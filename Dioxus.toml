@@ -1,0 +1,11 @@
+[application]
+name = "occb-crm-frontend"
+out_dir = "dist"
+asset_dir = "assets"
+
+[web.app]
+title = "OCCB CRM"
+
+[web.watcher]
+reload_html = true
+watch_path = ["src", "assets"]

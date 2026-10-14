@@ -1,0 +1,5 @@
+/target
+/dist
+/.dx
+.env
+.env.*.local
