@@ -114,7 +114,37 @@ select.input { width: auto; }
 .alert { border-radius: 8px; padding: 0.7rem 0.9rem; margin: 0.8rem 0; border: 1px solid; }
 .alert-error { background: #fef2f2; border-color: #fecaca; color: var(--bad); }
 .alert-info { background: #eff6ff; border-color: #bfdbfe; }
+.alert-ok { background: #f0fdf4; border-color: #bbf7d0; color: var(--ok); }
 .alert p { margin: 0.3rem 0; }
+
+/* Banner de consentimiento (Ley 21.719) */
+.consent-banner {
+  position: sticky;
+  bottom: 0;
+  background: var(--ink);
+  color: #e2e8f0;
+  z-index: 20;
+}
+.consent-inner { max-width: 1024px; margin: 0 auto; padding: 1rem; }
+.consent-inner .link { color: #93c5fd; }
+.consent-opt { display: flex; gap: 0.5rem; align-items: center; margin: 0.3rem 0; font-size: 0.92rem; }
+.consent-opt input { width: 1rem; height: 1rem; }
+
+/* Pie con enlaces de privacidad */
+.footer-links { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--brand);
+  cursor: pointer;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+/* Casillas de formularios */
+.check { display: flex; gap: 0.55rem; align-items: flex-start; font-weight: normal; margin-top: 0.4rem; }
+.check input { width: 1.05rem; height: 1.05rem; margin-top: 0.2rem; flex-shrink: 0; }
 
 /* Tablas */
 .table-wrap { overflow-x: auto; }

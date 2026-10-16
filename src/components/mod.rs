@@ -1,8 +1,17 @@
 //! Componentes compartidos: barra de navegación y marco de página.
 
+pub mod consent;
+
 use dioxus::prelude::*;
 
-use crate::{api, auth::use_auth, route::Route};
+use crate::{
+    api,
+    auth::use_auth,
+    privacy::{save_consent, use_consent, ConsentState},
+    route::Route,
+};
+
+use self::consent::ConsentBanner;
 
 /// Barra superior: marca, enlaces y estado de sesión (con salida).
 #[component]
@@ -22,6 +31,7 @@ pub fn NavBar() -> Element {
                     Link { to: Route::Dashboard {}, class: "nav-link", "Panel" }
                     Link { to: Route::Users {}, class: "nav-link", "Usuarios" }
                     Link { to: Route::Status {}, class: "nav-link", "Estado" }
+                    Link { to: Route::Rights {}, class: "nav-link", "Tus derechos" }
                 }
                 div { class: "nav-user",
                     match session {
@@ -66,9 +76,13 @@ pub fn NavBar() -> Element {
     }
 }
 
-/// Marco de página: navegación + título + contenido + pie.
+/// Marco de página: navegación + título + contenido + pie con privacidad.
 #[component]
 pub fn Layout(title: String, children: Element) -> Element {
+    let consent = use_consent();
+    let mut consent_w = consent;
+    let decided = consent.read().decided_at.is_some();
+
     rsx! {
         div { class: "shell",
             NavBar {}
@@ -77,7 +91,27 @@ pub fn Layout(title: String, children: Element) -> Element {
                 {children}
             }
             footer { class: "footer",
-                span { class: "muted", "OCCB CRM · frontend Dioxus · el API vive en el proyecto occb" }
+                div { class: "footer-links",
+                    Link { to: Route::Privacy {}, class: "link small", "Política de Privacidad" }
+                    Link { to: Route::Rights {}, class: "link small", "Tus derechos (ARCOP+B)" }
+                    button {
+                        class: "link-btn small",
+                        title: "Volver a elegir qué finalidades opcionales aceptas",
+                        onclick: move |_| {
+                            // Revocar: se borra la decisión y reaparece el banner.
+                            let undecided = ConsentState::default();
+                            save_consent(&undecided);
+                            consent_w.set(undecided);
+                        },
+                        "Preferencias de privacidad"
+                    }
+                }
+                div { class: "muted small",
+                    "OCCB CRM · frontend Dioxus · el API vive en el proyecto occb"
+                }
+            }
+            if !decided {
+                ConsentBanner {}
             }
         }
     }

@@ -7,6 +7,8 @@ use crate::pages::{
     dashboard::Dashboard,
     home::Home,
     not_found::NotFound,
+    privacy::Privacy,
+    rights::Rights,
     status::Status,
     users::{UserDetail, Users},
 };
@@ -29,6 +31,10 @@ pub enum Route {
     UserDetail { id: String },
     #[route("/status")]
     Status {},
+    #[route("/privacidad")]
+    Privacy {},
+    #[route("/derechos")]
+    Rights {},
     #[route("/:..segments")]
     NotFound { segments: Vec<String> },
 }

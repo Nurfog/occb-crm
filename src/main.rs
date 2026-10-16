@@ -8,6 +8,7 @@ mod auth;
 mod components;
 mod config;
 mod pages;
+mod privacy;
 mod route;
 
 use dioxus::prelude::*;
@@ -21,6 +22,7 @@ fn main() {
 #[component]
 fn App() -> Element {
     auth::provide_auth();
+    privacy::provide_consent();
     rsx! {
         document::Link { rel: "stylesheet", href: MAIN_CSS }
         Router::<route::Route> {}

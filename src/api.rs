@@ -330,6 +330,50 @@ pub async fn get_user(access_token: &str, id: &str) -> Result<UserPublic, ApiErr
     }
 }
 
+// --- Privacidad Ley 21.719 (canal de derechos) -------------------------------
+// `POST /api/v1/privacy/requests`: endpoint que el backend `occb` aún debe
+// implementar (ver `docs/ley-21719.md`). La página de derechos lo intenta y,
+// si no existe, genera un acuse provisorio local.
+
+/// Solicitud de ejercicio de un derecho ARCOP+B.
+#[derive(Debug, Serialize)]
+pub struct PrivacyRequestPayload<'a> {
+    /// `acceso|rectificacion|cancelacion|oposicion|portabilidad|bloqueo`.
+    pub kind: &'a str,
+    pub name: &'a str,
+    pub contact_email: &'a str,
+    pub detail: &'a str,
+    pub user_id: Option<Uuid>,
+}
+
+/// Acuse de recibo del backend.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct PrivacyReceipt {
+    pub folio: String,
+    pub received_at: Option<String>,
+}
+
+/// Envía la solicitud al registro del backend. Cualquier error de transporte
+/// o un 404/405/501 significa "backend aún sin soporte" y la UI usa el flujo
+/// provisorio local (ver `PrivacyRequestPayload` y `docs/ley-21719.md`).
+pub async fn submit_privacy_request(
+    payload: &PrivacyRequestPayload<'_>,
+) -> Result<PrivacyReceipt, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/privacy/requests"))
+        .json(payload)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<PrivacyReceipt>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
 // --- Observabilidad (público) ---------------------------------------------
 
 /// `GET /api/v1/health`.

@@ -55,6 +55,8 @@ Sirve `dist/` con cualquier estático (Nginx/Caddy). Ver `Dockerfile`.
 | `/users` | Listado con búsqueda/orden/paginación (`GET /api/v1/users`) |
 | `/users/:id` | Detalle (`GET /api/v1/users/:id`) |
 | `/status` | `health`, `ready` y `version` del backend |
+| `/privacidad` | Política de Privacidad (Ley 21.719) |
+| `/derechos` | Canal de derechos ARCOP+B + portabilidad |
 
 ## Endpoints cubiertos
 
@@ -71,6 +73,20 @@ en `src/api.rs` + `src/pages/` cuando el backend `occb` los exponga.
   y el refresh en el cuerpo; la sesión local se cierra aunque falle la red.
 - Los errores muestran `{ "error": { "code", "message" } }` del backend, sin
   filtrar detalles internos (el backend ya los oculta).
+
+## Privacidad — Ley 21.719 (Chile)
+
+Ver el mapa completo en [`docs/ley-21719.md`](./docs/ley-21719.md)
+(no es asesoría legal). El frontend aporta:
+
+- Banner de consentimiento **opt-in y granular** (marketing/analítica
+  desactivados por defecto, revocable en «Preferencias de privacidad»).
+- Aceptación de la Política de Privacidad al registrarse + evidencia local
+  (fecha y versión) del consentimiento.
+- Canal de derechos **ARCOP+B** (`/derechos`) con plazos legales visibles
+  (30 días corridos; bloqueo en 2 días hábiles) y portabilidad en JSON.
+- `PRIVACY_CONTACT_EMAIL` (build-time) define el canal formal mientras el
+  backend implementa `POST /api/v1/privacy/requests` (hoy: acuse provisorio).
 
 ## Estructura
 

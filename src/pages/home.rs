@@ -70,6 +70,16 @@ pub fn Home() -> Element {
                         }
                     }
                 }
+                div { class: "card",
+                    h2 { class: "card-title", "Tus derechos" }
+                    p { class: "muted",
+                        "Acceso, rectificación, cancelación, oposición, portabilidad y bloqueo (Ley 21.719)."
+                    }
+                    div { class: "row",
+                        Link { to: Route::Rights {}, class: "btn btn-small", "Ejercer derechos" }
+                        Link { to: Route::Privacy {}, class: "btn btn-small", "Privacidad" }
+                    }
+                }
             }
         }
     }

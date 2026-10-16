@@ -6,6 +6,7 @@ use crate::{
     api,
     auth::{use_auth, Session},
     components::Layout,
+    privacy::{CONSENT_VERSION, ConsentState, now_iso, save_consent, use_consent},
     route::Route,
 };
 
@@ -101,10 +102,13 @@ pub fn Login() -> Element {
 #[component]
 pub fn Register() -> Element {
     let mut auth = use_auth();
+    let mut consent = use_consent();
     let nav = use_navigator();
     let mut name = use_signal(String::new);
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
+    let mut privacy_ok = use_signal(|| false);
+    let mut marketing = use_signal(|| false);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
 
@@ -130,11 +134,30 @@ pub fn Register() -> Element {
                         error.set(Some("Completa nombre, email y contraseña.".to_string()));
                         return;
                     }
+                    if !*privacy_ok.read() {
+                        error
+                            .set(
+                                Some(
+                                    "Debes aceptar la Política de Privacidad para crear tu cuenta."
+                                        .to_string(),
+                                ),
+                            );
+                        return;
+                    }
+                    let marketing_v = *marketing.read();
                     busy.set(true);
                     error.set(None);
                     spawn(async move {
                         match api::register(&email_v, &name_v, &password_v).await {
                             Ok(pair) => {
+                                let state = ConsentState {
+                                    version: CONSENT_VERSION,
+                                    marketing: marketing_v,
+                                    analytics: false,
+                                    decided_at: Some(now_iso()),
+                                };
+                                save_consent(&state);
+                                consent.set(state);
                                 auth.write().session = Some(Session::from_pair(pair));
                                 nav.push(Route::Dashboard {});
                             }
@@ -188,6 +211,32 @@ pub fn Register() -> Element {
                     } else {
                         "Crear cuenta"
                     }
+                }
+                label { class: "check",
+                    input {
+                        r#type: "checkbox",
+                        checked: *privacy_ok.read(),
+                        onclick: move |_| {
+                            let next = !*privacy_ok.read();
+                            privacy_ok.set(next);
+                        },
+                    }
+                    span {
+                        "He leído y acepto la "
+                        Link { to: Route::Privacy {}, class: "link", "Política de Privacidad" }
+                        " (obligatorio)."
+                    }
+                }
+                label { class: "check",
+                    input {
+                        r#type: "checkbox",
+                        checked: *marketing.read(),
+                        onclick: move |_| {
+                            let next = !*marketing.read();
+                            marketing.set(next);
+                        },
+                    }
+                    "Quiero recibir novedades por email (opcional, revocable cuando quiera)."
                 }
                 p { class: "muted small",
                     "¿Ya tienes cuenta? "
