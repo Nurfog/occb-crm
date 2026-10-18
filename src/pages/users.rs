@@ -113,13 +113,22 @@ pub fn Users() -> Element {
                 None => rsx! {
                     p { class: "muted", "Cargando usuarios…" }
                 },
-                Some(Err(e)) => rsx! {
-                    div { class: "alert alert-error",
-                        p { "No se pudo cargar el listado." }
-                        p { class: "muted small", "{e}" }
-                        button { class: "btn btn-small", onclick: move |_| users.restart(), "Reintentar" }
+                Some(Err(e)) => {
+                    let is_forbidden = e.status == 403;
+                    rsx! {
+                        div { class: "alert alert-error",
+                            p {
+                                if is_forbidden {
+                                    "El listado de usuarios requiere rol administrador."
+                                } else {
+                                    "No se pudo cargar el listado."
+                                }
+                            }
+                            p { class: "muted small", "{e}" }
+                            button { class: "btn btn-small", onclick: move |_| users.restart(), "Reintentar" }
+                        }
                     }
-                },
+                }
                 Some(Ok(paged)) => {
                     let total_pages = (paged.total + paged.per_page - 1) / paged.per_page.max(1);
                     let total_pages = total_pages.max(1);

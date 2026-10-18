@@ -8,11 +8,17 @@
 use dioxus::prelude::*;
 
 use crate::{
-    privacy::{now_iso, save_consent, use_consent, ConsentState, CONSENT_VERSION},
+    auth::use_auth,
+    privacy::{now_iso, push_consent, save_consent, use_consent, ConsentState, CONSENT_VERSION},
     route::Route,
 };
 
-fn store_decision(mut consent: Signal<ConsentState>, marketing: bool, analytics: bool) {
+fn store_decision(
+    mut consent: Signal<ConsentState>,
+    token: Option<String>,
+    marketing: bool,
+    analytics: bool,
+) {
     let state = ConsentState {
         version: CONSENT_VERSION,
         marketing,
@@ -20,15 +26,20 @@ fn store_decision(mut consent: Signal<ConsentState>, marketing: bool, analytics:
         decided_at: Some(now_iso()),
     };
     save_consent(&state);
-    consent.set(state);
-    // TODO(backend): POST /api/v1/privacy/consents con el registro
-    // probatorio (fecha, texto y versión aceptada). Ver docs/ley-21719.md.
+    consent.set(state.clone());
+    // Registro probatorio en el backend (mejor esfuerzo, requiere sesión).
+    if let Some(t) = token {
+        spawn(async move {
+            push_consent(&t, &state).await;
+        });
+    }
 }
 
 /// Banner inferior. Se muestra mientras la persona no haya decidido.
 #[component]
 pub fn ConsentBanner() -> Element {
     let consent = use_consent();
+    let auth = use_auth();
     let mut marketing = use_signal(|| consent.read().marketing);
     let mut analytics = use_signal(|| consent.read().analytics);
 
@@ -67,14 +78,24 @@ pub fn ConsentBanner() -> Element {
                     button {
                         class: "btn btn-small btn-primary",
                         onclick: move |_| {
-                            store_decision(consent, *marketing.read(), *analytics.read());
+                            let token = auth
+                                .read()
+                                .session
+                                .clone()
+                                .map(|s| s.access_token);
+                            store_decision(consent, token, *marketing.read(), *analytics.read());
                         },
                         "Aceptar selección"
                     }
                     button {
                         class: "btn btn-small",
                         onclick: move |_| {
-                            store_decision(consent, false, false);
+                            let token = auth
+                                .read()
+                                .session
+                                .clone()
+                                .map(|s| s.access_token);
+                            store_decision(consent, token, false, false);
                         },
                         "Rechazar opcionales"
                     }

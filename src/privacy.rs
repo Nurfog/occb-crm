@@ -131,12 +131,13 @@ impl RightKind {
         RightKind::Bloqueo,
     ];
 
-    /// Valor que viaja al backend.
+    /// Valor que viaja al backend (`privacy_request_type`).
+    /// Ojo: la cancelación viaja como `supresion` (nombre del enum).
     pub fn code(self) -> &'static str {
         match self {
             RightKind::Acceso => "acceso",
             RightKind::Rectificacion => "rectificacion",
-            RightKind::Cancelacion => "cancelacion",
+            RightKind::Cancelacion => "supresion",
             RightKind::Oposicion => "oposicion",
             RightKind::Portabilidad => "portabilidad",
             RightKind::Bloqueo => "bloqueo",
@@ -200,11 +201,40 @@ impl std::fmt::Display for RightKind {
 pub fn right_from_code(code: &str) -> RightKind {
     match code {
         "rectificacion" => RightKind::Rectificacion,
-        "cancelacion" => RightKind::Cancelacion,
+        "supresion" | "cancelacion" => RightKind::Cancelacion,
         "oposicion" => RightKind::Oposicion,
         "portabilidad" => RightKind::Portabilidad,
         "bloqueo" => RightKind::Bloqueo,
         _ => RightKind::Acceso,
+    }
+}
+
+/// Envía la decisión al registro probatorio del backend (mejor esfuerzo).
+/// Se llama con el token cuando hay sesión; sin sesión solo queda local.
+pub async fn push_consent(access_token: &str, state: &ConsentState) {
+    let _ = crate::api::record_consent(
+        access_token,
+        state.marketing,
+        state.analytics,
+        state.version as i32,
+        "app",
+    )
+    .await;
+}
+
+/// Trae la última decisión registrada en el backend, si existe.
+pub async fn pull_consent(access_token: &str) -> Option<ConsentState> {
+    match crate::api::latest_consent(access_token).await {
+        Ok(Some(rec)) => Some(ConsentState {
+            version: rec.version.max(1) as u32,
+            marketing: rec.marketing,
+            analytics: rec.analytics,
+            decided_at: Some(
+                rec.created_at
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            ),
+        }),
+        _ => None,
     }
 }
 

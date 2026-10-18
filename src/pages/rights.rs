@@ -1,10 +1,9 @@
 //! Canal de ejercicio de derechos ARCOP+B (Ley 21.719).
 //!
-//! Intenta registrar la solicitud en el backend
-//! (`POST /api/v1/privacy/requests`, aún pendiente) y, si no existe, genera
-//! un acuse provisorio local con instrucciones para enviarla al correo de
-//! privacidad. Incluye portabilidad básica: descarga de los datos que el
-//! frontend maneja.
+//! Registra la solicitud en el backend (`POST /api/v1/privacy/requests`,
+//! responde 202) y, solo si no hay red, genera un acuse provisorio local con
+//! instrucciones para enviarla al correo de privacidad. Incluye portabilidad
+//! básica: descarga de los datos que el frontend maneja.
 
 use dioxus::prelude::*;
 use serde::Serialize;
@@ -24,16 +23,16 @@ use crate::{
 struct ExportData {
     exported_at: String,
     source: String,
-    user: api::UserPublic,
+    user: api::MeProfile,
     consent: crate::privacy::ConsentState,
 }
 
 /// Resultado visible del envío.
 #[derive(Clone, PartialEq)]
 enum SubmitOutcome {
-    /// El backend registró la solicitud.
-    Registered { folio: String },
-    /// El backend aún no implementa el registro: acuse provisorio.
+    /// El backend registró la solicitud: folio oficial + vencimiento.
+    Registered { folio: String, due: String },
+    /// Sin red o backend caído: acuse provisorio con instrucciones.
     Provisional {
         folio: String,
         kind: RightKind,
@@ -105,30 +104,30 @@ pub fn Rights() -> Element {
                                 );
                             return;
                         }
-                        let user_id = auth.read().session.clone().map(|s| s.user.id);
                         busy.set(true);
-                        outcome.set(None); // El backend aún no implementa el registro: acuse provisorio.
+                        outcome.set(None);
                         spawn(async move {
                             let payload = PrivacyRequestPayload {
-                                kind: kind_v.code(),
-                                name: &name_v,
-                                contact_email: &email_v,
-                                detail: &detail_v,
-                                user_id,
+                                email: &email_v,
+                                request_type: kind_v.code(),
+                                motivo: &detail_v,
+                                solicitante_nombre: &name_v,
                             };
                             match api::submit_privacy_request(&payload).await {
                                 Ok(receipt) => {
+                                    let due = receipt
+                                        .due_at
+                                        .format("%Y-%m-%d")
+                                        .to_string();
                                     outcome
                                         .set(
                                             Some(SubmitOutcome::Registered {
-                                                folio: receipt.folio,
+                                                folio: receipt.id.to_string(),
+                                                due,
                                             }),
                                         )
                                 }
-                                Err(
-                                    err,
-                                ) if err.status == 0 || err.status == 404 || err.status == 405
-                                    || err.status == 501 => {
+                                Err(err) if err.status == 0 => {
                                     let folio = provisional_folio();
                                     let summary = format!(
                                         "Folio provisorio: {folio}\nFecha: {}\nDerecho: {}\nNombre: {name_v}\nContacto: {email_v}\nDetalle: {detail_v}",
@@ -217,12 +216,15 @@ pub fn Rights() -> Element {
 
                 if let Some(result) = outcome.read().clone() {
                     match result {
-                        SubmitOutcome::Registered { folio } => rsx! {
+                        SubmitOutcome::Registered { folio, due } => rsx! {
                             div { class: "alert alert-ok",
                                 p {
                                     strong { "Solicitud registrada. Folio: {folio}" }
                                 }
-                                p { class: "small", "Te responderemos dentro del plazo legal." }
+                                p { class: "small",
+                                    "Vence el {due}. Te enviamos un correo para verificar tu identidad: "
+                                    "la solicitud avanza cuando la verifiques. Si no lo reconoces, ignóralo."
+                                }
                             }
                         },
                         SubmitOutcome::Provisional { folio, kind: k, summary } => rsx! {
@@ -231,7 +233,7 @@ pub fn Rights() -> Element {
                                     strong { "Acuse provisorio. Folio: {folio}" }
                                 }
                                 p { class: "small",
-                                    "El registro automático aún está en construcción en el backend. Para que tu "
+                                    "No pudimos contactar al registro (sin red o backend no disponible). Para que tu "
                                     "solicitud de «{k}» quede formalmente ingresada, envíala a "
                                     strong { "{contact}" }
                                     " con asunto «{folio}»."
@@ -256,8 +258,8 @@ pub fn Rights() -> Element {
                 h2 { class: "card-title", "Portabilidad: descarga tus datos" }
                 p { class: "muted small",
                     "Descarga en JSON los datos que esta app maneja sobre ti (tu perfil y tu decisión "
-                    "de consentimiento). La exportación completa la entrega el backend cuando implemente "
-                    "el registro."
+                    "de consentimiento). La exportación completa de tus datos comerciales la entrega el "
+                    "equipo al resolver una solicitud de portabilidad."
                 }
                 if session.is_none() {
                     div { class: "alert alert-info",

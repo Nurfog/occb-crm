@@ -61,8 +61,11 @@ Sirve `dist/` con cualquier estático (Nginx/Caddy). Ver `Dockerfile`.
 ## Endpoints cubiertos
 
 Auth con rotación de refresh tokens (`register`, `login`, `refresh`,
-`logout`, `me`), usuarios (`list`, `get`) y observabilidad (`health`,
-`ready`, `version`). Los módulos CRM de la referencia `opencrmccb`
+`logout`, `me` con perfil extendido, `profile` PUT para rectificación
+directa), usuarios (`get`; el listado `GET /users` es solo admin y la UI lo
+indica), observabilidad (`health`, `ready`, `version`) y privacidad Ley 21.719
+(`privacy/requests` POST público + verificación, `privacy/consents` POST/GET
+latest con sesión). Los módulos CRM de la referencia `opencrmccb`
 (contactos, empresas, deals, actividades, documentos, reportes…) se añadirán
 en `src/api.rs` + `src/pages/` cuando el backend `occb` los exponga.
 

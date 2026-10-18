@@ -6,7 +6,10 @@ use crate::{
     api,
     auth::{use_auth, Session},
     components::Layout,
-    privacy::{CONSENT_VERSION, ConsentState, now_iso, save_consent, use_consent},
+    privacy::{
+        CONSENT_VERSION, ConsentState, now_iso, pull_consent, push_consent, save_consent,
+        use_consent,
+    },
     route::Route,
 };
 
@@ -14,6 +17,7 @@ use crate::{
 #[component]
 pub fn Login() -> Element {
     let mut auth = use_auth();
+    let mut consent = use_consent();
     let nav = use_navigator();
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
@@ -46,7 +50,15 @@ pub fn Login() -> Element {
                     spawn(async move {
                         match api::login(&email_v, &password_v).await {
                             Ok(pair) => {
+                                let token = pair.access_token.clone();
                                 auth.write().session = Some(Session::from_pair(pair));
+                                // Reconcilia el consentimiento con el registro del backend.
+                                spawn(async move {
+                                    if let Some(server) = pull_consent(&token).await {
+                                        save_consent(&server);
+                                        consent.set(server);
+                                    }
+                                });
                                 nav.push(Route::Dashboard {});
                             }
                             Err(err) => error.set(Some(err.to_string())),
@@ -157,8 +169,13 @@ pub fn Register() -> Element {
                                     decided_at: Some(now_iso()),
                                 };
                                 save_consent(&state);
-                                consent.set(state);
+                                consent.set(state.clone());
+                                let token = pair.access_token.clone();
                                 auth.write().session = Some(Session::from_pair(pair));
+                                // Registro probatorio en el backend (mejor esfuerzo).
+                                spawn(async move {
+                                    push_consent(&token, &state).await;
+                                });
                                 nav.push(Route::Dashboard {});
                             }
                             Err(err) => error.set(Some(err.to_string())),
@@ -241,7 +258,7 @@ pub fn Register() -> Element {
                 p { class: "muted small",
                     "¿Ya tienes cuenta? "
                     Link { to: Route::Login {}, class: "link", "Entra aquí" }
-                    "."
+                    ". El primer registro crea la cuenta administradora; después, los usuarios los crea un admin."
                 }
             }
         }

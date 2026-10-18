@@ -19,13 +19,26 @@ use crate::config::endpoint;
 // Tipos del API (contrato del backend occb)
 // ---------------------------------------------------------------------------
 
-/// Usuario público tal como lo devuelve el backend.
+/// Usuario público tal como lo devuelve el backend (`/users`, TokenPair).
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct UserPublic {
     pub id: Uuid,
     pub email: String,
     pub name: String,
     pub created_at: DateTime<Utc>,
+}
+
+/// Perfil propio (`GET /api/v1/auth/me`): sin `created_at`, con permisos.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct MeProfile {
+    pub id: Uuid,
+    pub email: String,
+    pub name: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub profile_id: Option<Uuid>,
+    #[serde(default)]
+    pub permissions: Vec<String>,
 }
 
 /// Par de tokens que devuelven `register`, `login` y `refresh`.
@@ -96,6 +109,14 @@ struct RefreshBody<'a> {
 #[derive(Debug, Serialize)]
 struct LogoutBody<'a> {
     refresh_token: &'a str,
+}
+
+#[derive(Debug, Serialize)]
+struct UpdateProfileBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<&'a str>,
 }
 
 // ---------------------------------------------------------------------------
@@ -260,10 +281,34 @@ pub async fn logout(access_token: &str, refresh_token: &str) -> Result<(), ApiEr
 }
 
 /// `GET /api/v1/auth/me` — perfil del dueño del access token.
-pub async fn me(access_token: &str) -> Result<UserPublic, ApiError> {
+/// Devuelve el perfil extendido (sin `created_at`, con permisos).
+pub async fn me(access_token: &str) -> Result<MeProfile, ApiError> {
     let res = client()
         .get(endpoint("/api/v1/auth/me"))
         .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<MeProfile>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `PUT /api/v1/auth/profile` — rectificación directa (nombre y/o email).
+/// 409 si el email ya existe.
+pub async fn update_profile(
+    access_token: &str,
+    email: Option<&str>,
+    name: Option<&str>,
+) -> Result<UserPublic, ApiError> {
+    let res = client()
+        .put(endpoint("/api/v1/auth/profile"))
+        .bearer_auth(access_token)
+        .json(&UpdateProfileBody { email, name })
         .send()
         .await
         .map_err(|e| ApiError::transport(e.to_string()))?;
@@ -330,32 +375,29 @@ pub async fn get_user(access_token: &str, id: &str) -> Result<UserPublic, ApiErr
     }
 }
 
-// --- Privacidad Ley 21.719 (canal de derechos) -------------------------------
-// `POST /api/v1/privacy/requests`: endpoint que el backend `occb` aún debe
-// implementar (ver `docs/ley-21719.md`). La página de derechos lo intenta y,
-// si no existe, genera un acuse provisorio local.
+// --- Privacidad Ley 21.719 (contrato real del backend `occb`) ----------------
+// `POST /api/v1/privacy/requests` (público, rate-limit estricto) responde 202
+// con `{id, status, due_at}` y envía un email para verificar identidad.
+// Tipos válidos: acceso|rectificacion|supresion|oposicion|portabilidad|bloqueo.
 
 /// Solicitud de ejercicio de un derecho ARCOP+B.
 #[derive(Debug, Serialize)]
 pub struct PrivacyRequestPayload<'a> {
-    /// `acceso|rectificacion|cancelacion|oposicion|portabilidad|bloqueo`.
-    pub kind: &'a str,
-    pub name: &'a str,
-    pub contact_email: &'a str,
-    pub detail: &'a str,
-    pub user_id: Option<Uuid>,
+    pub email: &'a str,
+    pub request_type: &'a str,
+    pub motivo: &'a str,
+    pub solicitante_nombre: &'a str,
 }
 
-/// Acuse de recibo del backend.
+/// Acuse del backend: `id` = folio, `due_at` = vencimiento del plazo legal.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PrivacyReceipt {
-    pub folio: String,
-    pub received_at: Option<String>,
+    pub id: Uuid,
+    pub status: String,
+    pub due_at: DateTime<Utc>,
 }
 
-/// Envía la solicitud al registro del backend. Cualquier error de transporte
-/// o un 404/405/501 significa "backend aún sin soporte" y la UI usa el flujo
-/// provisorio local (ver `PrivacyRequestPayload` y `docs/ley-21719.md`).
+/// Envía la solicitud al registro del backend.
 pub async fn submit_privacy_request(
     payload: &PrivacyRequestPayload<'_>,
 ) -> Result<PrivacyReceipt, ApiError> {
@@ -369,6 +411,84 @@ pub async fn submit_privacy_request(
         res.json::<PrivacyReceipt>()
             .await
             .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- Registro probatorio de consentimientos ---------------------------------
+
+/// Fila vigente de `privacy_consents` (`GET .../latest`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ServerConsent {
+    pub marketing: bool,
+    pub analytics: bool,
+    pub version: i32,
+    pub source: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Acuse de `POST /api/v1/privacy/consents`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ConsentReceipt {
+    pub id: Uuid,
+    pub recorded_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+struct RecordConsentBody<'a> {
+    marketing: bool,
+    analytics: bool,
+    version: i32,
+    source: &'a str,
+}
+
+/// `POST /api/v1/privacy/consents` (protegido): registra la decisión del dueño
+/// del token. Cada llamada crea una fila (historial); revocar = todo-falso.
+pub async fn record_consent(
+    access_token: &str,
+    marketing: bool,
+    analytics: bool,
+    version: i32,
+    source: &str,
+) -> Result<ConsentReceipt, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/privacy/consents"))
+        .bearer_auth(access_token)
+        .json(&RecordConsentBody {
+            marketing,
+            analytics,
+            version,
+            source,
+        })
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<ConsentReceipt>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `GET /api/v1/privacy/consents/latest` (protegido): última decisión.
+/// Devuelve `None` si la persona nunca ha decidido (404 del backend).
+pub async fn latest_consent(access_token: &str) -> Result<Option<ServerConsent>, ApiError> {
+    let res = client()
+        .get(endpoint("/api/v1/privacy/consents/latest"))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<ServerConsent>()
+            .await
+            .map(Some)
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else if res.status().as_u16() == 404 {
+        Ok(None)
     } else {
         Err(into_api_error(res).await)
     }
