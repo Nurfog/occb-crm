@@ -4,6 +4,8 @@ use dioxus::prelude::*;
 
 use crate::pages::{
     activities::Activities,
+    admin::Admin,
+    audit::Audit,
     auth_pages::{Login, Register},
     companies::{Companies, CompanyDetail},
     contacts::{ContactDetail, Contacts},
@@ -13,7 +15,7 @@ use crate::pages::{
     home::Home,
     leads::{LeadDetail, Leads},
     notifications::Notifications,
-    password::{ChangePassword, ForgotPassword, ResetPassword},
+    password::{ForgotPassword, ResetPassword},
     reports::Reports,
     search::Search,
     not_found::NotFound,
@@ -61,6 +63,10 @@ pub enum Route {
     Notifications {},
     #[route("/buscar")]
     Search {},
+    #[route("/auditoria")]
+    Audit {},
+    #[route("/admin")]
+    Admin {},
     #[route("/recuperar")]
     ForgotPassword {},
     #[route("/restablecer")]

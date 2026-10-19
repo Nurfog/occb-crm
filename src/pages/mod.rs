@@ -1,6 +1,8 @@
 //! Páginas de la SPA.
 
 pub mod activities;
+pub mod admin;
+pub mod audit;
 pub mod auth_pages;
 pub mod companies;
 pub mod contacts;

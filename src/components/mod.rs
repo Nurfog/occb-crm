@@ -36,6 +36,8 @@ pub fn NavBar() -> Element {
                     Link { to: Route::Activities {}, class: "nav-link", "Actividades" }
                     Link { to: Route::Documents {}, class: "nav-link", "Documentos" }
                     Link { to: Route::Reports {}, class: "nav-link", "Informes" }
+                    Link { to: Route::Audit {}, class: "nav-link", "Auditoría" }
+                    Link { to: Route::Admin {}, class: "nav-link", "Admin" }
                     Link { to: Route::Dashboard {}, class: "nav-link", "Panel" }
                     Link { to: Route::Search {}, class: "nav-link", "Buscar" }
                     Link {

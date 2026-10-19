@@ -2020,6 +2020,424 @@ pub async fn update_prefs(
     }
 }
 
+// --- Staff: auditoría ----------------------------------------------------------
+// Requiere permiso de auditoría (`audit.*`); 403 en caso contrario.
+
+/// Entrada del registro de auditoría.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AuditLog {
+    pub id: Uuid,
+    #[serde(default)]
+    pub user_id: Option<Uuid>,
+    #[serde(default)]
+    pub action: String,
+    #[serde(default)]
+    pub entity_type: String,
+    pub entity_id: Uuid,
+    #[serde(default)]
+    pub old_values: Option<serde_json::Value>,
+    #[serde(default)]
+    pub new_values: Option<serde_json::Value>,
+    #[serde(default)]
+    pub ip_address: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// `GET /api/v1/audit?page&per_page&entity_type&entity_id&user_id`.
+pub async fn list_audit_logs(
+    access_token: &str,
+    page: u32,
+    entity_type: &str,
+    entity_id: &str,
+) -> Result<Vec<AuditLog>, ApiError> {
+    let mut query: Vec<(&str, String)> = vec![("page", page.max(1).to_string())];
+    if !entity_type.trim().is_empty() {
+        query.push(("entity_type", entity_type.trim().to_string()));
+    }
+    if !entity_id.trim().is_empty() {
+        query.push(("entity_id", entity_id.trim().to_string()));
+    }
+    get_json(access_token, "/api/v1/audit", &query).await
+}
+
+/// `GET /api/v1/audit/entity/{type}/{id}` — historial de una ficha.
+pub async fn entity_history(
+    access_token: &str,
+    entity_type: &str,
+    entity_id: &str,
+) -> Result<Vec<AuditLog>, ApiError> {
+    get_json(
+        access_token,
+        &format!("/api/v1/audit/entity/{entity_type}/{entity_id}"),
+        &[],
+    )
+    .await
+}
+
+// --- Admin: pipelines / perfiles / branding / webhooks ------------------------
+// Todo bajo `/api/v1/admin/*` con `admin.access`; 403 sin el permiso.
+
+#[derive(Debug, Serialize)]
+pub struct PipelineInput<'a> {
+    pub name: &'a str,
+    pub slug: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_type: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StageInput<'a> {
+    pub name: &'a str,
+    pub position: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub probability: Option<i32>,
+}
+
+/// `POST /api/v1/admin/pipelines` → 201.
+pub async fn create_pipeline(
+    access_token: &str,
+    body: &PipelineInput<'_>,
+) -> Result<Pipeline, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/admin/pipelines"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Pipeline>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `POST /api/v1/admin/pipelines/{id}/stages` → 201.
+pub async fn create_stage(
+    access_token: &str,
+    pipeline_id: &str,
+    body: &StageInput<'_>,
+) -> Result<PipelineStage, ApiError> {
+    let res = client()
+        .post(endpoint(&format!(
+            "/api/v1/admin/pipelines/{pipeline_id}/stages"
+        )))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<PipelineStage>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/admin/pipelines/{pid}/stages/{sid}` → 204.
+pub async fn delete_stage(
+    access_token: &str,
+    pipeline_id: &str,
+    stage_id: &str,
+) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!(
+            "/api/v1/admin/pipelines/{pipeline_id}/stages/{stage_id}"
+        )))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// Perfil con sus permisos.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Profile {
+    pub id: Uuid,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub is_system: bool,
+    #[serde(default)]
+    pub permissions: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProfileInput<'a> {
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<&'a [String]>,
+}
+
+/// `GET /api/v1/admin/profiles`.
+pub async fn list_profiles(access_token: &str) -> Result<Vec<Profile>, ApiError> {
+    get_json(access_token, "/api/v1/admin/profiles", &[]).await
+}
+
+/// `POST /api/v1/admin/profiles` → 201.
+pub async fn create_profile(
+    access_token: &str,
+    body: &ProfileInput<'_>,
+) -> Result<Profile, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/admin/profiles"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Profile>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `PUT /api/v1/admin/profiles/{id}`.
+pub async fn update_user_profile(
+    access_token: &str,
+    id: &str,
+    body: &ProfileInput<'_>,
+) -> Result<Profile, ApiError> {
+    let res = client()
+        .put(endpoint(&format!("/api/v1/admin/profiles/{id}")))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Profile>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// Marca (`GET /api/v1/branding` público, `PUT /api/v1/admin/branding`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Branding {
+    pub id: Uuid,
+    #[serde(default)]
+    pub company_name: Option<String>,
+    #[serde(default)]
+    pub logo_url: Option<String>,
+    #[serde(default)]
+    pub primary_color: Option<String>,
+    #[serde(default)]
+    pub secondary_color: Option<String>,
+    #[serde(default)]
+    pub accent_color: Option<String>,
+    #[serde(default)]
+    pub favicon_url: Option<String>,
+    #[serde(default)]
+    pub custom_domain: Option<String>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct BrandingInput<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo_url: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub primary_color: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_color: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accent_color: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favicon_url: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_domain: Option<&'a str>,
+}
+
+pub async fn get_branding() -> Result<Branding, ApiError> {
+    let res = client()
+        .get(endpoint("/api/v1/branding"))
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Branding>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+pub async fn update_branding(
+    access_token: &str,
+    body: &BrandingInput<'_>,
+) -> Result<Branding, ApiError> {
+    let res = client()
+        .put(endpoint("/api/v1/admin/branding"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Branding>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// Webhook (`GET|POST /api/v1/webhooks`, …).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Webhook {
+    pub id: Uuid,
+    pub url: String,
+    #[serde(default)]
+    pub event: String,
+    #[serde(default)]
+    pub secret: Option<String>,
+    #[serde(default)]
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct WebhookDelivery {
+    pub id: Uuid,
+    pub webhook_id: Uuid,
+    #[serde(default)]
+    pub event_type: String,
+    #[serde(default)]
+    pub payload: Option<serde_json::Value>,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub attempts: i32,
+    #[serde(default)]
+    pub response_status: Option<i32>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateWebhookBody<'a> {
+    pub url: &'a str,
+    pub event: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret: Option<&'a str>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct UpdateWebhookBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret: Option<&'a str>,
+}
+
+/// Eventos admitidos por el backend.
+pub const WEBHOOK_EVENTS: [&str; 6] = [
+    "deal_created",
+    "deal_updated",
+    "deal_deleted",
+    "contact_created",
+    "contact_updated",
+    "contact_deleted",
+];
+
+pub async fn list_webhooks(access_token: &str) -> Result<Vec<Webhook>, ApiError> {
+    get_json(access_token, "/api/v1/webhooks", &[]).await
+}
+
+pub async fn create_webhook(
+    access_token: &str,
+    body: &CreateWebhookBody<'_>,
+) -> Result<Webhook, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/webhooks"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Webhook>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+pub async fn update_webhook(
+    access_token: &str,
+    id: &str,
+    body: &UpdateWebhookBody<'_>,
+) -> Result<Webhook, ApiError> {
+    let res = client()
+        .patch(endpoint(&format!("/api/v1/webhooks/{id}")))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Webhook>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+pub async fn delete_webhook(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/webhooks/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+pub async fn webhook_deliveries(
+    access_token: &str,
+    id: &str,
+) -> Result<Vec<WebhookDelivery>, ApiError> {
+    get_json(
+        access_token,
+        &format!("/api/v1/webhooks/{id}/deliveries"),
+        &[],
+    )
+    .await
+}
+
 // --- Admin: gestión de usuarios --------------------------------------------
 
 #[derive(Debug, Serialize)]
