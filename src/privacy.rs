@@ -22,10 +22,12 @@ use serde::{Deserialize, Serialize};
 // ---------------------------------------------------------------------------
 
 /// Email del responsable / DPO que recibe las solicitudes de derechos.
-/// Fijar con `PRIVACY_CONTACT_EMAIL=juan.allende@gmail.com`.
+/// Se fija en tiempo de compilación con `PRIVACY_CONTACT_EMAIL`
+/// (ver `.env`; en Docker, `--build-arg PRIVACY_CONTACT_EMAIL=...`).
+/// El fallback es solo un genérico para no compilar un placeholder vacío.
 pub fn privacy_contact_email() -> String {
     option_env!("PRIVACY_CONTACT_EMAIL")
-        .unwrap_or("juan.allende@gmail.com")
+        .unwrap_or("privacidad@example.com")
         .to_string()
 }
 

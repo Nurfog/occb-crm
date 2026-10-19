@@ -8,7 +8,7 @@
 FROM rust:1.83-bookworm AS build
 ARG API_BASE_URL=http://127.0.0.1:8000
 ENV API_BASE_URL=${API_BASE_URL}
-ARG PRIVACY_CONTACT_EMAIL=juan.allende@gmail.com
+ARG PRIVACY_CONTACT_EMAIL=privacidad@example.com
 ENV PRIVACY_CONTACT_EMAIL=${PRIVACY_CONTACT_EMAIL}
 RUN rustup target add wasm32-unknown-unknown \
     && cargo install dioxus-cli --version 0.7 --locked
