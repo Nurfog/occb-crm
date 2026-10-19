@@ -5,7 +5,7 @@
 #   --build-arg API_BASE_URL=https://api.tu-dominio.com \
 #   --build-arg PRIVACY_CONTACT_EMAIL=privacidad@tu-dominio.com .
 
-FROM rust:1.83-bookworm AS build
+FROM rust:1.98-bookworm AS build
 ARG API_BASE_URL=http://127.0.0.1:8000
 ENV API_BASE_URL=${API_BASE_URL}
 ARG PRIVACY_CONTACT_EMAIL=privacidad@example.com
