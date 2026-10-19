@@ -7,17 +7,20 @@ use crate::pages::{
     admin::Admin,
     audit::Audit,
     auth_pages::{Login, Register},
+    calendar::Calendar,
     companies::{Companies, CompanyDetail},
     contacts::{ContactDetail, Contacts},
     dashboard::Dashboard,
     deals::{DealDetail, Deals},
     documents::Documents,
+    email::Email,
     home::Home,
     leads::{LeadDetail, Leads},
     notifications::Notifications,
     password::{ForgotPassword, ResetPassword},
     reports::Reports,
     search::Search,
+    whatsapp::{Whatsapp, WhatsappConfig},
     not_found::NotFound,
     privacy::Privacy,
     rights::Rights,
@@ -67,6 +70,14 @@ pub enum Route {
     Audit {},
     #[route("/admin")]
     Admin {},
+    #[route("/email")]
+    Email {},
+    #[route("/calendario")]
+    Calendar {},
+    #[route("/whatsapp")]
+    Whatsapp {},
+    #[route("/whatsapp/config")]
+    WhatsappConfig {},
     #[route("/recuperar")]
     ForgotPassword {},
     #[route("/restablecer")]

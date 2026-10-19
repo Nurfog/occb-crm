@@ -38,6 +38,9 @@ pub fn NavBar() -> Element {
                     Link { to: Route::Reports {}, class: "nav-link", "Informes" }
                     Link { to: Route::Audit {}, class: "nav-link", "Auditoría" }
                     Link { to: Route::Admin {}, class: "nav-link", "Admin" }
+                    Link { to: Route::Email {}, class: "nav-link", "Email" }
+                    Link { to: Route::Calendar {}, class: "nav-link", "Calendario" }
+                    Link { to: Route::Whatsapp {}, class: "nav-link", "WhatsApp" }
                     Link { to: Route::Dashboard {}, class: "nav-link", "Panel" }
                     Link { to: Route::Search {}, class: "nav-link", "Buscar" }
                     Link {

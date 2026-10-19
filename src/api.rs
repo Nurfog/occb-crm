@@ -2020,6 +2020,508 @@ pub async fn update_prefs(
     }
 }
 
+// --- Comunicación: email -------------------------------------------------------
+// `POST /email/send` exige SMTP activo (503 si no); la bitácora registra igual.
+
+/// Registro de un envío (`GET /api/v1/email/logs`, …).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EmailLog {
+    pub id: Uuid,
+    #[serde(default)]
+    pub from_email: String,
+    #[serde(default)]
+    pub to_email: String,
+    #[serde(default)]
+    pub cc: Option<String>,
+    #[serde(default)]
+    pub bcc: Option<String>,
+    #[serde(default)]
+    pub subject: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub body_html: Option<String>,
+    #[serde(default)]
+    pub entity_type: Option<String>,
+    #[serde(default)]
+    pub entity_id: Option<Uuid>,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub template_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Plantilla (`GET /api/v1/email/templates`, …).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EmailTemplate {
+    pub id: Uuid,
+    pub name: String,
+    #[serde(default)]
+    pub subject: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub body_html: Option<String>,
+    #[serde(default)]
+    pub category: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SendEmailBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<&'a str>,
+    pub to: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cc: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bcc: Option<&'a str>,
+    pub subject: &'a str,
+    pub body: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_html: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateTemplateBody<'a> {
+    pub name: &'a str,
+    pub subject: &'a str,
+    pub body: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_html: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<&'a str>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct UpdateTemplateBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_html: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<&'a str>,
+}
+
+/// Página de bitácora `{data, page, per_page, total}` (sin `total_pages`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EmailLogPage {
+    #[serde(default)]
+    pub data: Vec<EmailLog>,
+    #[serde(default)]
+    pub total: i64,
+    #[serde(default)]
+    pub page: i64,
+    #[serde(default)]
+    pub per_page: i64,
+}
+
+/// `POST /api/v1/email/send` → 200 con el registro.
+pub async fn send_email(
+    access_token: &str,
+    body: &SendEmailBody<'_>,
+) -> Result<EmailLog, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/email/send"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<EmailLog>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `GET /api/v1/email/logs?page&per_page`.
+pub async fn list_email_logs(
+    access_token: &str,
+    page: u32,
+) -> Result<EmailLogPage, ApiError> {
+    let query: Vec<(&str, String)> = vec![("page", page.max(1).to_string())];
+    get_json(access_token, "/api/v1/email/logs", &query).await
+}
+
+/// `GET /api/v1/email/templates`.
+pub async fn list_templates(access_token: &str) -> Result<Vec<EmailTemplate>, ApiError> {
+    get_json(access_token, "/api/v1/email/templates", &[]).await
+}
+
+/// `POST /api/v1/email/templates` → 201.
+pub async fn create_template(
+    access_token: &str,
+    body: &CreateTemplateBody<'_>,
+) -> Result<EmailTemplate, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/email/templates"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<EmailTemplate>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `PUT /api/v1/email/templates/{id}`.
+pub async fn update_template(
+    access_token: &str,
+    id: &str,
+    body: &UpdateTemplateBody<'_>,
+) -> Result<EmailTemplate, ApiError> {
+    let res = client()
+        .put(endpoint(&format!("/api/v1/email/templates/{id}")))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<EmailTemplate>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/email/templates/{id}` → 204.
+pub async fn delete_template(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/email/templates/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `POST /api/v1/email/send-from-template/{id}` → hereda asunto/cuerpo.
+pub async fn send_from_template(
+    access_token: &str,
+    template_id: &str,
+    body: &SendEmailBody<'_>,
+) -> Result<EmailLog, ApiError> {
+    let res = client()
+        .post(endpoint(&format!(
+            "/api/v1/email/send-from-template/{template_id}"
+        )))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<EmailLog>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- Comunicación: calendario --------------------------------------------------
+
+/// Evento (`GET /api/v1/calendar/events`, …).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct CalendarEvent {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    #[serde(default)]
+    pub provider: String,
+    #[serde(default)]
+    pub external_id: Option<String>,
+    pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub location: Option<String>,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    #[serde(default)]
+    pub all_day: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateCalendarEventBody<'a> {
+    pub title: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<&'a str>,
+    pub start_time: &'a str,
+    pub end_time: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub all_day: Option<bool>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct UpdateCalendarEventBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_time: Option<&'a str>,
+}
+
+/// `GET /api/v1/calendar/status` → `{google, microsoft}`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct CalendarConnectionStatus {
+    #[serde(default)]
+    pub google: bool,
+    #[serde(default)]
+    pub microsoft: bool,
+}
+
+pub async fn calendar_status(access_token: &str) -> Result<CalendarConnectionStatus, ApiError> {
+    get_json(access_token, "/api/v1/calendar/status", &[]).await
+}
+
+/// `GET /api/v1/calendar/events?start=&end=&provider=` — array plano.
+pub async fn list_calendar_events(
+    access_token: &str,
+) -> Result<Vec<CalendarEvent>, ApiError> {
+    get_json(access_token, "/api/v1/calendar/events", &[]).await
+}
+
+/// `POST /api/v1/calendar/events` → 201 (siempre `provider='local'`).
+pub async fn create_calendar_event(
+    access_token: &str,
+    body: &CreateCalendarEventBody<'_>,
+) -> Result<CalendarEvent, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/calendar/events"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<CalendarEvent>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/calendar/events/{id}` → 204.
+pub async fn delete_calendar_event(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/calendar/events/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `GET /api/v1/calendar/auth/{provider}` → URL de autorización OAuth.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct CalendarAuthUrl {
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub auth_url: String,
+}
+
+pub async fn calendar_auth_url(
+    access_token: &str,
+    provider: &str,
+) -> Result<CalendarAuthUrl, ApiError> {
+    get_json(
+        access_token,
+        &format!("/api/v1/calendar/auth/{provider}"),
+        &[],
+    )
+    .await
+}
+
+/// `POST /api/v1/calendar/sync/google` → `{synced}`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct CalendarSyncResult {
+    #[serde(default)]
+    pub synced: i64,
+}
+
+pub async fn sync_google_calendar(access_token: &str) -> Result<CalendarSyncResult, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/calendar/sync/google"))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<CalendarSyncResult>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- Comunicación: WhatsApp -----------------------------------------------------
+
+/// Config (`GET|PUT /api/v1/integrations/whatsapp/config`). Sin `api_token`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct WhatsappConfig {
+    #[serde(default)]
+    pub phone_number_id: String,
+    #[serde(default)]
+    pub business_account_id: String,
+    #[serde(default)]
+    pub phone_number: Option<String>,
+    #[serde(default)]
+    pub is_active: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WhatsappConfigInput<'a> {
+    pub phone_number_id: &'a str,
+    pub business_account_id: &'a str,
+    pub api_token: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone_number: Option<&'a str>,
+}
+
+pub async fn get_whatsapp_config(access_token: &str) -> Result<WhatsappConfig, ApiError> {
+    get_json(access_token, "/api/v1/integrations/whatsapp/config", &[]).await
+}
+
+pub async fn update_whatsapp_config(
+    access_token: &str,
+    body: &WhatsappConfigInput<'_>,
+) -> Result<WhatsappConfig, ApiError> {
+    let res = client()
+        .put(endpoint("/api/v1/integrations/whatsapp/config"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<WhatsappConfig>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// Mensaje (`POST /send`, `GET /messages`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct WhatsappMessage {
+    pub id: Uuid,
+    #[serde(default)]
+    pub direction: String,
+    #[serde(default)]
+    pub from_number: String,
+    #[serde(default)]
+    pub to_number: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SendWhatsappBody<'a> {
+    pub to: &'a str,
+    pub content: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contact_id: Option<&'a str>,
+}
+
+pub async fn send_whatsapp(
+    access_token: &str,
+    body: &SendWhatsappBody<'_>,
+) -> Result<WhatsappMessage, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/integrations/whatsapp/send"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<WhatsappMessage>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `GET /api/v1/integrations/whatsapp/messages?contact_id=`.
+pub async fn whatsapp_messages(
+    access_token: &str,
+    contact_id: &str,
+) -> Result<Vec<WhatsappMessage>, ApiError> {
+    let mut query: Vec<(&str, String)> = Vec::new();
+    if !contact_id.trim().is_empty() {
+        query.push(("contact_id", contact_id.trim().to_string()));
+    }
+    get_json(access_token, "/api/v1/integrations/whatsapp/messages", &query).await
+}
+
+/// Conversación (último mensaje por número).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct WhatsappConversation {
+    #[serde(default)]
+    pub phone: String,
+    #[serde(default)]
+    pub contact_id: Option<Uuid>,
+    #[serde(default)]
+    pub contact_name: Option<String>,
+    #[serde(default)]
+    pub last_message: String,
+    pub last_message_at: DateTime<Utc>,
+    #[serde(default)]
+    pub last_direction: String,
+}
+
+pub async fn whatsapp_conversations(
+    access_token: &str,
+) -> Result<Vec<WhatsappConversation>, ApiError> {
+    get_json(
+        access_token,
+        "/api/v1/integrations/whatsapp/conversations",
+        &[],
+    )
+    .await
+}
+
 // --- Staff: auditoría ----------------------------------------------------------
 // Requiere permiso de auditoría (`audit.*`); 403 en caso contrario.
 
