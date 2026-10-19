@@ -17,8 +17,8 @@ COPY . .
 RUN dx build --release
 
 FROM nginx:1.27-alpine
-# `dx build` deja el sitio estático en dist/; ajustar la ruta si cambia el layout.
-COPY --from=build /app/dist /usr/share/nginx/html
+# `dx build --release` deja el sitio en target/dx/<pkg>/release/web/public.
+COPY --from=build /app/target/dx/occb-crm-frontend/release/web/public /usr/share/nginx/html
 # En producción, proxear /api/* al backend occb o servir con API_BASE_URL absoluta.
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
