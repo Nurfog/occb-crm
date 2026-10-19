@@ -29,8 +29,20 @@ pub fn NavBar() -> Element {
                 nav { class: "nav-links",
                     Link { to: Route::Home {}, class: "nav-link", "Inicio" }
                     Link { to: Route::Contacts {}, class: "nav-link", "Contactos" }
+                    Link { to: Route::Companies {}, class: "nav-link", "Empresas" }
+                    Link { to: Route::Leads {}, class: "nav-link", "Prospectos" }
                     Link { to: Route::Deals {}, class: "nav-link", "Negocios" }
+                    Link { to: Route::Activities {}, class: "nav-link", "Actividades" }
+                    Link { to: Route::Documents {}, class: "nav-link", "Documentos" }
+                    Link { to: Route::Reports {}, class: "nav-link", "Informes" }
                     Link { to: Route::Dashboard {}, class: "nav-link", "Panel" }
+                    Link { to: Route::Search {}, class: "nav-link", "Buscar" }
+                    Link {
+                        to: Route::Notifications {},
+                        class: "nav-link",
+                        "Notificaciones"
+                        UnreadBadge {}
+                    }
                     Link { to: Route::Users {}, class: "nav-link", "Usuarios" }
                     Link { to: Route::Status {}, class: "nav-link", "Estado" }
                     Link { to: Route::Rights {}, class: "nav-link", "Tus derechos" }
@@ -74,6 +86,32 @@ pub fn NavBar() -> Element {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Insignia con el conteo de no leídas. Vacía si no hay sesión o es cero.
+#[component]
+fn UnreadBadge() -> Element {
+    let auth = use_auth();
+    let token = auth.read().session.clone().map(|s| s.access_token);
+    let count = use_resource(move || {
+        let t = token.clone();
+        async move {
+            match t {
+                Some(tok) => api::unread_count(&tok).await.map(|c| c.count).unwrap_or(0),
+                None => 0,
+            }
+        }
+    });
+    let n: i64 = count.read().clone().unwrap_or(0);
+    if n > 0 {
+        rsx! {
+            span { class: "badge", "{n}" }
+        }
+    } else {
+        rsx! {
+            span {}
         }
     }
 }

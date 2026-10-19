@@ -25,7 +25,9 @@ pub fn Users() -> Element {
     let mut per_page = use_signal(|| 20u32);
     let mut sort = use_signal(|| "created_at".to_string());
     let mut dir = use_signal(|| "desc".to_string());
+    let mut show_new = use_signal(|| false);
 
+    let token_of = auth.read().session.clone().map(|s| s.access_token);
     let mut users = use_resource(move || {
         let token = auth.read().session.clone().map(|s| s.access_token);
         let q = applied.read().clone();
@@ -56,8 +58,27 @@ pub fn Users() -> Element {
         };
     }
 
+    let creating = *show_new.read();
+    let new_label = if creating { "Cerrar formulario" } else { "+ Nuevo usuario" };
+
     rsx! {
         Layout { title: "Usuarios".to_string(),
+            p { class: "muted small",
+                "Solo administradores: el backend responde 403 sin el permiso."
+            }
+            div { class: "row",
+                button {
+                    class: "btn btn-small btn-primary",
+                    onclick: move |_| show_new.set(!creating),
+                    "{new_label}"
+                }
+            }
+            if creating {
+                NewUserForm { on_created: move || {
+                    show_new.set(false);
+                    users.restart();
+                } }
+            }
             form {
                 class: "toolbar card",
                 onsubmit: move |e| {
@@ -141,6 +162,7 @@ pub fn Users() -> Element {
                                         th { "Nombre" }
                                         th { "Email" }
                                         th { "Alta (UTC)" }
+                                        th { "Acciones" }
                                     }
                                 }
                                 tbody {
@@ -151,6 +173,7 @@ pub fn Users() -> Element {
                                                 .format("%Y-%m-%d %H:%M")
                                                 .to_string();
                                             let id = user.id.to_string();
+                                            let token = token_of.clone();
                                             rsx! {
                                                 tr { key: "{id}",
                                                     td {
@@ -164,6 +187,22 @@ pub fn Users() -> Element {
                                                     }
                                                     td { "{user.email}" }
                                                     td { class: "muted", "{created}" }
+                                                    td {
+                                                        button {
+                                                            class: "btn btn-small",
+                                                            onclick: move |_| {
+                                                                let token_v = token.clone();
+                                                                let id_v = id.clone();
+                                                                spawn(async move {
+                                                                    if let Some(t) = token_v {
+                                                                        let _ = api::admin_delete_user(&t, &id_v).await;
+                                                                    }
+                                                                    users.restart();
+                                                                });
+                                                            },
+                                                            "Eliminar"
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -191,6 +230,95 @@ pub fn Users() -> Element {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// Alta de usuario (admin).
+#[component]
+fn NewUserForm(on_created: EventHandler<()>) -> Element {
+    let auth = use_auth();
+    let mut name = use_signal(String::new);
+    let mut email = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut busy = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+
+    let busy_v = *busy.read();
+    let submit_label = if busy_v { "Creando…" } else { "Crear usuario" };
+
+    rsx! {
+        form {
+            class: "card form",
+            onsubmit: move |e| {
+                e.prevent_default();
+                let token = auth.read().session.clone().map(|s| s.access_token);
+                let n = name.read().trim().to_string();
+                let em = email.read().trim().to_lowercase();
+                let pw = password.read().clone();
+                if n.is_empty() || em.is_empty() || pw.is_empty() {
+                    error.set(Some("Nombre, email y clave son obligatorios.".to_string()));
+                    return;
+                }
+                busy.set(true);
+                error.set(None);
+                spawn(async move {
+                    let res = match token {
+                        Some(t) => {
+                            api::admin_create_user(
+                                    &t,
+                                    &api::AdminCreateUserBody {
+                                        email: &em,
+                                        name: &n,
+                                        password: &pw,
+                                    },
+                                )
+                                .await
+                                .map(|_| ())
+                                .map_err(|e| e.to_string())
+                        }
+                        None => Err("Sin sesión.".to_string()),
+                    };
+                    busy.set(false);
+                    match res {
+                        Ok(()) => on_created.call(()),
+                        Err(msg) => error.set(Some(msg)),
+                    }
+                });
+            },
+            h2 { class: "card-title", "Nuevo usuario" }
+            label { class: "field", "Nombre *" }
+            input {
+                class: "input",
+                value: "{name}",
+                oninput: move |e| name.set(e.value()),
+                required: true,
+            }
+            label { class: "field", "Email *" }
+            input {
+                class: "input",
+                r#type: "email",
+                value: "{email}",
+                oninput: move |e| email.set(e.value()),
+                required: true,
+            }
+            label { class: "field", "Clave inicial *" }
+            input {
+                class: "input",
+                r#type: "password",
+                value: "{password}",
+                oninput: move |e| password.set(e.value()),
+                required: true,
+            }
+            if let Some(msg) = error.read().clone() {
+                p { class: "alert alert-error", "{msg}" }
+            }
+            button {
+                class: "btn btn-primary",
+                r#type: "submit",
+                disabled: busy_v,
+                "{submit_label}"
             }
         }
     }

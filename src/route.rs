@@ -3,11 +3,18 @@
 use dioxus::prelude::*;
 
 use crate::pages::{
+    activities::Activities,
     auth_pages::{Login, Register},
+    companies::{Companies, CompanyDetail},
     contacts::{ContactDetail, Contacts},
     dashboard::Dashboard,
     deals::{DealDetail, Deals},
+    documents::Documents,
     home::Home,
+    leads::{LeadDetail, Leads},
+    notifications::Notifications,
+    reports::Reports,
+    search::Search,
     not_found::NotFound,
     privacy::Privacy,
     rights::Rights,
@@ -35,6 +42,24 @@ pub enum Route {
     Deals {},
     #[route("/negocios/:id")]
     DealDetail { id: String },
+    #[route("/empresas")]
+    Companies {},
+    #[route("/empresas/:id")]
+    CompanyDetail { id: String },
+    #[route("/prospectos")]
+    Leads {},
+    #[route("/prospectos/:id")]
+    LeadDetail { id: String },
+    #[route("/actividades")]
+    Activities {},
+    #[route("/documentos")]
+    Documents {},
+    #[route("/informes")]
+    Reports {},
+    #[route("/notificaciones")]
+    Notifications {},
+    #[route("/buscar")]
+    Search {},
     #[route("/users")]
     Users {},
     #[route("/users/:id")]

@@ -56,6 +56,16 @@ Sirve `dist/` con cualquier estático (Nginx/Caddy). Ver `Dockerfile`.
 | `/contactos/:id` | Detalle con negocios y actividad ligada |
 | `/negocios` | Tablero kanban por etapas + alta |
 | `/negocios/:id` | Detalle con edición y cambio de etapa |
+| `/empresas` | Empresas: listado, alta, edición y borrado |
+| `/empresas/:id` | Detalle con ingresos, contactos y negocios |
+| `/prospectos` | Leads: filtros, estadísticas, alta y conversión |
+| `/prospectos/:id` | Detalle con bitácora y conversión a negocio |
+| `/actividades` | Actividades: alta, completar y borrado |
+| `/documentos` | Documentos: búsqueda, descarga y borrado |
+| `/informes` | Reportes de pipeline y ganados/perdidos |
+| `/notificaciones` | Bandeja, conteo no leídas y preferencias |
+| `/buscar` | Búsqueda global (contactos, empresas, negocios) |
+| `/usuarios` | Admin: listado, alta y borrado |
 | `/users` | Listado con búsqueda/orden/paginación (`GET /api/v1/users`) |
 | `/users/:id` | Detalle (`GET /api/v1/users/:id`) |
 | `/status` | `health`, `ready` y `version` del backend |

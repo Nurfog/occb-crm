@@ -838,22 +838,7 @@ pub async fn contact_activities(
     .await
 }
 
-/// `GET /api/v1/companies?page&per_page&search&sort_by&sort_order`.
-pub async fn list_companies(
-    access_token: &str,
-    page: u32,
-    per_page: u32,
-    search: &str,
-) -> Result<Paged<Company>, ApiError> {
-    let mut query: Vec<(&str, String)> = vec![
-        ("page", page.max(1).to_string()),
-        ("per_page", per_page.clamp(1, 200).to_string()),
-    ];
-    if !search.trim().is_empty() {
-        query.push(("search", search.trim().to_string()));
-    }
-    get_json(access_token, "/api/v1/companies", &query).await
-}
+/// `GET /api/v1/companies/{id}`.
 
 /// `GET /api/v1/deals?page&per_page&search&sort_by&sort_order`.
 /// Orden válido: `title|value|stage|created_at`.
@@ -991,6 +976,1051 @@ pub async fn dashboard_top_deals(access_token: &str) -> Result<TopDeals, ApiErro
 pub async fn global_search(access_token: &str, q: &str) -> Result<SearchResults, ApiError> {
     let query = vec![("q", q.trim().to_string())];
     get_json(access_token, "/api/v1/search", &query).await
+}
+
+/// `GET /api/v1/companies?page&per_page&search&sort_by&sort_order`.
+/// Orden válido: `name|industry|city|country|created_at`.
+pub async fn list_companies(
+    access_token: &str,
+    page: u32,
+    per_page: u32,
+    search: &str,
+    sort_by: &str,
+    sort_order: &str,
+) -> Result<Paged<Company>, ApiError> {
+    let mut query: Vec<(&str, String)> = vec![
+        ("page", page.max(1).to_string()),
+        ("per_page", per_page.clamp(1, 200).to_string()),
+        ("sort_by", sort_by.to_string()),
+        ("sort_order", sort_order.to_string()),
+    ];
+    if !search.trim().is_empty() {
+        query.push(("search", search.trim().to_string()));
+    }
+    get_json(access_token, "/api/v1/companies", &query).await
+}
+
+/// `GET /api/v1/companies/{id}`.
+pub async fn get_company(access_token: &str, id: &str) -> Result<Company, ApiError> {
+    get_json(access_token, &format!("/api/v1/companies/{id}"), &[]).await
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateCompanyBody<'a> {
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub industry: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub website: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub city: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub country: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<&'a str>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct UpdateCompanyBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub industry: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub website: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub city: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub country: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<&'a str>,
+}
+
+/// `POST /api/v1/companies` → 201.
+pub async fn create_company(
+    access_token: &str,
+    body: &CreateCompanyBody<'_>,
+) -> Result<Company, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/companies"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Company>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `PUT /api/v1/companies/{id}`.
+pub async fn update_company(
+    access_token: &str,
+    id: &str,
+    body: &UpdateCompanyBody<'_>,
+) -> Result<Company, ApiError> {
+    let res = client()
+        .put(endpoint(&format!("/api/v1/companies/{id}")))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Company>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/companies/{id}` → 204.
+pub async fn delete_company(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/companies/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `GET /api/v1/companies/{id}/contacts`.
+pub async fn company_contacts(
+    access_token: &str,
+    id: &str,
+) -> Result<Vec<Contact>, ApiError> {
+    get_json(
+        access_token,
+        &format!("/api/v1/companies/{id}/contacts"),
+        &[],
+    )
+    .await
+}
+
+/// `GET /api/v1/companies/{id}/deals`.
+pub async fn company_deals(access_token: &str, id: &str) -> Result<Vec<Deal>, ApiError> {
+    get_json(access_token, &format!("/api/v1/companies/{id}/deals"), &[]).await
+}
+
+/// `GET /api/v1/companies/{id}/revenue` → `{total_value, deal_count}`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct CompanyRevenue {
+    #[serde(default)]
+    pub total_value: f64,
+    #[serde(default)]
+    pub deal_count: i64,
+}
+
+pub async fn company_revenue(
+    access_token: &str,
+    id: &str,
+) -> Result<CompanyRevenue, ApiError> {
+    get_json(
+        access_token,
+        &format!("/api/v1/companies/{id}/revenue"),
+        &[],
+    )
+    .await
+}
+
+// --- CRM: leads -----------------------------------------------------------
+// `status`: new|contacted|qualified|unqualified|converted|recycled.
+// `lead_source`: web|referral|cold_call|advertisement|email|social|partner|event|other.
+
+/// Prospecto (`GET /api/v1/leads`, …).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct Lead {
+    pub id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    #[serde(default)]
+    pub email: Option<String>,
+    #[serde(default)]
+    pub phone: Option<String>,
+    #[serde(default)]
+    pub company_name: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub industry: Option<String>,
+    #[serde(default)]
+    pub website: Option<String>,
+    #[serde(default = "default_lead_source")]
+    pub lead_source: String,
+    #[serde(default = "default_lead_status")]
+    pub status: String,
+    #[serde(default)]
+    pub score: i32,
+    #[serde(default)]
+    pub assigned_to: Option<Uuid>,
+    #[serde(default)]
+    pub converted_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub converted_contact_id: Option<Uuid>,
+    #[serde(default)]
+    pub converted_company_id: Option<Uuid>,
+    #[serde(default)]
+    pub converted_deal_id: Option<Uuid>,
+    #[serde(default)]
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+fn default_lead_source() -> String {
+    "other".to_string()
+}
+
+fn default_lead_status() -> String {
+    "new".to_string()
+}
+
+impl Lead {
+    pub fn full_name(&self) -> String {
+        format!("{} {}", self.first_name, self.last_name)
+            .trim()
+            .to_string()
+    }
+}
+
+/// Etiquetas legibles de estado y origen.
+pub fn lead_status_label(status: &str) -> &'static str {
+    match status {
+        "new" => "Nuevo",
+        "contacted" => "Contactado",
+        "qualified" => "Calificado",
+        "unqualified" => "Descartado",
+        "converted" => "Convertido",
+        "recycled" => "Reciclado",
+        _ => "Otro",
+    }
+}
+
+pub fn lead_source_label(source: &str) -> &'static str {
+    match source {
+        "web" => "Web",
+        "referral" => "Referido",
+        "cold_call" => "Llamada en frío",
+        "advertisement" => "Publicidad",
+        "email" => "Email",
+        "social" => "Redes",
+        "partner" => "Socio",
+        "event" => "Evento",
+        "other" => "Otro",
+        _ => "Otro",
+    }
+}
+
+/// Estados en orden de avance para filtros.
+pub const LEAD_STATUSES: [&str; 6] = [
+    "new",
+    "contacted",
+    "qualified",
+    "unqualified",
+    "converted",
+    "recycled",
+];
+
+pub const LEAD_SOURCES: [&str; 9] = [
+    "web",
+    "referral",
+    "cold_call",
+    "advertisement",
+    "email",
+    "social",
+    "partner",
+    "event",
+    "other",
+];
+
+#[derive(Debug, Serialize)]
+pub struct CreateLeadBody<'a> {
+    pub first_name: &'a str,
+    pub last_name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub industry: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub website: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lead_source: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assigned_to: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<&'a str>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct UpdateLeadBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub industry: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub website: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lead_source: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConvertLeadBody<'a> {
+    pub pipeline_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deal_title: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deal_value: Option<f64>,
+}
+
+/// Resultado de `POST /api/v1/leads/{id}/convert`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ConvertLeadResult {
+    #[serde(default)]
+    pub contact_id: Option<Uuid>,
+    #[serde(default)]
+    pub company_id: Option<Uuid>,
+    #[serde(default)]
+    pub deal_id: Option<Uuid>,
+}
+
+/// `GET /api/v1/leads/stats`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct LeadSourceCount {
+    pub source: String,
+    #[serde(default)]
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct LeadStats {
+    #[serde(default)]
+    pub total: i64,
+    #[serde(default)]
+    pub new: i64,
+    #[serde(default)]
+    pub contacted: i64,
+    #[serde(default)]
+    pub qualified: i64,
+    #[serde(default)]
+    pub converted: i64,
+    #[serde(default)]
+    pub conversion_rate: f64,
+    #[serde(default)]
+    pub by_source: Vec<LeadSourceCount>,
+}
+
+/// Actividad propia de un lead (`GET /api/v1/leads/{id}/activities`).
+/// Ojo: la clave JSON del tipo es `type`, no `activity_type`.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct LeadActivity {
+    pub id: Uuid,
+    pub lead_id: Uuid,
+    #[serde(rename = "type")]
+    pub activity_type: String,
+    pub subject: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub due_date: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub completed: bool,
+    #[serde(default)]
+    pub created_by: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateLeadActivityBody<'a> {
+    #[serde(rename = "type")]
+    pub activity_type: &'a str,
+    pub subject: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<&'a str>,
+}
+
+/// `GET /api/v1/leads?page&per_page&search&status&lead_source&sort&sort_dir`.
+pub async fn list_leads(
+    access_token: &str,
+    page: u32,
+    per_page: u32,
+    search: &str,
+    status: &str,
+    source: &str,
+    sort: &str,
+    sort_dir: &str,
+) -> Result<Paged<Lead>, ApiError> {
+    let mut query: Vec<(&str, String)> = vec![
+        ("page", page.max(1).to_string()),
+        ("per_page", per_page.clamp(1, 100).to_string()),
+        ("sort", sort.to_string()),
+        ("sort_dir", sort_dir.to_string()),
+    ];
+    if !search.trim().is_empty() {
+        query.push(("search", search.trim().to_string()));
+    }
+    if !status.trim().is_empty() {
+        query.push(("status", status.trim().to_string()));
+    }
+    if !source.trim().is_empty() {
+        query.push(("lead_source", source.trim().to_string()));
+    }
+    get_json(access_token, "/api/v1/leads", &query).await
+}
+
+/// `GET /api/v1/leads/{id}`.
+pub async fn get_lead(access_token: &str, id: &str) -> Result<Lead, ApiError> {
+    get_json(access_token, &format!("/api/v1/leads/{id}"), &[]).await
+}
+
+/// `POST /api/v1/leads` → 201.
+pub async fn create_lead(access_token: &str, body: &CreateLeadBody<'_>) -> Result<Lead, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/leads"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Lead>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `PUT /api/v1/leads/{id}`.
+pub async fn update_lead(
+    access_token: &str,
+    id: &str,
+    body: &UpdateLeadBody<'_>,
+) -> Result<Lead, ApiError> {
+    let res = client()
+        .put(endpoint(&format!("/api/v1/leads/{id}")))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Lead>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/leads/{id}` → 204.
+pub async fn delete_lead(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/leads/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `POST /api/v1/leads/{id}/convert` → contacto + empresa/deal.
+pub async fn convert_lead(
+    access_token: &str,
+    id: &str,
+    body: &ConvertLeadBody<'_>,
+) -> Result<ConvertLeadResult, ApiError> {
+    let res = client()
+        .post(endpoint(&format!("/api/v1/leads/{id}/convert")))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<ConvertLeadResult>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `GET /api/v1/leads/stats`.
+pub async fn lead_stats(access_token: &str) -> Result<LeadStats, ApiError> {
+    get_json(access_token, "/api/v1/leads/stats", &[]).await
+}
+
+/// `GET /api/v1/leads/{id}/activities`.
+pub async fn lead_activities(
+    access_token: &str,
+    id: &str,
+) -> Result<Vec<LeadActivity>, ApiError> {
+    get_json(
+        access_token,
+        &format!("/api/v1/leads/{id}/activities"),
+        &[],
+    )
+    .await
+}
+
+/// `POST /api/v1/leads/{id}/activities` → 201.
+pub async fn create_lead_activity(
+    access_token: &str,
+    id: &str,
+    body: &CreateLeadActivityBody<'_>,
+) -> Result<LeadActivity, ApiError> {
+    let res = client()
+        .post(endpoint(&format!("/api/v1/leads/{id}/activities")))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<LeadActivity>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `POST /api/v1/leads/{lead_id}/activities/{activity_id}` (completar) → 200 sin body.
+pub async fn complete_lead_activity(
+    access_token: &str,
+    lead_id: &str,
+    activity_id: &str,
+) -> Result<(), ApiError> {
+    let res = client()
+        .post(endpoint(&format!(
+            "/api/v1/leads/{lead_id}/activities/{activity_id}"
+        )))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/leads/{lead_id}/activities/{activity_id}` → 204.
+pub async fn delete_lead_activity(
+    access_token: &str,
+    lead_id: &str,
+    activity_id: &str,
+) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!(
+            "/api/v1/leads/{lead_id}/activities/{activity_id}"
+        )))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- CRM: actividades ------------------------------------------------------
+// `activity_type`: call|email|meeting|task|note (minúsculas).
+
+/// Etiqueta legible del tipo de actividad.
+pub fn activity_type_label(kind: &str) -> &'static str {
+    match kind {
+        "call" => "Llamada",
+        "email" => "Email",
+        "meeting" => "Reunión",
+        "task" => "Tarea",
+        "note" => "Nota",
+        _ => "Otra",
+    }
+}
+
+pub const ACTIVITY_TYPES: [&str; 5] = ["call", "email", "meeting", "task", "note"];
+
+#[derive(Debug, Serialize)]
+pub struct CreateActivityBody<'a> {
+    pub activity_type: &'a str,
+    pub subject: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contact_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deal_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub company_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<&'a str>,
+}
+
+/// `GET /api/v1/activities` — array plano (orden fijo por creación).
+pub async fn list_activities(
+    access_token: &str,
+    activity_type: &str,
+    contact_id: &str,
+    deal_id: &str,
+    company_id: &str,
+) -> Result<Vec<Activity>, ApiError> {
+    let mut query: Vec<(&str, String)> = Vec::new();
+    if !activity_type.trim().is_empty() {
+        query.push(("activity_type", activity_type.trim().to_string()));
+    }
+    if !contact_id.trim().is_empty() {
+        query.push(("contact_id", contact_id.trim().to_string()));
+    }
+    if !deal_id.trim().is_empty() {
+        query.push(("deal_id", deal_id.trim().to_string()));
+    }
+    if !company_id.trim().is_empty() {
+        query.push(("company_id", company_id.trim().to_string()));
+    }
+    get_json(access_token, "/api/v1/activities", &query).await
+}
+
+/// `POST /api/v1/activities` → 201.
+pub async fn create_activity(
+    access_token: &str,
+    body: &CreateActivityBody<'_>,
+) -> Result<Activity, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/activities"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Activity>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `POST /api/v1/activities/{id}/complete` → 200 con la actividad.
+pub async fn complete_activity(access_token: &str, id: &str) -> Result<Activity, ApiError> {
+    let res = client()
+        .post(endpoint(&format!("/api/v1/activities/{id}/complete")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Activity>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/activities/{id}` → 204.
+pub async fn delete_activity(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/activities/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- CRM: documentos -------------------------------------------------------
+
+/// Documento (`GET /api/v1/documents`, …).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct Document {
+    pub id: Uuid,
+    pub filename: String,
+    pub original_name: String,
+    #[serde(default)]
+    pub mime_type: Option<String>,
+    #[serde(default)]
+    pub file_size: i64,
+    #[serde(default)]
+    pub folder: Option<String>,
+    #[serde(default)]
+    pub uploaded_by: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// `GET /api/v1/documents?search=&folder=&mime_type=` — array plano.
+pub async fn list_documents(
+    access_token: &str,
+    search: &str,
+) -> Result<Vec<Document>, ApiError> {
+    let mut query: Vec<(&str, String)> = Vec::new();
+    if !search.trim().is_empty() {
+        query.push(("search", search.trim().to_string()));
+    }
+    get_json(access_token, "/api/v1/documents", &query).await
+}
+
+/// `GET /api/v1/documents/{id}`.
+pub async fn get_document(access_token: &str, id: &str) -> Result<Document, ApiError> {
+    get_json(access_token, &format!("/api/v1/documents/{id}"), &[]).await
+}
+
+/// `GET /api/v1/documents/{id}/download` — bytes del archivo.
+pub async fn download_document(
+    access_token: &str,
+    id: &str,
+) -> Result<Vec<u8>, ApiError> {
+    let res = client()
+        .get(endpoint(&format!("/api/v1/documents/{id}/download")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.bytes()
+            .await
+            .map(|b| b.to_vec())
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/documents/{id}` → 204.
+pub async fn delete_document(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/documents/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- CRM: reportes ---------------------------------------------------------
+
+/// `GET /api/v1/reports/pipeline`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct PipelineReportItem {
+    pub stage: String,
+    #[serde(default)]
+    pub count: i64,
+    #[serde(default)]
+    pub total_value: f64,
+    #[serde(default)]
+    pub avg_value: f64,
+    #[serde(default)]
+    pub percentage: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct PipelineReport {
+    #[serde(default)]
+    pub stages: Vec<PipelineReportItem>,
+    #[serde(default)]
+    pub total_deals: i64,
+    #[serde(default)]
+    pub total_value: f64,
+}
+
+/// `GET /api/v1/reports/win-loss`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct WinLossReport {
+    #[serde(default)]
+    pub won_count: i64,
+    #[serde(default)]
+    pub lost_count: i64,
+    #[serde(default)]
+    pub win_rate: f64,
+    #[serde(default)]
+    pub loss_rate: f64,
+    #[serde(default)]
+    pub won_value: f64,
+    #[serde(default)]
+    pub lost_value: f64,
+    #[serde(default)]
+    pub total_closed: i64,
+}
+
+pub async fn pipeline_report(access_token: &str) -> Result<PipelineReport, ApiError> {
+    get_json(access_token, "/api/v1/reports/pipeline", &[]).await
+}
+
+pub async fn win_loss_report(access_token: &str) -> Result<WinLossReport, ApiError> {
+    get_json(access_token, "/api/v1/reports/win-loss", &[]).await
+}
+
+// --- CRM: notificaciones ---------------------------------------------------
+
+/// Notificación (`GET /api/v1/notifications`, …).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct Notification {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub title: String,
+    #[serde(default)]
+    pub message: String,
+    #[serde(default)]
+    pub entity_type: Option<String>,
+    #[serde(default)]
+    pub entity_id: Option<Uuid>,
+    #[serde(default)]
+    pub read: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+/// `GET /api/v1/notifications` — últimas 50.
+pub async fn list_notifications(
+    access_token: &str,
+) -> Result<Vec<Notification>, ApiError> {
+    get_json(access_token, "/api/v1/notifications", &[]).await
+}
+
+/// `GET /api/v1/notifications/unread-count` → `{count}`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct UnreadCount {
+    #[serde(default)]
+    pub count: i64,
+}
+
+pub async fn unread_count(access_token: &str) -> Result<UnreadCount, ApiError> {
+    get_json(access_token, "/api/v1/notifications/unread-count", &[]).await
+}
+
+/// `PUT /api/v1/notifications/{id}/read` → 200 vacío.
+pub async fn mark_notification_read(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .put(endpoint(&format!("/api/v1/notifications/{id}/read")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `PUT /api/v1/notifications/read-all` → 200 vacío.
+pub async fn mark_all_notifications_read(access_token: &str) -> Result<(), ApiError> {
+    let res = client()
+        .put(endpoint("/api/v1/notifications/read-all"))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/notifications/{id}` → 204.
+pub async fn delete_notification(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/notifications/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// Preferencias (`GET /api/v1/notifications/preferences`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct NotificationPreferences {
+    pub user_id: Uuid,
+    #[serde(default = "default_true")]
+    pub email_enabled: bool,
+    #[serde(default = "default_true")]
+    pub push_enabled: bool,
+    #[serde(default)]
+    pub weekly_digest: bool,
+    #[serde(default)]
+    pub marketing_emails: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct UpdateNotificationPreferences {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weekly_digest: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub marketing_emails: Option<bool>,
+}
+
+pub async fn get_prefs(access_token: &str) -> Result<NotificationPreferences, ApiError> {
+    get_json(access_token, "/api/v1/notifications/preferences", &[]).await
+}
+
+/// `PUT /api/v1/notifications/preferences` → 200 vacío.
+pub async fn update_prefs(
+    access_token: &str,
+    body: &UpdateNotificationPreferences,
+) -> Result<(), ApiError> {
+    let res = client()
+        .put(endpoint("/api/v1/notifications/preferences"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- Admin: gestión de usuarios --------------------------------------------
+
+#[derive(Debug, Serialize)]
+pub struct AdminCreateUserBody<'a> {
+    pub email: &'a str,
+    pub name: &'a str,
+    pub password: &'a str,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminUpdateUserBody<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<&'a str>,
+}
+
+/// `POST /api/v1/users` (admin) → 201.
+pub async fn admin_create_user(
+    access_token: &str,
+    body: &AdminCreateUserBody<'_>,
+) -> Result<UserPublic, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/users"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<UserPublic>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `PUT /api/v1/users/{id}/profile` (admin).
+pub async fn admin_update_user(
+    access_token: &str,
+    id: &str,
+    body: &AdminUpdateUserBody<'_>,
+) -> Result<UserPublic, ApiError> {
+    let res = client()
+        .put(endpoint(&format!("/api/v1/users/{id}/profile")))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<UserPublic>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/users/{id}` (admin) → 204. 422 si es uno mismo.
+pub async fn admin_delete_user(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/users/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
 }
 
 // --- Privacidad Ley 21.719 (contrato real del backend `occb`) ----------------
