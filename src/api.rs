@@ -2522,6 +2522,203 @@ pub async fn whatsapp_conversations(
     .await
 }
 
+// --- Ajustes: integraciones, IA y reparto ----------------------------------------
+
+/// Estado de una integración OAuth.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct IntegrationStatus {
+    pub provider: String,
+    #[serde(default)]
+    pub connected: bool,
+    #[serde(default)]
+    pub connected_at: Option<String>,
+    #[serde(default)]
+    pub provider_email: Option<String>,
+    #[serde(default)]
+    pub provider_name: Option<String>,
+}
+
+/// `GET /api/v1/integrations`.
+pub async fn list_integrations(access_token: &str) -> Result<Vec<IntegrationStatus>, ApiError> {
+    get_json(access_token, "/api/v1/integrations", &[]).await
+}
+
+/// `GET /api/v1/integrations/{provider}/connect` → `{auth_url}`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct OAuthConnectUrl {
+    #[serde(default)]
+    pub auth_url: String,
+}
+
+pub async fn integration_connect_url(
+    access_token: &str,
+    provider: &str,
+) -> Result<OAuthConnectUrl, ApiError> {
+    get_json(
+        access_token,
+        &format!("/api/v1/integrations/{provider}/connect"),
+        &[],
+    )
+    .await
+}
+
+/// `DELETE /api/v1/integrations/{provider}/disconnect` → 204.
+pub async fn integration_disconnect(access_token: &str, provider: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!(
+            "/api/v1/integrations/{provider}/disconnect"
+        )))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// Config de IA (`GET /api/v1/settings/ai`; sin `api_key`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AIConfig {
+    #[serde(default)]
+    pub provider: String,
+    #[serde(default)]
+    pub api_url: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub is_active: bool,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct AIConfigInput<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_url: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<&'a str>,
+}
+
+pub async fn get_ai_config(access_token: &str) -> Result<AIConfig, ApiError> {
+    get_json(access_token, "/api/v1/settings/ai", &[]).await
+}
+
+/// `PUT /api/v1/settings/ai`.
+pub async fn update_ai_config(
+    access_token: &str,
+    body: &AIConfigInput<'_>,
+) -> Result<AIConfig, ApiError> {
+    let res = client()
+        .put(endpoint("/api/v1/settings/ai"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<AIConfig>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// Reparto de leads (`GET|PUT /api/v1/settings/lead-assignment`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct LeadAssignmentConfig {
+    #[serde(default)]
+    pub strategy: String,
+    #[serde(default)]
+    pub max_active_leads: i32,
+    #[serde(default)]
+    pub territory_enabled: bool,
+    #[serde(default)]
+    pub notify_on_assign: bool,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct LeadAssignmentInput<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_active_leads: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub territory_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notify_on_assign: Option<bool>,
+}
+
+pub async fn get_lead_assignment(access_token: &str) -> Result<LeadAssignmentConfig, ApiError> {
+    get_json(access_token, "/api/v1/settings/lead-assignment", &[]).await
+}
+
+pub async fn update_lead_assignment(
+    access_token: &str,
+    body: &LeadAssignmentInput<'_>,
+) -> Result<LeadAssignmentConfig, ApiError> {
+    let res = client()
+        .put(endpoint("/api/v1/settings/lead-assignment"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<LeadAssignmentConfig>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct AssignLeadBody<'a> {
+    pub lead_id: &'a str,
+    pub lead_type: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<&'a str>,
+}
+
+/// `POST /api/v1/settings/lead-assignment/assign`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AgentAssignment {
+    pub agent_id: Uuid,
+    #[serde(default)]
+    pub agent_name: String,
+    pub lead_id: Uuid,
+    #[serde(default)]
+    pub lead_type: String,
+    #[serde(default)]
+    pub status: String,
+}
+
+pub async fn assign_lead(
+    access_token: &str,
+    body: &AssignLeadBody<'_>,
+) -> Result<AgentAssignment, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/settings/lead-assignment/assign"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<AgentAssignment>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
 // --- Staff: auditoría ----------------------------------------------------------
 // Requiere permiso de auditoría (`audit.*`); 403 en caso contrario.
 

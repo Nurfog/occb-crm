@@ -14,12 +14,14 @@ use crate::pages::{
     deals::{DealDetail, Deals},
     documents::Documents,
     email::Email,
+    help::Help,
     home::Home,
     leads::{LeadDetail, Leads},
     notifications::Notifications,
     password::{ForgotPassword, ResetPassword},
     reports::Reports,
     search::Search,
+    settings::Settings,
     whatsapp::{Whatsapp, WhatsappConfig},
     not_found::NotFound,
     privacy::Privacy,
@@ -78,6 +80,10 @@ pub enum Route {
     Whatsapp {},
     #[route("/whatsapp/config")]
     WhatsappConfig {},
+    #[route("/ajustes")]
+    Settings {},
+    #[route("/ayuda")]
+    Help {},
     #[route("/recuperar")]
     ForgotPassword {},
     #[route("/restablecer")]
