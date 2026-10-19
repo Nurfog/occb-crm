@@ -22,10 +22,10 @@ use serde::{Deserialize, Serialize};
 // ---------------------------------------------------------------------------
 
 /// Email del responsable / DPO que recibe las solicitudes de derechos.
-/// Fijar con `PRIVACY_CONTACT_EMAIL=privacidad@tu-organizacion.cl`.
+/// Fijar con `PRIVACY_CONTACT_EMAIL=juan.allende@gmail.com`.
 pub fn privacy_contact_email() -> String {
     option_env!("PRIVACY_CONTACT_EMAIL")
-        .unwrap_or("privacidad@tu-organizacion.cl")
+        .unwrap_or("juan.allende@gmail.com")
         .to_string()
 }
 

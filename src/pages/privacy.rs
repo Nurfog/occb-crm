@@ -1,7 +1,7 @@
 //! Política de Privacidad (Ley 21.719, Chile).
 //!
-//! Los bloques `[COMPLETAR: …]` deben llenarse con los datos reales del
-//! responsable antes de publicar. Ver `docs/ley-21719.md`.
+//! Datos del responsable provistos por el equipo (entorno de desarrollo).
+//! Revisar con abogado antes de publicar en producción.
 
 use dioxus::prelude::*;
 
@@ -20,10 +20,11 @@ pub fn Privacy() -> Element {
             section { class: "card",
                 h2 { class: "card-title", "1. Quién es responsable de tus datos" }
                 p {
-                    "[COMPLETAR: razón social, RUT y domicilio del responsable del tratamiento]. "
+                    "Responsable del tratamiento: prueba, domicilio 1-9 mi casa 123. "
+                    "[PENDIENTE: agregar RUT del responsable]. "
                     "Contacto de privacidad: "
                     strong { "{contact}" }
-                    ". [COMPLETAR: datos del Delegado de Protección de Datos, si aplica]."
+                    ". Delegado de Protección de Datos: juan."
                 }
             }
 
@@ -74,16 +75,19 @@ pub fn Privacy() -> Element {
             section { class: "card",
                 h2 { class: "card-title", "5. Cuánto tiempo los guardamos" }
                 p {
-                    "[COMPLETAR: plazos de conservación por tipo de dato, p. ej. cuenta activa + X años por obligaciones "
-                    "tributarias/laborales]. Cumplido el plazo, los datos se eliminan o se anonimizan."
+                    "Conservamos tus datos mientras tu cuenta esté activa y hasta 15 años "
+                    "después de cerrarla, por obligaciones legales. Cumplido el plazo, "
+                    "los datos se eliminan o se anonimizan."
                 }
             }
 
             section { class: "card",
                 h2 { class: "card-title", "6. Con quién los compartimos" }
                 p {
-                    "[COMPLETAR: encargados del tratamiento — p. ej. hosting, correo — y transferencias "
-                    "internacionales, si las hay, con sus garantías]. No vendemos tus datos personales."
+                    "Estamos en desarrollo: por ahora no hay encargados externos ni "
+                    "transferencias internacionales. Si se incorporan (p. ej. hosting, "
+                    "correo, analítica), se informarán aquí con sus garantías. "
+                    "No vendemos tus datos personales."
                 }
             }
 
@@ -117,7 +121,7 @@ pub fn Privacy() -> Element {
             }
 
             p { class: "muted small",
-                "Última actualización: [COMPLETAR: fecha]. Te avisaremos de cambios relevantes antes de que apliquen."
+                "Última actualización: 2026-10-19. Te avisaremos de cambios relevantes antes de que apliquen."
             }
         }
     }
