@@ -51,7 +51,11 @@ Sirve `dist/` con cualquier estático (Nginx/Caddy). Ver `Dockerfile`.
 | `/` | Portada + estado del backend |
 | `/login` | Entrada (`POST /api/v1/auth/login`) |
 | `/register` | Registro (`POST /api/v1/auth/register`) |
-| `/dashboard` | Perfil (`GET /api/v1/auth/me`), renovar tokens, salir |
+| `/dashboard` | Panel: perfil + resumen del negocio (stats, top deals) |
+| `/contactos` | Contactos: listado, alta, edición y borrado |
+| `/contactos/:id` | Detalle con negocios y actividad ligada |
+| `/negocios` | Tablero kanban por etapas + alta |
+| `/negocios/:id` | Detalle con edición y cambio de etapa |
 | `/users` | Listado con búsqueda/orden/paginación (`GET /api/v1/users`) |
 | `/users/:id` | Detalle (`GET /api/v1/users/:id`) |
 | `/status` | `health`, `ready` y `version` del backend |
@@ -65,9 +69,11 @@ Auth con rotación de refresh tokens (`register`, `login`, `refresh`,
 directa), usuarios (`get`; el listado `GET /users` es solo admin y la UI lo
 indica), observabilidad (`health`, `ready`, `version`) y privacidad Ley 21.719
 (`privacy/requests` POST público + verificación, `privacy/consents` POST/GET
-latest con sesión). Los módulos CRM de la referencia `opencrmccb`
-(contactos, empresas, deals, actividades, documentos, reportes…) se añadirán
-en `src/api.rs` + `src/pages/` cuando el backend `occb` los exponga.
+latest con sesión), CRM (`contacts` y `companies` list/get/create/update/delete,
+`deals` + `deals/{id}/stage` PATCH, `pipelines`, `dashboard/stats|pipeline|top-deals`,
+`search`) y observabilidad. Los módulos restantes de la referencia `opencrmccb`
+(leads, actividades, calendario, documentos, reportes, notificaciones…) se añadirán
+en `src/api.rs` + `src/pages/` a medida que se necesiten.
 
 ## Seguridad
 

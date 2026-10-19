@@ -27,6 +27,27 @@ pub fn Dashboard() -> Element {
         }
     });
 
+    // Resumen CRM del negocio.
+    let token_crm = auth.read().session.clone().map(|s| s.access_token);
+    let token_top = token_crm.clone();
+    let mut stats = use_resource(move || {
+        let token = token_crm.clone();
+        async move {
+            match token {
+                Some(t) => api::dashboard_stats(&t).await,
+                None => Err(ApiError::no_session()),
+            }
+        }
+    });
+    let top = use_resource(move || {        let token = token_top.clone();
+        async move {
+            match token {
+                Some(t) => api::dashboard_top_deals(&t).await,
+                None => Err(ApiError::no_session()),
+            }
+        }
+    });
+
     if auth.read().session.is_none() {
         return rsx! {
             Layout { title: "Panel".to_string(),
@@ -144,6 +165,78 @@ pub fn Dashboard() -> Element {
                         }
                     }
                 },
+            }
+            section { class: "card",
+                h2 { class: "card-title", "El negocio hoy" }
+                match &*stats.read() {
+                    None => rsx! { p { class: "muted", "Cargando resumen…" } },
+                    Some(Err(e)) => rsx! {
+                        p { class: "muted small",
+                            "Sin resumen (¿falta permiso?): {e} "
+                            button { class: "btn btn-small", onclick: move |_| stats.restart(), "Reintentar" }
+                        }
+                    },
+                    Some(Ok(s)) => {
+                        let revenue = format!("{:.0}", s.total_revenue);
+                        rsx! {
+                            div { class: "grid-cards",
+                                div { class: "card",
+                                    h2 { class: "card-title", "Contactos" }
+                                    p { "{s.total_contacts}" }
+                                }
+                                div { class: "card",
+                                    h2 { class: "card-title", "Negocios activos" }
+                                    p { "{s.active_deals}" }
+                                }
+                                div { class: "card",
+                                    h2 { class: "card-title", "Ganados / Perdidos" }
+                                    p { "{s.won_deals} / {s.lost_deals}" }
+                                }
+                                div { class: "card",
+                                    h2 { class: "card-title", "Ingresos (cerrados)" }
+                                    p { "{revenue}" }
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+            section { class: "card",
+                h2 { class: "card-title", "Mejores negocios" }
+                match &*top.read() {
+                    None => rsx! { p { class: "muted", "Cargando…" } },
+                    Some(Err(e)) => rsx! { p { class: "muted small", "No se pudo cargar: {e}" } },
+                    Some(Ok(t)) => rsx! {
+                        if t.deals.is_empty() {
+                            p { class: "muted", "Aún no hay negocios." }
+                        } else {
+                            ul {
+                                for d in &t.deals {
+                                    {
+                                        let did = d.id.to_string();
+                                        let title = d.title.clone();
+                                        let st = api::deal_stage_label(&d.stage).to_string();
+                                        let amount = format!("{:.0}", d.value);
+                                        rsx! {
+                                            li { key: "{did}",
+                                                Link {
+                                                    to: Route::DealDetail { id: did },
+                                                    class: "link",
+                                                    "{title}"
+                                                }
+                                                span { class: "muted small", " · {st} · {amount}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                }
+                div { class: "row",
+                    Link { to: Route::Contacts {}, class: "btn btn-small", "Ir a contactos" }
+                    Link { to: Route::Deals {}, class: "btn btn-small btn-primary", "Ir al tablero" }
+                }
             }
         }
     }

@@ -4,7 +4,9 @@ use dioxus::prelude::*;
 
 use crate::pages::{
     auth_pages::{Login, Register},
+    contacts::{ContactDetail, Contacts},
     dashboard::Dashboard,
+    deals::{DealDetail, Deals},
     home::Home,
     not_found::NotFound,
     privacy::Privacy,
@@ -25,6 +27,14 @@ pub enum Route {
     Register {},
     #[route("/dashboard")]
     Dashboard {},
+    #[route("/contactos")]
+    Contacts {},
+    #[route("/contactos/:id")]
+    ContactDetail { id: String },
+    #[route("/negocios")]
+    Deals {},
+    #[route("/negocios/:id")]
+    DealDetail { id: String },
     #[route("/users")]
     Users {},
     #[route("/users/:id")]

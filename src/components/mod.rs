@@ -28,6 +28,8 @@ pub fn NavBar() -> Element {
                 Link { to: Route::Home {}, class: "brand", "OCCB · CRM" }
                 nav { class: "nav-links",
                     Link { to: Route::Home {}, class: "nav-link", "Inicio" }
+                    Link { to: Route::Contacts {}, class: "nav-link", "Contactos" }
+                    Link { to: Route::Deals {}, class: "nav-link", "Negocios" }
                     Link { to: Route::Dashboard {}, class: "nav-link", "Panel" }
                     Link { to: Route::Users {}, class: "nav-link", "Usuarios" }
                     Link { to: Route::Status {}, class: "nav-link", "Estado" }

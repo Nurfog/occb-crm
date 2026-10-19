@@ -74,6 +74,25 @@ body {
 .grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
 .grid-cards .card { margin: 0; }
 
+/* Tablero kanban de negocios */
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 1fr);
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+.board-col { min-height: 120px; }
+.deal-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  margin: 0.5rem 0;
+  background: var(--surface);
+}
+.deal-card .input { margin-top: 0.4rem; font-size: 0.9rem; padding: 0.4rem 0.5rem; }
+
 /* Formularios */
 .form { max-width: 460px; display: flex; flex-direction: column; gap: 0.55rem; }
 .field { font-weight: 600; font-size: 0.9rem; margin-top: 0.4rem; }

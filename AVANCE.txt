@@ -1,0 +1,122 @@
+AVANCE — Frontend OCCB CRM (Dioxus) + Privacidad Ley 21.719 (Chile)
+====================================================================
+Fecha: 2026-10-18
+Repos: https://github.com/Nurfog/occb-crm (frontend) | https://github.com/Nurfog/occb (backend)
+Ramas: occb-crm@main (709cbd7) | occb@Nurfog/occb (76389d9)
+
+1. PROYECTO BASE (frontend Dioxus, solo frontend)
+------------------------------------------------
+- Scaffold manual (dx new no funciona sin terminal): Cargo.toml, Dioxus.toml,
+  assets/main.css (CSS plano, sin Tailwind), .env/.env.example, Dockerfile, README.
+- Páginas: / (portada + estado backend), /login, /register, /dashboard (perfil),
+  /users (listado con búsqueda/orden/paginación), /users/:id, /status
+  (health/ready/version), 404.
+- API client (src/api.rs) contra backend occb: auth con rotación de tokens
+  (register/login/refresh/logout/me), users, observabilidad.
+- Sesión solo en memoria (Signal global, nunca localStorage), como exige el backend.
+- API_BASE_URL en tiempo de compilación (defecto http://127.0.0.1:8000);
+  el backend debe incluir el origen del dev-server en CORS_ORIGINS.
+- Verificado: cargo check host + wasm32, dx build OK, dx serve 200 en todas las rutas.
+
+2. LEY 21.719 — FRENTE (frontend)
+---------------------------------
+- Banner de consentimiento opt-in y granular (marketing/analítica OFF por
+  defecto), revocable en «Preferencias de privacidad» (pie de página).
+- Registro: checkbox obligatorio de Política de Privacidad + opt-in de marketing;
+  evidencia local (fecha + versión del texto).
+- Página /privacidad con 8 secciones. PENDIENTE: completar los bloques
+  [COMPLETAR] (razón social, RUT, contacto, plazos, encargados, fecha).
+- Página /derechos: canal ARCOP+B (Acceso, Rectificación, Cancelación,
+  Oposición, Portabilidad, Bloqueo) con plazos visibles (30 días corridos,
+  bloqueo en 2 días hábiles).
+- PRIVACY_CONTACT_EMAIL en tiempo de compilación (canal formal). Valor actual:
+  privacidad@tu-organizacion.cl (PLACEHOLDER — hay que fijar el real).
+- docs/ley-21719.md: mapa de cumplimiento frontend/backend/organizacional.
+- Vigencia plena de la ley: 1 dic 2026 (postergación a 2027 solo proyecto en trámite).
+
+3. ALINEACIÓN CON EL CONTRATO REAL DEL BACKEND (correcciones)
+-------------------------------------------------------------
+Hallazgo: el backend occb ya traía módulo de privacidad completo (solicitudes
+con máquina de estados, verificación por email, prórroga, ejecución real,
+auditoría) + PUT /auth/profile + listado de usuarios solo-admin. El frontend
+asumía un contrato antiguo y estaba roto en 3 puntos — corregidos:
+- /derechos usa el contrato real: payload {email, request_type, motivo,
+  solicitante_nombre}, tipos con "supresion" (no "cancelacion"), respuesta 202
+  {id, status, due_at} con folio oficial + aviso de verificación por email.
+  Acuse provisorio solo cuando no hay red.
+- /dashboard usa perfil extendido de /me (sin created_at) + rectificación
+  directa (PUT /auth/profile) con actualización de sesión local.
+- /users muestra mensaje claro ante 403 (requiere rol administrador).
+- Registro: nota de solo-setup (el primero crea la cuenta admin; después 403).
+
+4. BACKEND occb — NUEVO (único gap detectado)
+----------------------------------------------
+- Migración 043_privacy_consents: tabla privacy_consents (historial por usuario,
+  vigente = última fila; revocar = insertar todo-falso), índice y RLS.
+- POST /api/v1/privacy/consents (201 {id, recorded_at}, protegido, con auditoría).
+- GET /api/v1/privacy/consents/latest (protegido, 404 si nunca decidió).
+- Test unitario de validación (versión 1..99, source 1..20).
+- Verificado: 29 tests OK, clippy limpio (sin warnings nuevos).
+- El frontend ya lo consume: registra al decidir/registrarse (mejor esfuerzo) y
+  reconcilia al entrar (GET latest).
+
+5. PENDIENTES (no son código del frontend)
+------------------------------------------
+a) Desplegar migración 043 en la DB: ./scripts/migrate.sh dev (requiere
+   contenedor Postgres occb-db-dev en marcha).
+b) Fijar PRIVACY_CONTACT_EMAIL real y completar los [COMPLETAR] de /privacidad.
+c) Organizacional/legal: ROPA, DPO, DPIA, contratos con encargados, capacitación,
+   retención/borrado automático, brechas (ver cobertura actual del backend).
+d) Supresión de cuenta y exportación total siguen vía flujo staff (por diseño,
+   con retención legal educacional).
+e) Nota: esto es guía técnica, NO asesoría legal — validar con abogado.
+
+6. COMANDOS ÚTILES
+------------------
+Frontend dev:  dx serve   (API_BASE_URL=http://127.0.0.1:8000 dx serve)
+Frontend prod: API_BASE_URL=https://api.tu-dominio.com dx build --release
+Checks:        cargo check  |  cargo check --target wasm32-unknown-unknown --no-default-features --features web
+Backend tests: cargo test --bin occb-backend   (en /home/juan/orca/workspaces/occb/occb/backend)
+Migrar DB:     ./scripts/migrate.sh dev   (en /home/juan/orca/workspaces/occb/occb)
+
+7. PUNTOS POR REVISAR (checklist)
+---------------------------------
+Ordenados por prioridad. [ ] = pendiente, [x] = verificado en código.
+
+FRONTEND (este repo)
+[ ] [COMPLETAR] de /privacidad (src/pages/privacy.rs:23,26,77,85,120):
+    razón social, RUT, domicilio, DPO, plazos de conservación, encargados,
+    transferencias internacionales, fecha de actualización. Sin esto la
+    política está incompleta = incumplimiento directo.
+[ ] PRIVACY_CONTACT_EMAIL real (.env + build prod). Hoy es placeholder y el
+    canal formal no existe en la práctica.
+[ ] Probar flujo completo contra backend con DB migrada: registro con
+    consentimiento, login con reconciliación, solicitud de derecho (folio
+    oficial), edición de perfil, descarga de portabilidad, revocación desde
+    «Preferencias de privacidad».
+[ ] Revisar que el banner no reaparezca tras decidir (versión CONSENT_VERSION
+    en src/privacy.rs: subirla invalida decisiones anteriores a propósito).
+[ ] Accesibilidad mínima del banner/formularios (navegación por teclado,
+    contraste) antes de publicar.
+
+BACKEND occb (otro repo)
+[ ] Aplicar migración 043 en dev y prod (./scripts/migrate.sh). Sin esto,
+    POST /privacy/consents responde 500 y el frontend solo guarda local.
+[ ] Verificar cobertura de brechas: notificación a titulares + Agencia
+    (hay emails best-effort para solicitudes; revisar el flujo de brechas).
+[ ] Verificar jobs de retención/borrado automático por tipo de dato.
+[ ] Revisar rate-limit del canal público (10/min por IP): suficiente contra
+    spam sin bloquear uso legítimo.
+[ ] Confirmar que search/exports excluyen bloqueados
+    (AND blocked IS NULL OR blocked = FALSE) donde aplique.
+
+ORGANIZACIONAL / LEGAL (fuera del código — con abogado)
+[ ] ROPA: inventario de datos, finalidades, bases, ubicación, accesos.
+[ ] Designar DPO (si aplica) y publicar su contacto.
+[ ] DPIA para tratamientos de riesgo (sensible, NNA, perfilamiento).
+[ ] Contratos con encargados (hosting, correo, analítica) con cláusulas de
+    tratamiento, seguridad y borrado al terminar.
+[ ] Capacitación del equipo que responde solicitudes + evidencia de respuestas
+    dentro de plazo (el no-responder ya es infracción).
+[ ] Validar todo lo anterior con abogado antes del 1 dic 2026.
+
