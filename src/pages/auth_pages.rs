@@ -102,6 +102,8 @@ pub fn Login() -> Element {
                 p { class: "muted small",
                     "¿Sin cuenta? "
                     Link { to: Route::Register {}, class: "link", "Crea una cuenta" }
+                    " · ¿Olvidaste tu clave? "
+                    Link { to: Route::ForgotPassword {}, class: "link", "Recupérala" }
                     "."
                 }
             }

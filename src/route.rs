@@ -13,6 +13,7 @@ use crate::pages::{
     home::Home,
     leads::{LeadDetail, Leads},
     notifications::Notifications,
+    password::{ChangePassword, ForgotPassword, ResetPassword},
     reports::Reports,
     search::Search,
     not_found::NotFound,
@@ -60,6 +61,10 @@ pub enum Route {
     Notifications {},
     #[route("/buscar")]
     Search {},
+    #[route("/recuperar")]
+    ForgotPassword {},
+    #[route("/restablecer")]
+    ResetPassword {},
     #[route("/users")]
     Users {},
     #[route("/users/:id")]

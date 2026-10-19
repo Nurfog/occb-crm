@@ -318,6 +318,78 @@ pub async fn update_profile(
     }
 }
 
+#[derive(Debug, Serialize)]
+struct ChangePasswordBody<'a> {
+    current_password: &'a str,
+    new_password: &'a str,
+}
+
+/// `PUT /api/v1/auth/password` — cambia la clave del dueño del token.
+pub async fn change_password(
+    access_token: &str,
+    current: &str,
+    new: &str,
+) -> Result<(), ApiError> {
+    let res = client()
+        .put(endpoint("/api/v1/auth/password"))
+        .bearer_auth(access_token)
+        .json(&ChangePasswordBody {
+            current_password: current,
+            new_password: new,
+        })
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct ForgotPasswordBody<'a> {
+    email: &'a str,
+}
+
+/// `POST /api/v1/auth/forgot-password` — siempre 200 (anti-enumeración).
+/// El backend aún no envía el email (TODO SMTP): el token se entrega
+/// por fuera y se ingresa en `/restablecer`.
+pub async fn forgot_password(email: &str) -> Result<(), ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/auth/forgot-password"))
+        .json(&ForgotPasswordBody { email })
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct ResetPasswordBody<'a> {
+    token: &'a str,
+    password: &'a str,
+}
+
+/// `POST /api/v1/auth/reset-password` — canjea el token por la nueva clave.
+pub async fn reset_password(token: &str, password: &str) -> Result<(), ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/auth/reset-password"))
+        .json(&ResetPasswordBody { token, password })
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
 // --- Users (protegido) ---------------------------------------------------
 
 /// `GET /api/v1/users?page&per_page&q&sort&dir`.

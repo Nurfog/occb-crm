@@ -9,6 +9,7 @@ pub mod deals;
 pub mod documents;
 pub mod leads;
 pub mod notifications;
+pub mod password;
 pub mod reports;
 pub mod search;
 pub mod home;

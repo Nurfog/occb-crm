@@ -6,6 +6,7 @@ use crate::{
     api::{self, ApiError},
     auth::{use_auth, Session},
     components::Layout,
+    pages::password::ChangePassword,
     route::Route,
 };
 
@@ -237,6 +238,10 @@ pub fn Dashboard() -> Element {
                     Link { to: Route::Contacts {}, class: "btn btn-small", "Ir a contactos" }
                     Link { to: Route::Deals {}, class: "btn btn-small btn-primary", "Ir al tablero" }
                 }
+            }
+            section { class: "card",
+                h2 { class: "card-title", "Seguridad" }
+                ChangePassword {}
             }
         }
     }
