@@ -11,7 +11,7 @@ ENV API_BASE_URL=${API_BASE_URL}
 ARG PRIVACY_CONTACT_EMAIL=privacidad@example.com
 ENV PRIVACY_CONTACT_EMAIL=${PRIVACY_CONTACT_EMAIL}
 RUN rustup target add wasm32-unknown-unknown \
-    && cargo install dioxus-cli --version 0.7 --locked
+    && cargo install dioxus-cli --version 0.7.10 --locked
 WORKDIR /app
 COPY . .
 RUN dx build --release
