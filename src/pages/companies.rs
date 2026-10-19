@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use crate::{
     api::{self, ApiError},
     auth::use_auth,
-    components::Layout,
+    components::{tags::EntityTags, Layout},
     route::Route,
 };
 
@@ -32,8 +32,11 @@ pub fn Companies() -> Element {
     let mut sort_by = use_signal(|| "created_at".to_string());
     let mut order = use_signal(|| "desc".to_string());
     let mut show_new = use_signal(|| false);
+    let mut op_msg = use_signal(|| None::<String>);
 
     let token_of = auth.read().session.clone().map(|s| s.access_token);
+    let token_ex = token_of.clone();
+    let token_im = token_of.clone();
     let mut items = use_resource(move || {
         let token = token_of.clone();
         let q = applied.read().clone();
@@ -75,6 +78,76 @@ pub fn Companies() -> Element {
                     onclick: move |_| show_new.set(!creating),
                     "{new_label}"
                 }
+                button {
+                    class: "btn btn-small",
+                    onclick: move |_| {
+                        let tok = token_ex.clone();
+                        let qq = applied.read().clone();
+                        spawn(async move {
+                            if let Some(t) = tok {
+                                match api::export_companies(&t, &qq).await {
+                                    Ok(csv) => {
+                                        let _ = crate::privacy::download_text_file(
+                                            "empresas.csv",
+                                            &csv,
+                                        );
+                                    }
+                                    Err(e) => op_msg.set(Some(e.to_string())),
+                                }
+                            }
+                        });
+                    },
+                    "Exportar CSV"
+                }
+            }
+            div { class: "row",
+                input {
+                    r#type: "file",
+                    id: "companies-import",
+                    accept: ".csv,text/csv",
+                }
+                button {
+                    class: "btn btn-small",
+                    onclick: move |_| {
+                        let tok = token_im.clone();
+                        op_msg.set(None);
+                        spawn(async move {
+                            match crate::files::read_first_file("companies-import").await {
+                                Ok((_, _, bytes)) => match String::from_utf8(bytes) {
+                                    Ok(csv) => {
+                                        if let Some(t) = tok {
+                                            match api::import_companies(&t, &csv).await {
+                                                Ok(r) => {
+                                                    op_msg.set(
+                                                        Some(
+                                                            format!(
+                                                                "Importadas: {}. Filas con error: {}.",
+                                                                r.imported,
+                                                                r.errors.len()
+                                                            ),
+                                                        ),
+                                                    );
+                                                    items.restart();
+                                                }
+                                                Err(e) => op_msg.set(Some(e.to_string())),
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        op_msg.set(
+                                            Some("El archivo no es UTF-8 válido.".to_string()),
+                                        );
+                                    }
+                                },
+                                Err(e) => op_msg.set(Some(e)),
+                            }
+                        });
+                    },
+                    "Importar CSV"
+                }
+            }
+            if let Some(msg) = op_msg.read().clone() {
+                p { class: "alert alert-info", "{msg}" }
             }
             if creating {
                 NewCompanyForm { on_created: move || {
@@ -421,6 +494,7 @@ pub fn CompanyDetail(id: String) -> Element {
                     let detail_name = c.name.clone();
                     rsx! {
                         CompanyEditor { company: c.clone(), on_saved: move || company.restart() }
+                        EntityTags { entity_type: "company".to_string(), entity_id: detail_id.clone() }
                         DeleteCompany { id: detail_id, name: detail_name }
                         section { class: "card",
                             h2 { class: "card-title", "Ingresos (ganados + en curso)" }

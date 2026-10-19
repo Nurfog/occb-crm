@@ -2095,6 +2095,314 @@ pub async fn admin_delete_user(access_token: &str, id: &str) -> Result<(), ApiEr
     }
 }
 
+// --- CRM: etiquetas ----------------------------------------------------------
+// `entity_type`: contact|company|deal|lead.
+
+/// Etiqueta (`GET /api/v1/tags`, …).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct Tag {
+    pub id: Uuid,
+    pub name: String,
+    #[serde(default)]
+    pub color: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateTagBody<'a> {
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<&'a str>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AssignTagBody<'a> {
+    pub tag_id: &'a str,
+    pub entity_type: &'a str,
+    pub entity_id: &'a str,
+}
+
+/// `GET /api/v1/tags` — todas, ordenadas por nombre.
+pub async fn list_tags(access_token: &str) -> Result<Vec<Tag>, ApiError> {
+    get_json(access_token, "/api/v1/tags", &[]).await
+}
+
+/// `POST /api/v1/tags` → 201.
+pub async fn create_tag(access_token: &str, body: &CreateTagBody<'_>) -> Result<Tag, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/tags"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<Tag>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/tags/{id}` → 204.
+pub async fn delete_tag(access_token: &str, id: &str) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!("/api/v1/tags/{id}")))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `GET /api/v1/tags/{entity_type}/{entity_id}`.
+pub async fn entity_tags(
+    access_token: &str,
+    entity_type: &str,
+    entity_id: &str,
+) -> Result<Vec<Tag>, ApiError> {
+    get_json(
+        access_token,
+        &format!("/api/v1/tags/{entity_type}/{entity_id}"),
+        &[],
+    )
+    .await
+}
+
+/// `POST /api/v1/tags/assign` → 201.
+pub async fn assign_tag(access_token: &str, body: &AssignTagBody<'_>) -> Result<(), ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/tags/assign"))
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `DELETE /api/v1/tags/{tag_id}/{entity_type}/{entity_id}` → 204.
+pub async fn remove_tag(
+    access_token: &str,
+    tag_id: &str,
+    entity_type: &str,
+    entity_id: &str,
+) -> Result<(), ApiError> {
+    let res = client()
+        .delete(endpoint(&format!(
+            "/api/v1/tags/{tag_id}/{entity_type}/{entity_id}"
+        )))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- CRM: importar / exportar / borrado masivo --------------------------------
+
+async fn get_text(
+    token: &str,
+    path: &str,
+    query: &[(&str, String)],
+) -> Result<String, ApiError> {
+    let res = client()
+        .get(endpoint(path))
+        .bearer_auth(token)
+        .query(query)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.text()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `GET /api/v1/contacts/export?search=` → CSV.
+pub async fn export_contacts(access_token: &str, search: &str) -> Result<String, ApiError> {
+    let mut query: Vec<(&str, String)> = Vec::new();
+    if !search.trim().is_empty() {
+        query.push(("search", search.trim().to_string()));
+    }
+    get_text(access_token, "/api/v1/contacts/export", &query).await
+}
+
+/// `GET /api/v1/companies/export?search=` → CSV.
+pub async fn export_companies(access_token: &str, search: &str) -> Result<String, ApiError> {
+    let mut query: Vec<(&str, String)> = Vec::new();
+    if !search.trim().is_empty() {
+        query.push(("search", search.trim().to_string()));
+    }
+    get_text(access_token, "/api/v1/companies/export", &query).await
+}
+
+/// `GET /api/v1/deals/export` → CSV.
+pub async fn export_deals(access_token: &str) -> Result<String, ApiError> {
+    get_text(access_token, "/api/v1/deals/export", &[]).await
+}
+
+/// Resultado de una importación CSV.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ImportResult {
+    #[serde(default)]
+    pub imported: u32,
+    #[serde(default)]
+    pub errors: Vec<String>,
+}
+
+async fn post_csv(token: &str, path: &str, csv: &str) -> Result<ImportResult, ApiError> {
+    let res = client()
+        .post(endpoint(path))
+        .bearer_auth(token)
+        .header("Content-Type", "text/csv")
+        .body(csv.to_string())
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<ImportResult>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+/// `POST /api/v1/contacts/import` (CSV UTF-8, máx 2 MB).
+pub async fn import_contacts(access_token: &str, csv: &str) -> Result<ImportResult, ApiError> {
+    post_csv(access_token, "/api/v1/contacts/import", csv).await
+}
+
+/// `POST /api/v1/companies/import` (CSV UTF-8, máx 2 MB, máx 1000 filas).
+pub async fn import_companies(access_token: &str, csv: &str) -> Result<ImportResult, ApiError> {
+    post_csv(access_token, "/api/v1/companies/import", csv).await
+}
+
+/// `POST /api/v1/deals/import`.
+pub async fn import_deals(access_token: &str, csv: &str) -> Result<ImportResult, ApiError> {
+    post_csv(access_token, "/api/v1/deals/import", csv).await
+}
+
+/// `POST /api/v1/contacts/bulk-delete` → `{deleted}`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct BulkDeleteResult {
+    #[serde(default)]
+    pub deleted: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkDeleteBody<'a> {
+    ids: &'a [String],
+}
+
+pub async fn bulk_delete_contacts(
+    access_token: &str,
+    ids: &[String],
+) -> Result<BulkDeleteResult, ApiError> {
+    let res = client()
+        .post(endpoint("/api/v1/contacts/bulk-delete"))
+        .bearer_auth(access_token)
+        .json(&BulkDeleteBody { ids })
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<BulkDeleteResult>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
+// --- CRM: subida de documentos ------------------------------------------------
+
+/// Acuse de `POST /api/v1/documents/upload` (multipart `file` + `folder`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct UploadResponse {
+    pub id: Uuid,
+    pub filename: String,
+    pub original_name: String,
+    #[serde(default)]
+    pub mime_type: Option<String>,
+    #[serde(default)]
+    pub file_size: i64,
+    #[serde(default)]
+    pub folder: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Sube un archivo construyendo el multipart a mano (compatible con wasm).
+pub async fn upload_document(
+    access_token: &str,
+    filename: &str,
+    mime: &str,
+    folder: Option<&str>,
+    bytes: &[u8],
+) -> Result<UploadResponse, ApiError> {
+    let clean = filename
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("archivo")
+        .to_string();
+    let boundary = format!("occb{}", Uuid::new_v4().simple());
+    let mut body: Vec<u8> = Vec::new();
+    if let Some(f) = folder {
+        if !f.trim().is_empty() {
+            body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+            body.extend_from_slice(
+                b"Content-Disposition: form-data; name=\"folder\"\r\n\r\n",
+            );
+            body.extend_from_slice(f.trim().as_bytes());
+            body.extend_from_slice(b"\r\n");
+        }
+    }
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(
+        format!("Content-Disposition: form-data; name=\"file\"; filename=\"{clean}\"\r\n")
+            .as_bytes(),
+    );
+    body.extend_from_slice(format!("Content-Type: {mime}\r\n\r\n").as_bytes());
+    body.extend_from_slice(bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+    let res = client()
+        .post(endpoint("/api/v1/documents/upload"))
+        .bearer_auth(access_token)
+        .header(
+            "Content-Type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| ApiError::transport(e.to_string()))?;
+    if res.status().is_success() {
+        res.json::<UploadResponse>()
+            .await
+            .map_err(|e| ApiError::transport(e.to_string()))
+    } else {
+        Err(into_api_error(res).await)
+    }
+}
+
 // --- Privacidad Ley 21.719 (contrato real del backend `occb`) ----------------
 // `POST /api/v1/privacy/requests` (público, rate-limit estricto) responde 202
 // con `{id, status, due_at}` y envía un email para verificar identidad.

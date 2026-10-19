@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use crate::{
     api::{self, ApiError, LEAD_SOURCES, LEAD_STATUSES},
     auth::use_auth,
-    components::Layout,
+    components::{tags::EntityTags, Layout},
     route::Route,
 };
 
@@ -444,6 +444,7 @@ pub fn LeadDetail(id: String) -> Element {
                     let detail_name = l.full_name();
                     rsx! {
                         LeadEditor { lead: l.clone(), on_saved: move || lead.restart() }
+                        EntityTags { entity_type: "lead".to_string(), entity_id: detail_id.clone() }
                         ConvertLead {
                             id: detail_id.clone(),
                             name: detail_name.clone(),

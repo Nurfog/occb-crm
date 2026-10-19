@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use crate::{
     api::{self, ApiError},
     auth::use_auth,
-    components::Layout,
+    components::{tags::EntityTags, Layout},
     route::Route,
 };
 
@@ -32,8 +32,13 @@ pub fn Contacts() -> Element {
     let mut sort_by = use_signal(|| "created_at".to_string());
     let mut order = use_signal(|| "desc".to_string());
     let mut show_new = use_signal(|| false);
+    let mut selected = use_signal(Vec::<String>::new);
+    let mut op_msg = use_signal(|| None::<String>);
 
     let token_of = auth.read().session.clone().map(|s| s.access_token);
+    let token_ex = token_of.clone();
+    let token_bk = token_of.clone();
+    let token_im = token_of.clone();
     let mut contacts = use_resource(move || {
         let token = token_of.clone();
         let q = applied.read().clone();
@@ -66,6 +71,7 @@ pub fn Contacts() -> Element {
 
     let creating = *show_new.read();
     let new_label = if creating { "Cerrar formulario" } else { "+ Nuevo contacto" };
+    let n_selected = selected.read().len();
 
     rsx! {
         Layout { title: "Contactos".to_string(),
@@ -75,6 +81,101 @@ pub fn Contacts() -> Element {
                     onclick: move |_| show_new.set(!creating),
                     "{new_label}"
                 }
+                button {
+                    class: "btn btn-small",
+                    onclick: move |_| {
+                        let tok = token_ex.clone();
+                        let qq = applied.read().clone();
+                        spawn(async move {
+                            if let Some(t) = tok {
+                                match api::export_contacts(&t, &qq).await {
+                                    Ok(csv) => {
+                                        let _ = crate::privacy::download_text_file(
+                                            "contactos.csv",
+                                            &csv,
+                                        );
+                                    }
+                                    Err(e) => op_msg.set(Some(e.to_string())),
+                                }
+                            }
+                        });
+                    },
+                    "Exportar CSV"
+                }
+                if n_selected > 0 {
+                    button {
+                        class: "btn btn-small",
+                        onclick: move |_| {
+                            let tok = token_bk.clone();
+                            let ids = selected.read().clone();
+                            op_msg.set(None);
+                            spawn(async move {
+                                if let Some(t) = tok {
+                                    match api::bulk_delete_contacts(&t, &ids).await {
+                                        Ok(r) => {
+                                            op_msg.set(
+                                                Some(format!("Eliminados: {}.", r.deleted)),
+                                            );
+                                            selected.set(Vec::new());
+                                            contacts.restart();
+                                        }
+                                        Err(e) => op_msg.set(Some(e.to_string())),
+                                    }
+                                }
+                            });
+                        },
+                        "Eliminar {n_selected} seleccionados"
+                    }
+                }
+            }
+            div { class: "row",
+                input {
+                    r#type: "file",
+                    id: "contacts-import",
+                    accept: ".csv,text/csv",
+                }
+                button {
+                    class: "btn btn-small",
+                    onclick: move |_| {
+                        let tok = token_im.clone();
+                        op_msg.set(None);
+                        spawn(async move {
+                            match crate::files::read_first_file("contacts-import").await {
+                                Ok((_, _, bytes)) => match String::from_utf8(bytes) {
+                                    Ok(csv) => {
+                                        if let Some(t) = tok {
+                                            match api::import_contacts(&t, &csv).await {
+                                                Ok(r) => {
+                                                    op_msg.set(
+                                                        Some(
+                                                            format!(
+                                                                "Importados: {}. Filas con error: {}.",
+                                                                r.imported,
+                                                                r.errors.len()
+                                                            ),
+                                                        ),
+                                                    );
+                                                    contacts.restart();
+                                                }
+                                                Err(e) => op_msg.set(Some(e.to_string())),
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        op_msg.set(
+                                            Some("El archivo no es UTF-8 válido.".to_string()),
+                                        );
+                                    }
+                                },
+                                Err(e) => op_msg.set(Some(e)),
+                            }
+                        });
+                    },
+                    "Importar CSV"
+                }
+            }
+            if let Some(msg) = op_msg.read().clone() {
+                p { class: "alert alert-info", "{msg}" }
             }
             if creating {
                 NewContactForm { on_created: move || {
@@ -144,6 +245,7 @@ pub fn Contacts() -> Element {
                             table { class: "table",
                                 thead {
                                     tr {
+                                        th { "" }
                                         th { "Nombre" }
                                         th { "Email" }
                                         th { "Teléfono" }
@@ -154,12 +256,29 @@ pub fn Contacts() -> Element {
                                     for c in &paged.data {
                                         {
                                             let id = c.id.to_string();
+                                            let is_sel = selected.read().contains(&id);
+                                            let id_t = id.clone();
                                             let name = c.full_name();
                                             let email = c.email.clone().unwrap_or_default();
                                             let phone = c.phone.clone().unwrap_or_default();
                                             let position = c.position.clone().unwrap_or_default();
                                             rsx! {
                                                 tr { key: "{id}",
+                                                    td {
+                                                        input {
+                                                            r#type: "checkbox",
+                                                            checked: is_sel,
+                                                            onclick: move |_| {
+                                                                let mut s = selected.read().clone();
+                                                                if s.contains(&id_t) {
+                                                                    s.retain(|x| x != &id_t);
+                                                                } else {
+                                                                    s.push(id_t.clone());
+                                                                }
+                                                                selected.set(s);
+                                                            },
+                                                        }
+                                                    }
                                                     td {
                                                         Link {
                                                             to: Route::ContactDetail { id: id.clone() },
@@ -415,6 +534,7 @@ pub fn ContactDetail(id: String) -> Element {
                     let detail_name = c.full_name();
                     rsx! {
                         ContactEditor { contact: c.clone(), on_saved: move || contact.restart() }
+                        EntityTags { entity_type: "contact".to_string(), entity_id: detail_id.clone() }
                         DeleteContact { id: detail_id, name: detail_name }
                         section { class: "card",
                             h2 { class: "card-title", "Negocios ({n_deals})" }

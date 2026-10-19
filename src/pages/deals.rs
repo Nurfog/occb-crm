@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use crate::{
     api::{self, ApiError, DEAL_STAGES},
     auth::use_auth,
-    components::Layout,
+    components::{tags::EntityTags, Layout},
     route::Route,
 };
 
@@ -18,8 +18,10 @@ fn none_if_empty(s: &str) -> Option<String> {
 pub fn Deals() -> Element {
     let auth = use_auth();
     let mut show_new = use_signal(|| false);
+    let mut op_msg = use_signal(|| None::<String>);
     let token_of = auth.read().session.clone().map(|s| s.access_token);
-
+    let token_ex = token_of.clone();
+    let token_im = token_of.clone();
     let token_b = token_of.clone();
     let mut board = use_resource(move || {
         let token = token_b.clone();
@@ -70,11 +72,81 @@ pub fn Deals() -> Element {
                 button {
                     class: "btn btn-small",
                     onclick: move |_| {
+                        let tok = token_ex.clone();
+                        spawn(async move {
+                            if let Some(t) = tok {
+                                match api::export_deals(&t).await {
+                                    Ok(csv) => {
+                                        let _ = crate::privacy::download_text_file(
+                                            "negocios.csv",
+                                            &csv,
+                                        );
+                                    }
+                                    Err(e) => op_msg.set(Some(e.to_string())),
+                                }
+                            }
+                        });
+                    },
+                    "Exportar CSV"
+                }
+                button {
+                    class: "btn btn-small",
+                    onclick: move |_| {
                         board.restart();
                         summary.restart();
                     },
                     "Recargar"
                 }
+            }
+            div { class: "row",
+                input {
+                    r#type: "file",
+                    id: "deals-import",
+                    accept: ".csv,text/csv",
+                }
+                button {
+                    class: "btn btn-small",
+                    onclick: move |_| {
+                        let tok = token_im.clone();
+                        op_msg.set(None);
+                        spawn(async move {
+                            match crate::files::read_first_file("deals-import").await {
+                                Ok((_, _, bytes)) => match String::from_utf8(bytes) {
+                                    Ok(csv) => {
+                                        if let Some(t) = tok {
+                                            match api::import_deals(&t, &csv).await {
+                                                Ok(r) => {
+                                                    op_msg.set(
+                                                        Some(
+                                                            format!(
+                                                                "Importados: {}. Filas con error: {}.",
+                                                                r.imported,
+                                                                r.errors.len()
+                                                            ),
+                                                        ),
+                                                    );
+                                                    board.restart();
+                                                    summary.restart();
+                                                }
+                                                Err(e) => op_msg.set(Some(e.to_string())),
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        op_msg.set(
+                                            Some("El archivo no es UTF-8 válido.".to_string()),
+                                        );
+                                    }
+                                },
+                                Err(e) => op_msg.set(Some(e)),
+                            }
+                        });
+                    },
+                    "Importar CSV"
+                }
+            }
+            if let Some(msg) = op_msg.read().clone() {
+                p { class: "alert alert-info", "{msg}" }
             }
             if creating {
                 NewDealForm { on_created: move || {
@@ -426,6 +498,7 @@ pub fn DealDetail(id: String) -> Element {
                     let detail_title = d.title.clone();
                     rsx! {
                         DealEditor { deal: d.clone(), on_saved: move || deal.restart() }
+                        EntityTags { entity_type: "deal".to_string(), entity_id: detail_id.clone() }
                         DeleteDeal { id: detail_id, title: detail_title }
                         section { class: "card",
                             h2 { class: "card-title", "Actividad" }

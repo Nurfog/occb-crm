@@ -55,6 +55,10 @@ pub fn Documents() -> Element {
     let mut busy_id = use_signal(|| None::<String>);
 
     let token_of = auth.read().session.clone().map(|s| s.access_token);
+    let token_up = token_of.clone();
+    let mut up_folder = use_signal(String::new);
+    let mut up_msg = use_signal(|| None::<String>);
+    let mut up_busy = use_signal(|| false);
     let mut items = use_resource(move || {
         let token = token_of.clone();
         let q = applied.read().clone();
@@ -83,6 +87,66 @@ pub fn Documents() -> Element {
 
     rsx! {
         Layout { title: "Documentos".to_string(),
+            div { class: "card form",
+                h2 { class: "card-title", "Subir archivo" }
+                div { class: "row",
+                    input {
+                        r#type: "file",
+                        id: "doc-upload",
+                    }
+                    input {
+                        class: "input",
+                        placeholder: "Carpeta (opcional)",
+                        value: "{up_folder}",
+                        oninput: move |e| up_folder.set(e.value()),
+                    }
+                    button {
+                        class: "btn btn-small btn-primary",
+                        disabled: *up_busy.read(),
+                        onclick: move |_| {
+                            let tok = token_up.clone();
+                            let folder_v = up_folder.read().trim().to_string();
+                            up_msg.set(None);
+                            up_busy.set(true);
+                            spawn(async move {
+                                let outcome = match crate::files::read_first_file("doc-upload").await {
+                                    Ok((name, mime, bytes)) => match tok {
+                                        Some(t) => {
+                                            let folder_opt = if folder_v.is_empty() {
+                                                None
+                                            } else {
+                                                Some(folder_v.as_str())
+                                            };
+                                            let mime_v = if mime.is_empty() {
+                                                "application/octet-stream"
+                                            } else {
+                                                mime.as_str()
+                                            };
+                                            match api::upload_document(&t, &name, mime_v, folder_opt, &bytes)
+                                                .await
+                                            {
+                                                Ok(up) => {
+                                                    items.restart();
+                                                    format!("Subido: {}.", up.original_name)
+                                                }
+                                                Err(e) => e.to_string(),
+                                            }
+                                        }
+                                        None => "Sin sesión.".to_string(),
+                                    },
+                                    Err(e) => e,
+                                };
+                                up_msg.set(Some(outcome));
+                                up_busy.set(false);
+                            });
+                        },
+                        "Subir"
+                    }
+                }
+                if let Some(msg) = up_msg.read().clone() {
+                    p { class: "alert alert-info", "{msg}" }
+                }
+            }
             form {
                 class: "toolbar card",
                 onsubmit: move |e| {

@@ -7,6 +7,7 @@ mod api;
 mod auth;
 mod components;
 mod config;
+mod files;
 mod pages;
 mod privacy;
 mod route;

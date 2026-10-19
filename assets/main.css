@@ -65,6 +65,16 @@ body {
   margin-left: 0.3em;
 }
 li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.2em 0.7em;
+  font-size: 0.85rem;
+  background: var(--bg);
+}
 .nav-user { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; }
 .nav-email { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

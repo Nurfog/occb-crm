@@ -1,6 +1,7 @@
 //! Componentes compartidos: barra de navegación y marco de página.
 
 pub mod consent;
+pub mod tags;
 
 use dioxus::prelude::*;
 
