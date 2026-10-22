@@ -244,7 +244,7 @@ pub fn Dashboard() -> Element {
                                         let key = a.id.to_string();
                                         let subject = a.subject.clone();
                                         let kind = api::activity_type_label(&a.activity_type).to_string();
-                                        let (tile, glyph) = activity_badge(&a.activity_type, a.completed);
+                                        let (tile, glyph) = activity_badge(&a.activity_type);
                                         let who = a
                                             .contact_name
                                             .clone()
@@ -272,10 +272,7 @@ pub fn Dashboard() -> Element {
 }
 
 /// Mosaico de color + letra por tipo de actividad (como el original).
-fn activity_badge(kind: &str, completed: bool) -> (&'static str, &'static str) {
-    if completed {
-        return ("tile-ok", "✓");
-    }
+fn activity_badge(kind: &str) -> (&'static str, &'static str) {
     match kind {
         "call" => ("tile-call", "L"),
         "email" => ("tile-email", "@"),
