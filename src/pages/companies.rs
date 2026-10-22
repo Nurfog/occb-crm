@@ -21,6 +21,17 @@ fn none_if_empty(s: &str) -> Option<String> {
     if s.is_empty() { None } else { Some(s.to_string()) }
 }
 
+/// Industrias del formulario (como el original).
+const INDUSTRIES: [&str; 7] = [
+    "Technology",
+    "Healthcare",
+    "Finance",
+    "Manufacturing",
+    "Retail",
+    "Education",
+    "Other",
+];
+
 /// Listado con búsqueda, orden y paginación + alta. Requiere sesión.
 #[component]
 pub fn Companies() -> Element {
@@ -472,11 +483,6 @@ pub fn CompanyDetail(id: String) -> Element {
         };
     }
 
-    let revenue_line = match &*revenue.read() {
-        Some(Ok(r)) => format!("{:.0} en {} negocios", r.total_value, r.deal_count),
-        _ => "…".to_string(),
-    };
-
     rsx! {
         Layout { title: "Empresa".to_string(),
             Link { to: Route::Companies {}, class: "link", "← Volver a empresas" }
@@ -490,83 +496,327 @@ pub fn CompanyDetail(id: String) -> Element {
                     }
                 },
                 Some(Ok(c)) => {
-                    let detail_id = c.id.to_string();
-                    let detail_name = c.name.clone();
+                    let detail = c.clone();
                     rsx! {
-                        CompanyEditor { company: c.clone(), on_saved: move || company.restart() }
-                        EntityTags { entity_type: "company".to_string(), entity_id: detail_id.clone() }
-                        DeleteCompany { id: detail_id, name: detail_name }
-                        section { class: "card",
-                            h2 { class: "card-title", "Ingresos (ganados + en curso)" }
-                            p { "{revenue_line}" }
-                        }
-                        section { class: "card",
-                            h2 { class: "card-title", "Contactos" }
-                            match &*contacts.read() {
-                                None => rsx! { p { class: "muted", "Cargando…" } },
-                                Some(Err(e)) => rsx! { p { class: "muted small", "No se pudieron cargar: {e}" } },
-                                Some(Ok(list)) => rsx! {
-                                    if list.is_empty() {
-                                        p { class: "muted", "Sin contactos." }
-                                    } else {
-                                        ul {
-                                            for k in list {
-                                                {
-                                                    let kid = k.id.to_string();
-                                                    let kname = k.full_name();
-                                                    rsx! {
-                                                        li { key: "{kid}",
-                                                            Link {
-                                                                to: Route::ContactDetail { id: kid },
-                                                                class: "link",
-                                                                "{kname}"
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                            }
-                        }
-                        section { class: "card",
-                            h2 { class: "card-title", "Negocios" }
-                            match &*deals.read() {
-                                None => rsx! { p { class: "muted", "Cargando…" } },
-                                Some(Err(e)) => rsx! { p { class: "muted small", "No se pudieron cargar: {e}" } },
-                                Some(Ok(list)) => rsx! {
-                                    if list.is_empty() {
-                                        p { class: "muted", "Sin negocios." }
-                                    } else {
-                                        ul {
-                                            for d in list {
-                                                {
-                                                    let did = d.id.to_string();
-                                                    let title = d.title.clone();
-                                                    let stage = api::deal_stage_label(&d.stage).to_string();
-                                                    let amount = format!("{:.0} {}", d.value, d.currency);
-                                                    rsx! {
-                                                        li { key: "{did}",
-                                                            Link {
-                                                                to: Route::DealDetail { id: did },
-                                                                class: "link",
-                                                                "{title}"
-                                                            }
-                                                            span { class: "muted small",
-                                                                " · {stage} · {amount}"
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                            }
+                        CompanyDetailView {
+                            company: detail,
+                            contacts: contacts.read().clone(),
+                            deals: deals.read().clone(),
+                            revenue: revenue.read().clone(),
+                            on_changed: move || {
+                                company.restart();
+                                contacts.restart();
+                                deals.restart();
+                                revenue.restart();
+                            },
                         }
                     }
                 },
+            }
+        }
+    }
+}
+
+/// Vista del detalle: cabecera, barra lateral y pestañas (como el original).
+#[component]
+fn CompanyDetailView(
+    company: api::Company,
+    contacts: Option<Result<Vec<api::Contact>, ApiError>>,
+    deals: Option<Result<Vec<api::Deal>, ApiError>>,
+    revenue: Option<Result<api::CompanyRevenue, ApiError>>,
+    on_changed: EventHandler<()>,
+) -> Element {
+    let mut tab = use_signal(|| "datos".to_string());
+    let mut editing = use_signal(|| false);
+
+    let id = company.id.to_string();
+    let name = company.name.clone();
+    let industry = company.industry.clone().unwrap_or_default();
+    let email = company.email.clone().unwrap_or_default();
+    let phone = company.phone.clone().unwrap_or_default();
+    let website = company.website.clone().unwrap_or_default();
+    let address = company.address.clone().unwrap_or_default();
+    let city = company.city.clone().unwrap_or_default();
+    let country = company.country.clone().unwrap_or_default();
+    let notes = company.notes.clone().unwrap_or_default();
+    let created = company.created_at.format("%d %b %Y").to_string();
+    let n_contacts = match &contacts {
+        Some(Ok(l)) => l.len(),
+        _ => 0,
+    };
+    let n_deals = match &deals {
+        Some(Ok(l)) => l.len(),
+        _ => 0,
+    };
+    let current = tab.read().clone();
+    let editing_open = *editing.read();
+    let revenue_txt = match &revenue {
+        Some(Ok(r)) => format!("${:.0} en {} negocios", r.total_value, r.deal_count),
+        Some(Err(_)) => "—".to_string(),
+        None => "…".to_string(),
+    };
+
+    rsx! {
+        section { class: "card",
+            div { class: "detail-head",
+                div {
+                    h2 { class: "card-title", "{name}" }
+                    if !industry.is_empty() {
+                        p { class: "muted small", "{industry}" }
+                    }
+                }
+                div { class: "row detail-actions",
+                    button {
+                        class: "btn btn-small",
+                        onclick: move |_| editing.set(!editing_open),
+                        if editing_open { "Cerrar edición" } else { "Editar" }
+                    }
+                    DeleteCompanyInline { id: id.clone(), name: name.clone() }
+                }
+            }
+        }
+        div { class: "detail-grid",
+            div {
+                section { class: "card",
+                    h2 { class: "card-title", "Detalles" }
+                    dl { class: "detail-list",
+                        if !email.is_empty() {
+                            div {
+                                dt { "Email" }
+                                dd {
+                                    a { class: "link", href: "mailto:{email}", "{email}" }
+                                }
+                            }
+                        }
+                        if !phone.is_empty() {
+                            div {
+                                dt { "Teléfono" }
+                                dd {
+                                    a { class: "link", href: "tel:{phone}", "{phone}" }
+                                }
+                            }
+                        }
+                        if !website.is_empty() {
+                            div {
+                                dt { "Web" }
+                                dd {
+                                    a {
+                                        class: "link",
+                                        href: "{website}",
+                                        target: "_blank",
+                                        "{website}"
+                                    }
+                                }
+                            }
+                        }
+                        if !address.is_empty() || !city.is_empty() || !country.is_empty() {
+                            div {
+                                dt { "Dirección" }
+                                dd { "{address} {city} {country}" }
+                            }
+                        }
+                        div {
+                            dt { "Alta" }
+                            dd { "{created}" }
+                        }
+                    }
+                }
+                section { class: "card revenue-box",
+                    h2 { class: "card-title", "Ingresos" }
+                    p { class: "revenue-value", "{revenue_txt}" }
+                    p { class: "muted small", "Ganados + en curso" }
+                }
+                EntityTags { entity_type: "company".to_string(), entity_id: id.clone() }
+                if !notes.is_empty() {
+                    section { class: "card",
+                        h2 { class: "card-title", "Notas" }
+                        p { class: "detail-notes", "{notes}" }
+                    }
+                }
+            }
+            div {
+                div { class: "row tabs",
+                    button {
+                        class: if current == "datos" { "btn btn-small btn-primary" } else { "btn btn-small" },
+                        onclick: move |_| tab.set("datos".to_string()),
+                        "Datos"
+                    }
+                    button {
+                        class: if current == "contactos" { "btn btn-small btn-primary" } else { "btn btn-small" },
+                        onclick: move |_| tab.set("contactos".to_string()),
+                        "Contactos ({n_contacts})"
+                    }
+                    button {
+                        class: if current == "negocios" { "btn btn-small btn-primary" } else { "btn btn-small" },
+                        onclick: move |_| tab.set("negocios".to_string()),
+                        "Negocios ({n_deals})"
+                    }
+                }
+                if current == "datos" {
+                    if editing_open {
+                        CompanyEditor { company: company.clone(), on_saved: move || on_changed.call(()) }
+                    } else {
+                        p { class: "muted", "Pulsa «Editar» para modificar la ficha." }
+                    }
+                } else if current == "contactos" {
+                    section { class: "card",
+                        h2 { class: "card-title", "Contactos" }
+                        match contacts {
+                            None => rsx! { p { class: "muted", "Cargando…" } },
+                            Some(Err(e)) => rsx! { p { class: "muted small", "No se pudieron cargar: {e}" } },
+                            Some(Ok(list)) => rsx! {
+                                if list.is_empty() {
+                                    p { class: "muted", "Sin contactos." }
+                                } else {
+                                    div { class: "table-wrap",
+                                        table { class: "table",
+                                            thead {
+                                                tr {
+                                                    th { "Nombre" }
+                                                    th { "Email" }
+                                                    th { "Teléfono" }
+                                                    th { "Cargo" }
+                                                }
+                                            }
+                                            tbody {
+                                                for k in &list {
+                                                    {
+                                                        let kid = k.id.to_string();
+                                                        let kname = k.full_name();
+                                                        let kemail = k.email.clone().unwrap_or_default();
+                                                        let kphone = k.phone.clone().unwrap_or_default();
+                                                        let kpos = k.position.clone().unwrap_or_default();
+                                                        rsx! {
+                                                            tr { key: "{kid}",
+                                                                td {
+                                                                    Link {
+                                                                        to: Route::ContactDetail { id: kid },
+                                                                        class: "link",
+                                                                        "{kname}"
+                                                                    }
+                                                                }
+                                                                td { "{kemail}" }
+                                                                td { "{kphone}" }
+                                                                td { "{kpos}" }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    }
+                } else {
+                    section { class: "card",
+                        h2 { class: "card-title", "Negocios" }
+                        match deals {
+                            None => rsx! { p { class: "muted", "Cargando…" } },
+                            Some(Err(e)) => rsx! { p { class: "muted small", "No se pudieron cargar: {e}" } },
+                            Some(Ok(list)) => rsx! {
+                                if list.is_empty() {
+                                    p { class: "muted", "Sin negocios." }
+                                } else {
+                                    div { class: "table-wrap",
+                                        table { class: "table",
+                                            thead {
+                                                tr {
+                                                    th { "Nombre" }
+                                                    th { "Valor" }
+                                                    th { "Etapa" }
+                                                }
+                                            }
+                                            tbody {
+                                                for d in &list {
+                                                    {
+                                                        let did = d.id.to_string();
+                                                        let title = d.title.clone();
+                                                        let amount = format!("${:.0} {}", d.value, d.currency);
+                                                        let stage = api::deal_stage_label(&d.stage).to_string();
+                                                        rsx! {
+                                                            tr { key: "{did}",
+                                                                td {
+                                                                    Link {
+                                                                        to: Route::DealDetail { id: did },
+                                                                        class: "link",
+                                                                        "{title}"
+                                                                    }
+                                                                }
+                                                                td { "{amount}" }
+                                                                td { "{stage}" }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Borrado inline con confirmación.
+#[component]
+fn DeleteCompanyInline(id: String, name: String) -> Element {
+    let auth = use_auth();
+    let nav = use_navigator();
+    let mut confirm = use_signal(|| false);
+    let mut busy = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+
+    let asking = *confirm.read();
+    let busy_v = *busy.read();
+
+    rsx! {
+        if !asking {
+            button {
+                class: "btn btn-small danger-btn",
+                onclick: move |_| confirm.set(true),
+                "Eliminar"
+            }
+        } else {
+            span { class: "muted small", "¿Eliminar «{name}»?" }
+            button {
+                class: "btn btn-small danger-btn",
+                disabled: busy_v,
+                onclick: move |_| {
+                    let token = auth.read().session.clone().map(|s| s.access_token);
+                    let id_v = id.clone();
+                    busy.set(true);
+                    spawn(async move {
+                        let res = match token {
+                            Some(t) => api::delete_company(&t, &id_v).await.map_err(|e| e.to_string()),
+                            None => Err("Sin sesión.".to_string()),
+                        };
+                        busy.set(false);
+                        match res {
+                            Ok(()) => {
+                                nav.push(Route::Companies {});
+                            }
+                            Err(msg) => {
+                                error.set(Some(msg));
+                                confirm.set(false);
+                            }
+                        }
+                    });
+                },
+                if busy_v { "…" } else { "Sí" }
+            }
+            button {
+                class: "btn btn-small",
+                onclick: move |_| confirm.set(false),
+                "No"
+            }
+            if let Some(msg) = error.read().clone() {
+                p { class: "alert alert-error small", "{msg}" }
             }
         }
     }
@@ -656,10 +906,14 @@ fn CompanyEditor(company: api::Company, on_saved: EventHandler<()>) -> Element {
             div { class: "row",
                 div {
                     label { class: "field", "Industria" }
-                    input {
+                    select {
                         class: "input",
                         value: "{industry}",
-                        oninput: move |e| industry.set(e.value()),
+                        onchange: move |e| industry.set(e.value()),
+                        option { value: "", "—" }
+                        for ind in INDUSTRIES {
+                            option { value: "{ind}", "{ind}" }
+                        }
                     }
                 }
                 div {
@@ -707,79 +961,6 @@ fn CompanyEditor(company: api::Company, on_saved: EventHandler<()>) -> Element {
                 r#type: "submit",
                 disabled: busy_v,
                 "{submit_label}"
-            }
-        }
-    }
-}
-
-/// Borrado con confirmación en dos pasos.
-#[component]
-fn DeleteCompany(id: String, name: String) -> Element {
-    let auth = use_auth();
-    let nav = use_navigator();
-    let mut confirm = use_signal(|| false);
-    let mut busy = use_signal(|| false);
-    let mut error = use_signal(|| None::<String>);
-
-    let asking = *confirm.read();
-    let busy_v = *busy.read();
-    let yes_label = if busy_v { "Eliminando…" } else { "Sí, eliminar" };
-
-    rsx! {
-        section { class: "card",
-            h2 { class: "card-title", "Zona de peligro" }
-            if !asking {
-                button {
-                    class: "btn btn-small",
-                    onclick: move |_| confirm.set(true),
-                    "Eliminar empresa"
-                }
-            } else {
-                p { "¿Eliminar «{name}» definitivamente?" }
-                if let Some(msg) = error.read().clone() {
-                    p { class: "alert alert-error", "{msg}" }
-                }
-                div { class: "row",
-                    button {
-                        class: "btn btn-small",
-                        disabled: busy_v,
-                        onclick: move |_| {
-                            let token = auth
-                                .read()
-                                .session
-                                .clone()
-                                .map(|s| s.access_token);
-                            let id_v = id.clone();
-                            busy.set(true);
-                            spawn(async move {
-                                let res = match token {
-                                    Some(t) => {
-                                        api::delete_company(&t, &id_v)
-                                            .await
-                                            .map_err(|e| e.to_string())
-                                    }
-                                    None => Err("Sin sesión.".to_string()),
-                                };
-                                busy.set(false);
-                                match res {
-                                    Ok(()) => {
-                                        nav.push(Route::Companies {});
-                                    }
-                                    Err(msg) => error.set(Some(msg)),
-                                }
-                            });
-                        },
-                        "{yes_label}"
-                    }
-                    button {
-                        class: "btn btn-small",
-                        onclick: move |_: MouseEvent | {
-                            confirm.set(false);
-                            error.set(None);
-                        },
-                        "Cancelar"
-                    }
-                }
             }
         }
     }

@@ -211,6 +211,10 @@ li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
 .danger-btn { color: var(--bad); border-color: var(--bad); }
 .danger-btn:hover { background: var(--bad); color: #fff; }
 
+/* Caja de ingresos */
+.revenue-box { background: #f0fdf4; border-color: #bbf7d0; }
+.revenue-value { font-size: 1.5rem; font-weight: 800; color: var(--ok); margin: 0; }
+
 /* Avatar de iniciales */
 .avatar {
   display: inline-flex;
