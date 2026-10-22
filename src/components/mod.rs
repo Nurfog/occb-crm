@@ -135,7 +135,9 @@ pub fn Layout(title: String, children: Element) -> Element {
         div { class: "shell",
             NavBar {}
             main { class: "container",
-                h1 { class: "page-title", "{title}" }
+                if !title.is_empty() {
+                    h1 { class: "page-title", "{title}" }
+                }
                 {children}
             }
             footer { class: "footer",
