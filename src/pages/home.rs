@@ -6,10 +6,12 @@ use dioxus::prelude::*;
 
 use crate::{api, components::Layout, route::Route};
 
-const HERO_IMG: &str = "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=70";
-const TEAM_IMG: &str = "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=900&q=70";
+const HERO_IMG: &str = "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=900&q=70";
+const TEAM_IMG: &str = "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=900&q=70";
 const DATA_IMG: &str = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=900&q=70";
 const MEET_IMG: &str = "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=70";
+const OFFICE_IMG: &str = "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=900&q=70";
+const DEAL_IMG: &str = "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=900&q=70";
 
 /// Landing de presentación. Sin sesión muestra el producto; con sesión,
 // el panel sigue en `/dashboard`.
@@ -20,7 +22,11 @@ pub fn Home() -> Element {
     let status_pill = match &*health.read() {
         Some(Ok(h)) => {
             let ver = h.version.clone().unwrap_or_default();
-            let tag = if ver.is_empty() { "Sistema en línea".to_string() } else { format!("Sistema en línea · v{ver}") };
+            let tag = if ver.is_empty() {
+                "Sistema en línea".to_string()
+            } else {
+                format!("Sistema en línea · v{ver}")
+            };
             rsx! {
                 p { class: "hero-status",
                     span { class: "dot dot-ok" }
@@ -33,12 +39,13 @@ pub fn Home() -> Element {
 
     rsx! {
         Layout { title: "".to_string(),
-            section { class: "hero", style: "background-image: url({HERO_IMG})",
-                div { class: "hero-overlay",
-                    div { class: "hero-inner",
-                        p { class: "hero-eyebrow", "OCCB · CRM" }
+            section { class: "hero-pro",
+                div { class: "hero-grid",
+                    div { class: "hero-copy",
+                        p { class: "eyebrow", "OCCB · CRM" }
                         h1 { class: "hero-title",
-                            "Toda tu relación con clientes, en un solo lugar"
+                            "Toda tu relación con clientes, "
+                            span { class: "grad-text", "en un solo lugar" }
                         }
                         p { class: "hero-sub",
                             "Prospectos, contactos, empresas y negocios con tablero kanban, "
@@ -48,95 +55,120 @@ pub fn Home() -> Element {
                         div { class: "row hero-cta",
                             Link {
                                 to: Route::Register {},
-                                class: "btn btn-primary btn-large",
+                                class: "btn btn-primary btn-large btn-shadow",
                                 "Crear cuenta gratis"
                             }
                             Link {
                                 to: Route::Login {},
-                                class: "btn btn-large hero-btn-ghost",
+                                class: "btn btn-large btn-outline",
                                 "Entrar"
                             }
                         }
                         {status_pill}
+                        div { class: "hero-points",
+                            span { "✓ Sin tarjetas" }
+                            span { "✓ Importa por CSV" }
+                            span { "✓ Ley 21.719 incluida" }
+                        }
+                    }
+                    div { class: "hero-visual",
+                        img { class: "hero-img", src: "{HERO_IMG}", alt: "Equipo comercial trabajando" }
+                        div { class: "float-card float-a",
+                            strong { "+$48.500" }
+                            span { "ganado este mes" }
+                        }
+                        div { class: "float-card float-b",
+                            strong { "12" }
+                            span { "negocios en negociación" }
+                        }
                     }
                 }
             }
 
-            section { class: "stats-strip",
-                div { class: "stat",
+            section { class: "stats-band",
+                div { class: "stat-light",
                     strong { "8+" }
                     span { "módulos integrados" }
                 }
-                div { class: "stat",
-                    strong { "100%" }
-                    span { "datos bajo tu control" }
-                }
-                div { class: "stat",
+                div { class: "stat-light",
                     strong { "6" }
                     span { "etapas de venta" }
                 }
-                div { class: "stat",
-                    strong { "Ley 21.719" }
-                    span { "privacidad incluida" }
+                div { class: "stat-light",
+                    strong { "100%" }
+                    span { "datos bajo tu control" }
+                }
+                div { class: "stat-light",
+                    strong { "24/7" }
+                    span { "tu operación en línea" }
                 }
             }
 
-            section {
-                h2 { class: "section-title", "Un sistema, todo el ciclo comercial" }
-                p { class: "subtitle",
+            section { class: "section",
+                p { class: "eyebrow eyebrow-center", "Módulos" }
+                h2 { class: "section-title section-center", "Un sistema, todo el ciclo comercial" }
+                p { class: "subtitle subtitle-center",
                     "Desde el primer contacto hasta el cierre y la postventa."
                 }
-                div { class: "grid-cards",
-                    div { class: "card",
-                        h3 { class: "card-title", "Prospectos" }
-                        p { class: "muted",
-                            "Captura interesados, califícalos por puntaje y conviértelos en contacto, empresa y negocio con un clic."
+                div { class: "cards-media",
+                    div { class: "card card-media",
+                        img { src: "{MEET_IMG}", alt: "Captura de prospectos" }
+                        div { class: "card-media-body",
+                            h3 { "Prospectos" }
+                            p { "Califica por puntaje y convierte a contacto, empresa y negocio con un clic." }
+                            Link { to: Route::Leads {}, class: "link", "Ver prospectos →" }
                         }
-                        Link { to: Route::Leads {}, class: "link", "Ver prospectos →" }
                     }
-                    div { class: "card",
-                        h3 { class: "card-title", "Contactos y empresas" }
-                        p { class: "muted",
-                            "Fichas completas con etiquetas, actividad ligada e ingresos por empresa."
+                    div { class: "card card-media",
+                        img { src: "{TEAM_IMG}", alt: "Equipo junto a clientes" }
+                        div { class: "card-media-body",
+                            h3 { "Contactos y empresas" }
+                            p { "Fichas completas con etiquetas, actividad ligada e ingresos por empresa." }
+                            Link { to: Route::Contacts {}, class: "link", "Ver contactos →" }
                         }
-                        Link { to: Route::Contacts {}, class: "link", "Ver contactos →" }
                     }
-                    div { class: "card",
-                        h3 { class: "card-title", "Negocios" }
-                        p { class: "muted",
-                            "Tablero kanban de 6 etapas con valores, cierres esperados e importación por CSV."
+                    div { class: "card card-media",
+                        img { src: "{DEAL_IMG}", alt: "Cierre de negocio" }
+                        div { class: "card-media-body",
+                            h3 { "Negocios" }
+                            p { "Tablero kanban de 6 etapas con valores, cierres e importación CSV." }
+                            Link { to: Route::Deals {}, class: "link", "Ver tablero →" }
                         }
-                        Link { to: Route::Deals {}, class: "link", "Ver tablero →" }
                     }
-                    div { class: "card",
-                        h3 { class: "card-title", "Actividades y calendario" }
-                        p { class: "muted",
-                            "Tareas, llamadas y reuniones con vencimientos, conexión a Google y sincronización."
+                    div { class: "card card-media",
+                        img { src: "{DATA_IMG}", alt: "Análisis de datos" }
+                        div { class: "card-media-body",
+                            h3 { "Actividades e informes" }
+                            p { "Tareas con vencimientos, calendario sincronizado y reportes de pipeline." }
+                            Link { to: Route::Activities {}, class: "link", "Ver actividades →" }
                         }
-                        Link { to: Route::Activities {}, class: "link", "Ver actividades →" }
                     }
-                    div { class: "card",
-                        h3 { class: "card-title", "Documentos" }
-                        p { class: "muted",
-                            "Sube, descarga y organiza los archivos de cada negocio y cliente."
+                    div { class: "card card-media",
+                        img { src: "{OFFICE_IMG}", alt: "Oficina moderna" }
+                        div { class: "card-media-body",
+                            h3 { "Documentos" }
+                            p { "Sube, descarga y organiza los archivos de cada negocio y cliente." }
+                            Link { to: Route::Documents {}, class: "link", "Ver documentos →" }
                         }
-                        Link { to: Route::Documents {}, class: "link", "Ver documentos →" }
                     }
-                    div { class: "card",
-                        h3 { class: "card-title", "Informes y más" }
-                        p { class: "muted",
-                            "Pipeline por etapa, ganados vs perdidos, email, WhatsApp, auditoría y administración."
+                    div { class: "card card-media",
+                        img { src: "{HERO_IMG}", alt: "Equipo comercial" }
+                        div { class: "card-media-body",
+                            h3 { "Comunicación total" }
+                            p { "Email con plantillas, WhatsApp por contacto y notificaciones." }
+                            Link { to: Route::Reports {}, class: "link", "Ver informes →" }
                         }
-                        Link { to: Route::Reports {}, class: "link", "Ver informes →" }
                     }
                 }
             }
 
-            section {
-                h2 { class: "section-title", "Hecho para equipos que venden" }
+            section { class: "section",
+                p { class: "eyebrow eyebrow-center", "Por qué OCCB" }
+                h2 { class: "section-title section-center", "Hecho para equipos que venden" }
                 div { class: "feature-row",
                     img { class: "feature-img", src: "{TEAM_IMG}", alt: "Equipo trabajando junto" }
                     div {
+                        span { class: "step-num", "01" }
                         h3 { "Trabajo en equipo" }
                         p { class: "muted",
                             "Reparto automático de prospectos, notificaciones, bitácora de actividad "
@@ -147,6 +179,7 @@ pub fn Home() -> Element {
                 div { class: "feature-row feature-reverse",
                     img { class: "feature-img", src: "{DATA_IMG}", alt: "Análisis de datos en un computador" }
                     div {
+                        span { class: "step-num", "02" }
                         h3 { "Decisiones con datos" }
                         p { class: "muted",
                             "Estadísticas del negocio, mejores negocios, conversión de prospectos y "
@@ -157,6 +190,7 @@ pub fn Home() -> Element {
                 div { class: "feature-row",
                     img { class: "feature-img", src: "{MEET_IMG}", alt: "Reunión de planificación" }
                     div {
+                        span { class: "step-num", "03" }
                         h3 { "Comunicación integrada" }
                         p { class: "muted",
                             "Email con plantillas y bitácora, WhatsApp con hilos por contacto y "
@@ -166,40 +200,33 @@ pub fn Home() -> Element {
                 }
             }
 
-            section {
-                h2 { class: "section-title", "Empieza en 3 pasos" }
-                div { class: "grid-cards",
-                    div { class: "card",
-                        h3 { class: "card-title", "1. Crea tu cuenta" }
-                        p { class: "muted",
-                            "Regístrate en un minuto. La primera cuenta queda como administradora."
-                        }
+            section { class: "steps-band",
+                p { class: "eyebrow eyebrow-center eyebrow-light", "Cómo empezar" }
+                h2 { class: "section-title section-center section-light", "Empieza en 3 pasos" }
+                div { class: "steps-grid",
+                    div { class: "step",
+                        span { class: "step-dot", "1" }
+                        h3 { "Crea tu cuenta" }
+                        p { "Regístrate en un minuto. La primera cuenta queda como administradora." }
                     }
-                    div { class: "card",
-                        h3 { class: "card-title", "2. Carga tus datos" }
-                        p { class: "muted",
-                            "Importa tus contactos y empresas por CSV o créalos a mano."
-                        }
+                    div { class: "step",
+                        span { class: "step-dot", "2" }
+                        h3 { "Carga tus datos" }
+                        p { "Importa tus contactos y empresas por CSV o créalos a mano." }
                     }
-                    div { class: "card",
-                        h3 { class: "card-title", "3. Vende y mide" }
-                        p { class: "muted",
-                            "Mueve negocios por el tablero y sigue el avance en informes."
-                        }
+                    div { class: "step",
+                        span { class: "step-dot", "3" }
+                        h3 { "Vende y mide" }
+                        p { "Mueve negocios por el tablero y sigue el avance en informes." }
                     }
                 }
-            }
-
-            section { class: "cta-band",
-                h2 { "¿Listo para ordenar tus ventas?" }
-                p { "Crea tu cuenta y ten tu primer negocio en el tablero hoy mismo." }
-                div { class: "row",
+                div { class: "row steps-cta",
                     Link {
                         to: Route::Register {},
-                        class: "btn btn-primary btn-large",
-                        "Crear cuenta"
+                        class: "btn btn-large btn-white",
+                        "Crear cuenta gratis"
                     }
-                    Link { to: Route::Login {}, class: "btn btn-large hero-btn-ghost", "Entrar" }
+                    Link { to: Route::Login {}, class: "btn btn-large btn-outline-light", "Entrar" }
                 }
             }
 
