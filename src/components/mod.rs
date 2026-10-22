@@ -29,31 +29,31 @@ pub fn NavBar() -> Element {
                 Link { to: Route::Home {}, class: "brand", "OCCB · CRM" }
                 nav { class: "nav-links",
                     Link { to: Route::Home {}, class: "nav-link", "Inicio" }
-                    Link { to: Route::Contacts {}, class: "nav-link", "Contactos" }
-                    Link { to: Route::Companies {}, class: "nav-link", "Empresas" }
-                    Link { to: Route::Leads {}, class: "nav-link", "Prospectos" }
-                    Link { to: Route::Deals {}, class: "nav-link", "Negocios" }
-                    Link { to: Route::Activities {}, class: "nav-link", "Actividades" }
-                    Link { to: Route::Documents {}, class: "nav-link", "Documentos" }
-                    Link { to: Route::Reports {}, class: "nav-link", "Informes" }
-                    Link { to: Route::Audit {}, class: "nav-link", "Auditoría" }
-                    Link { to: Route::Admin {}, class: "nav-link", "Admin" }
-                    Link { to: Route::Email {}, class: "nav-link", "Email" }
-                    Link { to: Route::Calendar {}, class: "nav-link", "Calendario" }
-                    Link { to: Route::Whatsapp {}, class: "nav-link", "WhatsApp" }
-                    Link { to: Route::Settings {}, class: "nav-link", "Ajustes" }
-                    Link { to: Route::Help {}, class: "nav-link", "Ayuda" }
-                    Link { to: Route::Dashboard {}, class: "nav-link", "Panel" }
-                    Link { to: Route::Search {}, class: "nav-link", "Buscar" }
-                    Link {
-                        to: Route::Notifications {},
-                        class: "nav-link",
-                        "Notificaciones"
-                        UnreadBadge {}
+                    if session.is_some() {
+                        Link { to: Route::Dashboard {}, class: "nav-link", "Panel" }
+                        Link { to: Route::Contacts {}, class: "nav-link", "Contactos" }
+                        Link { to: Route::Companies {}, class: "nav-link", "Empresas" }
+                        Link { to: Route::Leads {}, class: "nav-link", "Prospectos" }
+                        Link { to: Route::Deals {}, class: "nav-link", "Negocios" }
+                        Link { to: Route::Activities {}, class: "nav-link", "Actividades" }
+                        Link { to: Route::Documents {}, class: "nav-link", "Documentos" }
+                        Link { to: Route::Reports {}, class: "nav-link", "Informes" }
+                        Link { to: Route::Calendar {}, class: "nav-link", "Calendario" }
+                        Link { to: Route::Email {}, class: "nav-link", "Email" }
+                        Link { to: Route::Whatsapp {}, class: "nav-link", "WhatsApp" }
+                        Link { to: Route::Search {}, class: "nav-link", "Buscar" }
+                        Link {
+                            to: Route::Notifications {},
+                            class: "nav-link",
+                            "Notificaciones"
+                            UnreadBadge {}
+                        }
+                        Link { to: Route::Audit {}, class: "nav-link", "Auditoría" }
+                        Link { to: Route::Admin {}, class: "nav-link", "Admin" }
+                        Link { to: Route::Settings {}, class: "nav-link", "Ajustes" }
+                        Link { to: Route::Users {}, class: "nav-link", "Usuarios" }
                     }
-                    Link { to: Route::Users {}, class: "nav-link", "Usuarios" }
-                    Link { to: Route::Status {}, class: "nav-link", "Estado" }
-                    Link { to: Route::Rights {}, class: "nav-link", "Tus derechos" }
+                    Link { to: Route::Help {}, class: "nav-link", "Ayuda" }
                 }
                 div { class: "nav-user",
                     match session {
@@ -144,6 +144,7 @@ pub fn Layout(title: String, children: Element) -> Element {
                 div { class: "footer-links",
                     Link { to: Route::Privacy {}, class: "link small", "Política de Privacidad" }
                     Link { to: Route::Rights {}, class: "link small", "Tus derechos (ARCOP+B)" }
+                    Link { to: Route::Status {}, class: "link small", "Estado del sistema" }
                     button {
                         class: "link-btn small",
                         title: "Volver a elegir qué finalidades opcionales aceptas",
