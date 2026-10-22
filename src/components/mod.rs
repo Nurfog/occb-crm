@@ -14,7 +14,8 @@ use crate::{
 
 use self::consent::ConsentBanner;
 
-/// Barra superior: marca, enlaces y estado de sesión (con salida).
+/// Barra superior propia: marca + lo esencial para visitas
+/// (Inicio, Ayuda, Entrar, Crear cuenta) o el menú de la app con sesión.
 #[component]
 pub fn NavBar() -> Element {
     let mut auth = use_auth();
@@ -27,9 +28,21 @@ pub fn NavBar() -> Element {
         header { class: "topbar",
             div { class: "topbar-inner",
                 Link { to: Route::Home {}, class: "brand", "OCCB · CRM" }
-                nav { class: "nav-links",
-                    Link { to: Route::Home {}, class: "nav-link", "Inicio" }
-                    if session.is_some() {
+                if session.is_none() {
+                    nav { class: "nav-links",
+                        Link { to: Route::Home {}, class: "nav-link", "Inicio" }
+                        Link { to: Route::Help {}, class: "nav-link", "Ayuda" }
+                    }
+                    div { class: "nav-user",
+                        Link { to: Route::Login {}, class: "nav-link", "Entrar" }
+                        Link {
+                            to: Route::Register {},
+                            class: "btn btn-primary nav-cta",
+                            "Crear cuenta"
+                        }
+                    }
+                } else {
+                    nav { class: "nav-links",
                         Link { to: Route::Dashboard {}, class: "nav-link", "Panel" }
                         Link { to: Route::Contacts {}, class: "nav-link", "Contactos" }
                         Link { to: Route::Companies {}, class: "nav-link", "Empresas" }
@@ -52,45 +65,38 @@ pub fn NavBar() -> Element {
                         Link { to: Route::Admin {}, class: "nav-link", "Admin" }
                         Link { to: Route::Settings {}, class: "nav-link", "Ajustes" }
                         Link { to: Route::Users {}, class: "nav-link", "Usuarios" }
+                        Link { to: Route::Help {}, class: "nav-link", "Ayuda" }
                     }
-                    Link { to: Route::Help {}, class: "nav-link", "Ayuda" }
-                }
-                div { class: "nav-user",
-                    match session {
-                        Some(s) => {
-                            let email = s.user.email.clone();
-                            let access = s.access_token.clone();
-                            let refresh = s.refresh_token.clone();
-                            rsx! {
-                                span { class: "muted nav-email", "{email}" }
-                                button {
-                                    class: "btn btn-small",
-                                    disabled: *busy.read(),
-                                    onclick: move |_| {
-                                        let access_v = access.clone();
-                                        let refresh_v = refresh.clone();
-                                        busy.set(true);
-                                        spawn(async move {
-                                            // Mejor esfuerzo: aunque el backend falle,
-                                            // la sesión local se cierra igual.
-                                            let _ = api::logout(&access_v, &refresh_v).await;
-                                            auth.write().session = None;
-                                            busy.set(false);
-                                            nav.push(Route::Home {});
-                                        });
-                                    },
-                                    "Salir"
+                    div { class: "nav-user",
+                        match session {
+                            Some(s) => {
+                                let email = s.user.email.clone();
+                                let access = s.access_token.clone();
+                                let refresh = s.refresh_token.clone();
+                                rsx! {
+                                    span { class: "muted nav-email", "{email}" }
+                                    button {
+                                        class: "btn btn-small",
+                                        disabled: *busy.read(),
+                                        onclick: move |_| {
+                                            let access_v = access.clone();
+                                            let refresh_v = refresh.clone();
+                                            busy.set(true);
+                                            spawn(async move {
+                                                // Mejor esfuerzo: aunque el backend falle,
+                                                // la sesión local se cierra igual.
+                                                let _ = api::logout(&access_v, &refresh_v).await;
+                                                auth.write().session = None;
+                                                busy.set(false);
+                                                nav.push(Route::Home {});
+                                            });
+                                        },
+                                        "Salir"
+                                    }
                                 }
                             }
+                            None => rsx! {},
                         }
-                        None => rsx! {
-                            Link { to: Route::Login {}, class: "btn btn-small", "Entrar" }
-                            Link {
-                                to: Route::Register {},
-                                class: "btn btn-small btn-primary",
-                                "Crear cuenta"
-                            }
-                        },
                     }
                 }
             }
@@ -140,25 +146,47 @@ pub fn Layout(title: String, children: Element) -> Element {
                 }
                 {children}
             }
-            footer { class: "footer",
-                div { class: "footer-links",
-                    Link { to: Route::Privacy {}, class: "link small", "Política de Privacidad" }
-                    Link { to: Route::Rights {}, class: "link small", "Tus derechos (ARCOP+B)" }
-                    Link { to: Route::Status {}, class: "link small", "Estado del sistema" }
-                    button {
-                        class: "link-btn small",
-                        title: "Volver a elegir qué finalidades opcionales aceptas",
-                        onclick: move |_| {
-                            // Revocar: se borra la decisión y reaparece el banner.
-                            let undecided = ConsentState::default();
-                            save_consent(&undecided);
-                            consent_w.set(undecided);
-                        },
-                        "Preferencias de privacidad"
+            footer { class: "footer footer-dark",
+                div { class: "footer-grid",
+                    div {
+                        h4 { class: "footer-title", "Módulos" }
+                        Link { to: Route::Leads {}, class: "footer-link", "Prospectos" }
+                        Link { to: Route::Contacts {}, class: "footer-link", "Contactos" }
+                        Link { to: Route::Companies {}, class: "footer-link", "Empresas" }
+                        Link { to: Route::Deals {}, class: "footer-link", "Negocios" }
+                        Link { to: Route::Activities {}, class: "footer-link", "Actividades" }
+                        Link { to: Route::Documents {}, class: "footer-link", "Documentos" }
+                    }
+                    div {
+                        h4 { class: "footer-title", "Producto" }
+                        Link { to: Route::Dashboard {}, class: "footer-link", "Panel" }
+                        Link { to: Route::Reports {}, class: "footer-link", "Informes" }
+                        Link { to: Route::Calendar {}, class: "footer-link", "Calendario" }
+                        Link { to: Route::Email {}, class: "footer-link", "Email" }
+                        Link { to: Route::Whatsapp {}, class: "footer-link", "WhatsApp" }
+                        Link { to: Route::Help {}, class: "footer-link", "Ayuda" }
+                    }
+                    div {
+                        h4 { class: "footer-title", "Legal y privacidad" }
+                        Link { to: Route::Privacy {}, class: "footer-link", "Política de Privacidad" }
+                        Link { to: Route::Rights {}, class: "footer-link", "Tus derechos (ARCOP+B)" }
+                        Link { to: Route::Status {}, class: "footer-link", "Estado del sistema" }
+                        button {
+                            class: "link-btn footer-link",
+                            title: "Volver a elegir qué finalidades opcionales aceptas",
+                            onclick: move |_| {
+                                // Revocar: se borra la decisión y reaparece el banner.
+                                let undecided = ConsentState::default();
+                                save_consent(&undecided);
+                                consent_w.set(undecided);
+                            },
+                            "Preferencias de privacidad"
+                        }
                     }
                 }
-                div { class: "muted small",
-                    "OCCB CRM · frontend Dioxus · el API vive en el proyecto occb"
+                div { class: "footer-bottom",
+                    span { "© 2026 OCCB CRM" }
+                    span { class: "muted", "Frontend Dioxus · API occb · Ley 21.719" }
                 }
             }
             if !decided {

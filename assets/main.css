@@ -43,7 +43,9 @@ body {
   gap: 1rem;
   flex-wrap: wrap;
 }
-.brand { font-weight: 800; color: var(--ink); text-decoration: none; }
+.brand { font-weight: 800; color: var(--ink); text-decoration: none; font-size: 1.1rem; }
+.brand:hover { color: var(--brand); }
+.nav-cta { padding: 0.55rem 1.2rem; }
 .nav-links { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 .nav-link {
   color: var(--muted);
@@ -170,6 +172,41 @@ li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
 .page-title { margin: 0 0 0.5rem; font-size: 1.7rem; }
 .subtitle { color: var(--muted); max-width: 60ch; }
 .footer { border-top: 1px solid var(--line); padding: 1rem; text-align: center; }
+.footer-dark { background: #101a30; color: #c6d2e6; border-top: none; text-align: left; }
+.footer-grid {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 2rem 1rem 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1.5rem;
+}
+.footer-title { color: #fff; font-size: 0.95rem; margin: 0 0 0.6rem; }
+.footer-link {
+  display: block;
+  color: #9fb0cc;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.2rem 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.footer-link:hover { color: #fff; }
+.footer-bottom {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 1rem;
+  border-top: 1px solid rgb(255 255 255 / 0.12);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.footer-bottom .muted { color: #7e90ad; }
 
 /* Tarjetas */
 .card {
