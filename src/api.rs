@@ -809,6 +809,7 @@ async fn get_json<T: serde::de::DeserializeOwned>(
 
 /// `GET /api/v1/contacts?page&per_page&search&sort_by&sort_order`.
 /// Orden válido: `first_name|last_name|email|phone|position|created_at`.
+/// Filtros opcionales: empresa (ILIKE), cargo (ILIKE), creado desde/hasta (AAAA-MM-DD).
 pub async fn list_contacts(
     access_token: &str,
     page: u32,
@@ -816,6 +817,10 @@ pub async fn list_contacts(
     search: &str,
     sort_by: &str,
     sort_order: &str,
+    company: &str,
+    position: &str,
+    created_after: &str,
+    created_before: &str,
 ) -> Result<Paged<Contact>, ApiError> {
     let mut query: Vec<(&str, String)> = vec![
         ("page", page.max(1).to_string()),
@@ -825,6 +830,18 @@ pub async fn list_contacts(
     ];
     if !search.trim().is_empty() {
         query.push(("search", search.trim().to_string()));
+    }
+    if !company.trim().is_empty() {
+        query.push(("company", company.trim().to_string()));
+    }
+    if !position.trim().is_empty() {
+        query.push(("position", position.trim().to_string()));
+    }
+    if !created_after.trim().is_empty() {
+        query.push(("created_after", created_after.trim().to_string()));
+    }
+    if !created_before.trim().is_empty() {
+        query.push(("created_before", created_before.trim().to_string()));
     }
     get_json(access_token, "/api/v1/contacts", &query).await
 }

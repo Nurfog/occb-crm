@@ -13,6 +13,31 @@ fn none_if_empty(s: &str) -> Option<String> {
     if s.is_empty() { None } else { Some(s.to_string()) }
 }
 
+/// Color del puntaje según tramo, como el original.
+fn score_class(score: i32) -> &'static str {
+    if score >= 80 {
+        "font-bold text-green-700"
+    } else if score >= 50 {
+        "font-bold text-yellow-700"
+    } else if score >= 20 {
+        "font-bold text-orange-700"
+    } else {
+        "font-bold text-red-700"
+    }
+}
+
+/// Pastilla de estado del prospecto.
+fn status_class(status: &str) -> &'static str {
+    match status {
+        "new" => "tag tag-info",
+        "contacted" => "tag tag-warning",
+        "qualified" => "tag tag-ok",
+        "unqualified" => "tag tag-muted",
+        "converted" => "tag tag-violet",
+        _ => "tag tag-warning",
+    }
+}
+
 /// Listado con filtros + estadísticas + alta. Requiere sesión.
 #[component]
 pub fn Leads() -> Element {
@@ -196,8 +221,10 @@ pub fn Leads() -> Element {
                                             let name = l.full_name();
                                             let company = l.company_name.clone().unwrap_or_default();
                                             let st = api::lead_status_label(&l.status).to_string();
+                                            let st_cls = status_class(&l.status);
                                             let src = api::lead_source_label(&l.lead_source).to_string();
                                             let score = l.score;
+                                            let score_cls = score_class(score);
                                             rsx! {
                                                 tr { key: "{id}",
                                                     td {
@@ -208,9 +235,11 @@ pub fn Leads() -> Element {
                                                         }
                                                     }
                                                     td { "{company}" }
-                                                    td { "{st}" }
+                                                    td {
+                                                        span { class: "{st_cls}", "{st}" }
+                                                    }
                                                     td { "{src}" }
-                                                    td { "{score}" }
+                                                    td { class: "{score_cls}", "{score}" }
                                                 }
                                             }
                                         }
@@ -442,26 +471,191 @@ pub fn LeadDetail(id: String) -> Element {
                 Some(Ok(l)) => {
                     let detail_id = l.id.to_string();
                     let detail_name = l.full_name();
+                    let is_converted = l.status == "converted";
                     rsx! {
-                        LeadEditor { lead: l.clone(), on_saved: move || lead.restart() }
-                        EntityTags { entity_type: "lead".to_string(), entity_id: detail_id.clone() }
-                        ConvertLead {
-                            id: detail_id.clone(),
-                            name: detail_name.clone(),
-                            pipes: pipes.read().clone(),
-                            on_done: move || {
-                                lead.restart();
-                                log.restart();
-                            },
-                        }
-                        DeleteLead { id: detail_id, name: detail_name }
-                        LeadLog {
-                            lead_id: l.id.to_string(),
-                            log: log.read().clone(),
-                            on_changed: move || log.restart(),
+                        div { class: "detail-grid",
+                            div {
+                                LeadEditor { lead: l.clone(), on_saved: move || lead.restart() }
+                                EntityTags { entity_type: "lead".to_string(), entity_id: detail_id.clone() }
+                                if !is_converted {
+                                    ConvertLead {
+                                        id: detail_id.clone(),
+                                        name: detail_name.clone(),
+                                        pipes: pipes.read().clone(),
+                                        on_done: move || {
+                                            lead.restart();
+                                            log.restart();
+                                        },
+                                    }
+                                } else {
+                                    ConvertedLinks { lead: l.clone() }
+                                }
+                                DeleteLead { id: detail_id, name: detail_name }
+                                LeadLog {
+                                    lead_id: l.id.to_string(),
+                                    log: log.read().clone(),
+                                    on_changed: move || log.restart(),
+                                }
+                            }
+                            div {
+                                LeadScore { lead: l.clone() }
+                                LeadQuickStatus {
+                                    lead: l.clone(),
+                                    on_changed: move || {
+                                        lead.restart();
+                                        log.restart();
+                                    },
+                                }
+                                LeadMeta { lead: l.clone() }
+                            }
                         }
                     }
                 },
+            }
+        }
+    }
+}
+
+/// Puntaje del prospecto con barra de progreso.
+#[component]
+fn LeadScore(lead: api::Lead) -> Element {
+    let width = format!("width: {}%", lead.score.clamp(0, 100));
+    rsx! {
+        section { class: "card",
+            h2 { class: "card-title", "Puntaje" }
+            p { class: "{score_class(lead.score)} text-3xl", "{lead.score}" }
+            div { class: "mt-2 h-2.5 overflow-hidden rounded-full bg-muted",
+                div { class: "h-full rounded-full bg-primary", style: "{width}" }
+            }
+        }
+    }
+}
+
+/// Cambio rápido de estado.
+#[component]
+fn LeadQuickStatus(lead: api::Lead, on_changed: EventHandler<()>) -> Element {
+    let auth = use_auth();
+    let mut busy = use_signal(|| false);
+
+    rsx! {
+        section { class: "card",
+            h2 { class: "card-title", "Estado" }
+            div { class: "flex flex-col gap-1",
+                for s in LEAD_STATUSES {
+                    {
+                        if s == "converted" {
+                            rsx! {}
+                        } else {
+                            let label = api::lead_status_label(s).to_string();
+                            let active = lead.status == s;
+                            let cls = if active {
+                                "rounded-lg bg-primary/10 px-3 py-1.5 text-left text-sm font-semibold text-primary"
+                            } else {
+                                "rounded-lg px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted"
+                            };
+                            let tok = auth
+                                .read()
+                                .session
+                                .clone()
+                                .map(|s| s.access_token);
+                            let id_v = lead.id.to_string();
+                            let st_v = s.to_string();
+                            rsx! {
+                                button { key: "{s}", class: "{cls}", disabled: *busy.read(),
+                                    onclick: move |_| {
+                                        let tk = tok.clone();
+                                        let iv = id_v.clone();
+                                        let sv = st_v.clone();
+                                        busy.set(true);
+                                        spawn(async move {
+                                            if let Some(t) = tk {
+                                                let _ = api::update_lead(
+                                                        &t,
+                                                        &iv,
+                                                        &api::UpdateLeadBody {
+                                                            status: Some(&sv),
+                                                            ..Default::default()
+                                                        },
+                                                    )
+                                                    .await;
+                                            }
+                                            busy.set(false);
+                                            on_changed.call(());
+                                        });
+                                    },
+                                    "{label}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Metadatos del prospecto.
+#[component]
+fn LeadMeta(lead: api::Lead) -> Element {
+    let created = lead.created_at.format("%d %b %Y %H:%M").to_string();
+    let updated = lead.updated_at.format("%d %b %Y %H:%M").to_string();
+    let source = api::lead_source_label(&lead.lead_source).to_string();
+    rsx! {
+        section { class: "card",
+            h2 { class: "card-title", "Ficha" }
+            dl { class: "detail-list",
+                div {
+                    dt { "Origen" }
+                    dd { "{source}" }
+                }
+                div {
+                    dt { "Creado" }
+                    dd { "{created}" }
+                }
+                div {
+                    dt { "Actualizado" }
+                    dd { "{updated}" }
+                }
+            }
+        }
+    }
+}
+
+/// Enlaces creados al convertir.
+#[component]
+fn ConvertedLinks(lead: api::Lead) -> Element {
+    rsx! {
+        section { class: "card converted",
+            h2 { class: "card-title", "Convertido ✓" }
+            div { class: "row",
+                if let Some(cid) = lead.converted_contact_id {
+                    {
+                        let id = cid.to_string();
+                        rsx! {
+                            Link { to: Route::ContactDetail { id }, class: "btn btn-small", "Ver contacto" }
+                        }
+                    }
+                }
+                if let Some(cid) = lead.converted_company_id {
+                    {
+                        let id = cid.to_string();
+                        rsx! {
+                            Link { to: Route::CompanyDetail { id }, class: "btn btn-small", "Ver empresa" }
+                        }
+                    }
+                }
+                if let Some(did) = lead.converted_deal_id {
+                    {
+                        let id = did.to_string();
+                        rsx! {
+                            Link {
+                                to: Route::DealDetail { id },
+                                class: "btn btn-small btn-primary",
+                                "Ver negocio"
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -770,6 +964,7 @@ fn LeadLog(
     let mut subject = use_signal(String::new);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let lid_form = lead_id.clone();
 
     let busy_v = *busy.read();
 
@@ -781,7 +976,7 @@ fn LeadLog(
                 onsubmit: move |e| {
                     e.prevent_default();
                     let token = auth.read().session.clone().map(|s| s.access_token);
-                    let id_v = lead_id.clone();
+                    let id_v = lid_form.clone();
                     let k = kind.read().clone();
                     let subj = subject.read().trim().to_string();
                     if subj.is_empty() {
@@ -859,10 +1054,59 @@ fn LeadLog(
                             for a in list {
                                 {
                                     let key = a.id.to_string();
+                                    let aid_c = key.clone();
+                                    let aid_d = key.clone();
                                     let subj = a.subject.clone();
-                                    let mark = if a.completed { "✓" } else { "·" };
+                                    let done = a.completed;
+                                    let mark = if done { "✓" } else { "○" };
+                                    let subj_cls = if done { "line-through muted" } else { "" };
+                                    let tok = auth
+                                        .read()
+                                        .session
+                                        .clone()
+                                        .map(|s| s.access_token);
+                                    let tok_c = tok.clone();
+                                    let lid = lead_id.clone();
+                                    let lid_c = lid.clone();
+                                    let lid_d = lid;
                                     rsx! {
-                                        li { key: "{key}", "{mark} {subj}" }
+                                        li { key: "{key}",
+                                            "{mark} "
+                                            span { class: "{subj_cls}", "{subj}" }
+                                            " "
+                                            if !done {
+                                                button {
+                                                    class: "link-btn small",
+                                                    onclick: move |_| {
+                                                        let tk = tok_c.clone();
+                                                        let lv = lid_c.clone();
+                                                        let av = aid_c.clone();
+                                                        spawn(async move {
+                                                            if let Some(t) = tk {
+                                                                let _ = api::complete_lead_activity(&t, &lv, &av).await;
+                                                            }
+                                                            on_changed.call(());
+                                                        });
+                                                    },
+                                                    "hecha"
+                                                }
+                                            }
+                                            button {
+                                                class: "link-btn small danger",
+                                                onclick: move |_| {
+                                                    let tk = tok.clone();
+                                                    let lv = lid_d.clone();
+                                                    let av = aid_d.clone();
+                                                    spawn(async move {
+                                                        if let Some(t) = tk {
+                                                            let _ = api::delete_lead_activity(&t, &lv, &av).await;
+                                                        }
+                                                        on_changed.call(());
+                                                    });
+                                                },
+                                                "×"
+                                            }
+                                        }
                                     }
                                 }
                             }

@@ -19,6 +19,9 @@ pub fn Deals() -> Element {
     let auth = use_auth();
     let mut show_new = use_signal(|| false);
     let mut op_msg = use_signal(|| None::<String>);
+    let mut view = use_signal(|| "board".to_string());
+    let mut stage_filter = use_signal(|| String::new());
+    let mut drag_id = use_signal(|| None::<String>);
     let token_of = auth.read().session.clone().map(|s| s.access_token);
     let token_ex = token_of.clone();
     let token_im = token_of.clone();
@@ -155,16 +158,36 @@ pub fn Deals() -> Element {
                     summary.restart();
                 } }
             }
+            div { class: "row",
+                button {
+                    class: if *view.read() == "board" { "btn btn-small btn-primary" } else { "btn btn-small" },
+                    onclick: move |_| view.set("board".to_string()),
+                    "Tablero"
+                }
+                button {
+                    class: if *view.read() == "list" { "btn btn-small btn-primary" } else { "btn btn-small" },
+                    onclick: move |_| view.set("list".to_string()),
+                    "Lista"
+                }
+            }
             if let Some(Ok(s)) = &*summary.read() {
-                section { class: "grid-cards",
+                div { class: "row",
+                    button {
+                        class: if stage_filter.read().is_empty() { "btn btn-small btn-primary" } else { "btn btn-small" },
+                        onclick: move |_| stage_filter.set(String::new()),
+                        "Todas"
+                    }
                     for st in &s.stages {
                         {
+                            let code = st.stage.clone();
                             let label = api::deal_stage_label(&st.stage).to_string();
-                            let detail = format!("{} negocios · {:.0} en total", st.count, st.total_value);
+                            let txt = format!("{label} ({})", st.count);
+                            let is_on = *stage_filter.read() == code;
+                            let cls = if is_on { "btn btn-small btn-primary" } else { "btn btn-small" };
                             rsx! {
-                                div { class: "card", key: "{st.stage}",
-                                    h2 { class: "card-title", "{label}" }
-                                    p { class: "muted", "{detail}" }
+                                button { key: "{code}", class: "{cls}",
+                                    onclick: move |_| stage_filter.set(code.clone()),
+                                    "{txt}"
                                 }
                             }
                         }
@@ -186,43 +209,92 @@ pub fn Deals() -> Element {
                         button { class: "btn btn-small", onclick: move |_| board.restart(), "Reintentar" }
                     }
                 },
-                Some(Ok(paged)) => rsx! {
-                    div { class: "board",
-                        for stage in DEAL_STAGES {
-                            {
-                                let label = api::deal_stage_label(stage).to_string();
-                                let cards: Vec<api::Deal> = paged
-                                    .data
-                                    .iter()
-                                    .filter(|d| d.stage == stage)
-                                    .cloned()
-                                    .collect();
-                                let count = cards.len();
-                                let head = format!("{label} ({count})");
-                                rsx! {
-                                    section { class: "card board-col", key: "{stage}",
-                                        h2 { class: "card-title", "{head}" }
-                                        if cards.is_empty() {
-                                            p { class: "muted small", "Vacía." }
-                                        }
-                                        for d in cards {
-                                            {
-                                                let did = d.id.to_string();
-                                                rsx! {
-                                                    DealCard {
-                                                        deal: d.clone(),
-                                                        on_moved: move || board.restart(),
+                Some(Ok(paged)) => {
+                    let filter = stage_filter.read().clone();
+                    let is_list = *view.read() == "list";
+                    let shown: Vec<api::Deal> = paged
+                        .data
+                        .iter()
+                        .filter(|d| filter.is_empty() || d.stage == filter)
+                        .cloned()
+                        .collect();
+                    let n_shown = shown.len();
+                    rsx! {
+                        if is_list {
+                            DealsTable { deals: shown, on_changed: move || {
+                                board.restart();
+                                summary.restart();
+                            } }
+                        } else {
+                            div { class: "board",
+                                for stage in DEAL_STAGES {
+                                    {
+                                        if !filter.is_empty() && filter != stage {
+                                            rsx! {}
+                                        } else {
+                                            let label = api::deal_stage_label(stage).to_string();
+                                            let cards: Vec<api::Deal> = paged
+                                                .data
+                                                .iter()
+                                                .filter(|d| d.stage == stage)
+                                                .cloned()
+                                                .collect();
+                                            let count = cards.len();
+                                            let head = format!("{label} ({count})");
+                                            let stage_v = stage.to_string();
+                                            let tok = token_of.clone();
+                                            rsx! {
+                                                section {
+                                                    class: "card board-col",
+                                                    key: "{stage}",
+                                                    ondragover: move |e| e.prevent_default(),
+                                                    ondrop: move |_| {
+                                                        let tk = tok.clone();
+                                                        let st = stage_v.clone();
+                                                        let did = drag_id.read().clone();
+                                                        drag_id.set(None);
+                                                        if let Some(did) = did {
+                                                            spawn(async move {
+                                                                if let Some(t) = tk {
+                                                                    let _ = api::move_deal_stage(&t, &did, &st).await;
+                                                                }
+                                                                board.restart();
+                                                                summary.restart();
+                                                            });
+                                                        }
+                                                    },
+                                                    h2 { class: "card-title", "{head}" }
+                                                    if cards.is_empty() {
+                                                        p { class: "muted small", "Vacía. Arrastra aquí." }
                                                     }
-                                                    Link {
-                                                        to: Route::DealDetail { id: did },
-                                                        class: "link small",
-                                                        "Ver detalle →"
+                                                    for d in cards {
+                                                        {
+                                                            let did = d.id.to_string();
+                                                            rsx! {
+                                                                DealCard {
+                                                                    deal: d.clone(),
+                                                                    drag: move |id: String| drag_id.set(Some(id)),
+                                                                    on_moved: move || {
+                                                                        board.restart();
+                                                                        summary.restart();
+                                                                    },
+                                                                }
+                                                                Link {
+                                                                    to: Route::DealDetail { id: did },
+                                                                    class: "link small",
+                                                                    "Ver detalle →"
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            }
+                            if n_shown == 0 {
+                                p { class: "muted", "Sin negocios con ese filtro." }
                             }
                         }
                     }
@@ -232,72 +304,161 @@ pub fn Deals() -> Element {
     }
 }
 
-/// Tarjeta de negocio con selector para mover de etapa.
+/// Tarjeta arrastrable: título, valor, empresa y acciones (ver/editar/borrar).
 #[component]
-fn DealCard(deal: api::Deal, on_moved: EventHandler<()>) -> Element {
+fn DealCard(deal: api::Deal, drag: EventHandler<String>, on_moved: EventHandler<()>) -> Element {
     let auth = use_auth();
-    let mut stage = use_signal(|| deal.stage.clone());
+    let mut confirm = use_signal(|| false);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
 
-    let stage_v = stage.read().clone();
-    let busy_v = *busy.read();
+    let deal_id = deal.id.to_string();
     let title = deal.title.clone();
-    let amount = format!("{:.0} {}", deal.value, deal.currency);
+    let amount = format!("${:.0} {}", deal.value, deal.currency);
     let company = deal.company_name.clone().unwrap_or_default();
-    let contact = deal.contact_name.clone().unwrap_or_default();
-    let extra = match (company.is_empty(), contact.is_empty()) {
-        (true, true) => String::new(),
-        (false, true) => format!(" · {company}"),
-        (true, false) => format!(" · {contact}"),
-        (false, false) => format!(" · {company} · {contact}"),
-    };
+    let busy_v = *busy.read();
+    let asking = *confirm.read();
 
     rsx! {
-        div { class: "deal-card",
+        div {
+            class: "deal-card",
+            draggable: "true",
+            ondragstart: move |_| drag.call(deal_id.clone()),
             strong { "{title}" }
-            p { class: "muted small", "{amount}{extra}" }
-            select {
-                class: "input",
-                value: "{stage_v}",
-                disabled: busy_v,
-                onchange: move |e| {
-                    let next = e.value();
-                    stage.set(next.clone());
-                    let token = auth
-                        .read()
-                        .session
-                        .clone()
-                        .map(|s| s.access_token);
-                    let id_v = deal.id.to_string();
-                    busy.set(true);
-                    error.set(None);
-                    spawn(async move {
-                        let res = match token {
-                            Some(t) => {
-                                api::move_deal_stage(&t, &id_v, &next)
-                                    .await
-                                    .map(|_| ())
-                                    .map_err(|e| e.to_string())
-                            }
-                            None => Err("Sin sesión.".to_string()),
-                        };
-                        busy.set(false);
-                        match res {
-                            Ok(()) => on_moved.call(()),
-                            Err(msg) => error.set(Some(msg)),
-                        }
-                    });
-                },
-                for s in DEAL_STAGES {
-                    {
-                        let label = api::deal_stage_label(s).to_string();
-                        rsx! { option { value: s, "{label}" } }
+            p { class: "deal-amount", "{amount}" }
+            if !company.is_empty() {
+                p { class: "muted small truncate", "{company}" }
+            }
+            div { class: "deal-actions",
+                Link {
+                    to: Route::DealDetail { id: deal.id.to_string() },
+                    class: "link-btn small",
+                    "Ver"
+                }
+                Link {
+                    to: Route::DealDetail { id: deal.id.to_string() },
+                    class: "link-btn small",
+                    "Editar"
+                }
+                if !asking {
+                    button {
+                        class: "link-btn small danger",
+                        onclick: move |_| confirm.set(true),
+                        "Borrar"
+                    }
+                } else {
+                    button {
+                        class: "link-btn small danger",
+                        disabled: busy_v,
+                        onclick: move |_| {
+                            let tok = auth
+                                .read()
+                                .session
+                                .clone()
+                                .map(|s| s.access_token);
+                            let id_v = deal.id.to_string();
+                            busy.set(true);
+                            spawn(async move {
+                                let res = match tok {
+                                    Some(t) => {
+                                        api::delete_deal(&t, &id_v)
+                                            .await
+                                            .map_err(|e| e.to_string())
+                                    }
+                                    None => Err("Sin sesión.".to_string()),
+                                };
+                                busy.set(false);
+                                match res {
+                                    Ok(()) => on_moved.call(()),
+                                    Err(msg) => {
+                                        error.set(Some(msg));
+                                        confirm.set(false);
+                                    }
+                                }
+                            });
+                        },
+                        "¿Sí?"
                     }
                 }
             }
             if let Some(msg) = error.read().clone() {
                 p { class: "alert alert-error small", "{msg}" }
+            }
+        }
+    }
+}
+
+/// Vista lista: tabla con monto, etapa, cierre y acciones.
+#[component]
+fn DealsTable(deals: Vec<api::Deal>, on_changed: EventHandler<()>) -> Element {
+    let auth = use_auth();
+
+    rsx! {
+        if deals.is_empty() {
+            p { class: "muted", "Sin negocios con ese filtro." }
+        } else {
+            div { class: "table-wrap card",
+                table { class: "table",
+                    thead {
+                        tr {
+                            th { "Nombre" }
+                            th { "Monto" }
+                            th { "Etapa" }
+                            th { "Cierre" }
+                            th { "Acciones" }
+                        }
+                    }
+                    tbody {
+                        for d in deals {
+                            {
+                                let key = d.id.to_string();
+                                let id_v = key.clone();
+                                let title = d.title.clone();
+                                let amount = format!("${:.0} {}", d.value, d.currency);
+                                let stage = api::deal_stage_label(&d.stage).to_string();
+                                let close = d
+                                    .expected_close_date
+                                    .map(|c| c.format("%Y-%m-%d").to_string())
+                                    .unwrap_or_else(|| "—".to_string());
+                                let tok = auth
+                                    .read()
+                                    .session
+                                    .clone()
+                                    .map(|s| s.access_token);
+                                rsx! {
+                                    tr { key: "{key}",
+                                        td {
+                                            Link {
+                                                to: Route::DealDetail { id: id_v.clone() },
+                                                class: "link",
+                                                "{title}"
+                                            }
+                                        }
+                                        td { "{amount}" }
+                                        td { "{stage}" }
+                                        td { class: "muted", "{close}" }
+                                        td {
+                                            button {
+                                                class: "link-btn small danger",
+                                                onclick: move |_| {
+                                                    let tk = tok.clone();
+                                                    let iv = id_v.clone();
+                                                    spawn(async move {
+                                                        if let Some(t) = tk {
+                                                            let _ = api::delete_deal(&t, &iv).await;
+                                                        }
+                                                        on_changed.call(());
+                                                    });
+                                                },
+                                                "Borrar"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -465,6 +626,18 @@ pub fn DealDetail(id: String) -> Element {
             }
         }
     });
+    let token_h = token_of.clone();
+    let id_h = id.clone();
+    let mut history = use_resource(move || {
+        let token = token_h.clone();
+        let id_v = id_h.clone();
+        async move {
+            match token {
+                Some(t) => api::entity_history(&t, "deal", &id_v).await,
+                None => Err(ApiError::no_session()),
+            }
+        }
+    });
 
     if auth.read().session.is_none() {
         return rsx! {
@@ -500,6 +673,7 @@ pub fn DealDetail(id: String) -> Element {
                         DealEditor { deal: d.clone(), on_saved: move || deal.restart() }
                         EntityTags { entity_type: "deal".to_string(), entity_id: detail_id.clone() }
                         DeleteDeal { id: detail_id, title: detail_title }
+                        DealHistory { log: history.read().clone() }
                         section { class: "card",
                             h2 { class: "card-title", "Actividad" }
                             match &*activities.read() {
@@ -529,6 +703,44 @@ pub fn DealDetail(id: String) -> Element {
                                         }
                                     }
                                 },
+                            }
+                        }
+                    }
+                },
+            }
+        }
+    }
+}
+
+/// Historial de cambios del negocio (auditoría por entidad).
+#[component]
+fn DealHistory(log: Option<Result<Vec<api::AuditLog>, ApiError>>) -> Element {
+    rsx! {
+        section { class: "card",
+            h2 { class: "card-title", "Historial" }
+            match log {
+                None => rsx! { p { class: "muted", "Cargando…" } },
+                Some(Err(e)) => rsx! { p { class: "muted small", "Sin acceso al historial: {e}" } },
+                Some(Ok(list)) => rsx! {
+                    if list.is_empty() {
+                        p { class: "muted", "Sin movimientos registrados." }
+                    } else {
+                        ul { class: "timeline",
+                            for l in list.iter().take(20) {
+                                {
+                                    let key = l.id.to_string();
+                                    let action = l.action.clone();
+                                    let when = l.created_at.format("%d %b %H:%M").to_string();
+                                    rsx! {
+                                        li { key: "{key}", class: "timeline-item",
+                                            span { class: "timeline-dot" }
+                                            div {
+                                                strong { "{action}" }
+                                                p { class: "muted small", "{when}" }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

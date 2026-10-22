@@ -196,6 +196,64 @@ li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
   background: var(--surface);
 }
 .deal-card .input { margin-top: 0.4rem; font-size: 0.9rem; padding: 0.4rem 0.5rem; }
+.deal-amount { font-size: 1.1rem; font-weight: 800; color: var(--brand); margin: 0.15rem 0; }
+.deal-actions { display: flex; gap: 0.6rem; border-top: 1px solid var(--line); margin-top: 0.5rem; padding-top: 0.4rem; }
+.link-btn.danger { color: var(--bad); }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
+
+/* Cabecera de ficha + avatar grande + pestañas */
+.detail-head { display: flex; align-items: center; gap: 1rem; }
+.detail-head .card-title { margin: 0; }
+.detail-actions { margin-left: auto; }
+.avatar-lg { width: 3rem; height: 3rem; font-size: 1.1rem; margin-right: 0; }
+.tabs { gap: 0.4rem; margin: 1rem 0 0; }
+.detail-notes { white-space: pre-wrap; }
+.danger-btn { color: var(--bad); border-color: var(--bad); }
+.danger-btn:hover { background: var(--bad); color: #fff; }
+
+/* Avatar de iniciales */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Cabeceras ordenables */
+.th-sort { font: inherit; font-weight: 700; color: inherit; }
+
+/* Detalle en 2 columnas (contenido + barra lateral) */
+.detail-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
+@media (min-width: 960px) {
+    .detail-grid { grid-template-columns: 2fr 1fr; gap: 1.2rem; align-items: start; }
+    .detail-grid > div { min-width: 0; }
+}
+
+/* Bloque de convertido */
+.converted { background: #f5f3ff; border-color: #c4b5fd; }
+
+/* Pastillas de estado */
+.tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.15em 0.7em;
+  white-space: nowrap;
+}
+.tag-info { background: #e0f2fe; color: #0369a1; }
+.tag-warning { background: #fef3c7; color: #92400e; }
+.tag-ok { background: #dcfce7; color: #15803d; }
+.tag-muted { background: var(--secondary); color: var(--muted); }
+.tag-violet { background: #ede9fe; color: #6d28d9; }
 
 /* Formularios */
 .form { max-width: 460px; display: flex; flex-direction: column; gap: 0.55rem; }

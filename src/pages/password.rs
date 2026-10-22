@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::{api, auth::{use_auth, Session}, components::Layout, route::Route};
+use crate::{api, auth::use_auth, components::Layout, route::Route};
 
 /// Lee `?token=` de la URL en el navegador (para pre-rellenar el reset).
 fn query_token() -> String {
