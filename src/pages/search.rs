@@ -11,10 +11,11 @@ use crate::{
 
 /// Buscador global de contactos, empresas y negocios. Requiere sesión.
 #[component]
-pub fn Search() -> Element {
+pub fn Search(q: String) -> Element {
     let auth = use_auth();
-    let mut q = use_signal(String::new);
-    let mut applied = use_signal(String::new);
+    let initial = q.clone();
+    let mut q = use_signal(|| initial.clone());
+    let mut applied = use_signal(|| initial);
 
     let token_of = auth.read().session.clone().map(|s| s.access_token);
     let mut results = use_resource(move || {

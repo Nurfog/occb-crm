@@ -9,9 +9,10 @@ use crate::{
     route::Route,
 };
 
-const TABS: [(&str, &str); 4] = [
+const TABS: [(&str, &str); 5] = [
     ("pipelines", "Pipelines"),
     ("profiles", "Perfiles"),
+    ("users", "Usuarios"),
     ("branding", "Marca"),
     ("webhooks", "Webhooks"),
 ];
@@ -65,6 +66,8 @@ pub fn Admin() -> Element {
                 PipelinesSection {}
             } else if current == "profiles" {
                 ProfilesSection {}
+            } else if current == "users" {
+                UsersSection {}
             } else if current == "branding" {
                 BrandingSection {}
             } else {
@@ -394,6 +397,169 @@ fn ProfilesSection() -> Element {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            },
+        }
+    }
+}
+
+/// Usuarios: listado, alta y borrado (requiere admin.access).
+#[component]
+fn UsersSection() -> Element {
+    let auth = use_auth();
+    let mut page = use_signal(|| 1u32);
+    let mut name = use_signal(String::new);
+    let mut email = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut error = use_signal(|| None::<String>);
+
+    let token_of = auth.read().session.clone().map(|s| s.access_token);
+    let token_l = token_of.clone();
+    let mut items = use_resource(move || {
+        let token = token_l.clone();
+        let p = *page.read();
+        async move {
+            match token {
+                Some(t) => api::list_users(&t, p, 20, "", "created_at", "desc").await,
+                None => Err(ApiError::no_session()),
+            }
+        }
+    });
+
+    rsx! {
+        section { class: "card form",
+            h2 { class: "card-title", "Nuevo usuario" }
+            label { class: "field", "Nombre *" }
+            input {
+                class: "input",
+                value: "{name}",
+                oninput: move |e| name.set(e.value()),
+            }
+            label { class: "field", "Email *" }
+            input {
+                class: "input",
+                r#type: "email",
+                value: "{email}",
+                oninput: move |e| email.set(e.value()),
+            }
+            label { class: "field", "Clave inicial *" }
+            input {
+                class: "input",
+                r#type: "password",
+                value: "{password}",
+                oninput: move |e| password.set(e.value()),
+                autocomplete: "new-password",
+            }
+            if let Some(msg) = error.read().clone() {
+                p { class: "alert alert-error", "{msg}" }
+            }
+            button {
+                class: "btn btn-primary",
+                onclick: move |_| {
+                    let tok = token_of.clone();
+                    let n = name.read().trim().to_string();
+                    let em = email.read().trim().to_lowercase();
+                    let pw = password.read().clone();
+                    if n.is_empty() || em.is_empty() || pw.is_empty() {
+                        error.set(Some("Nombre, email y clave son obligatorios.".to_string()));
+                        return;
+                    }
+                    error.set(None);
+                    spawn(async move {
+                        if let Some(t) = tok {
+                            match api::admin_create_user(
+                                    &t,
+                                    &api::AdminCreateUserBody { email: &em, name: &n, password: &pw },
+                                )
+                                .await
+                            {
+                                Ok(_) => {
+                                    name.set(String::new());
+                                    email.set(String::new());
+                                    password.set(String::new());
+                                    items.restart();
+                                }
+                                Err(e) => error.set(Some(e.to_string())),
+                            }
+                        }
+                    });
+                },
+                "Crear usuario"
+            }
+        }
+        match &*items.read() {
+            None => rsx! { p { class: "muted", "Cargando usuarios…" } },
+            Some(Err(e)) => rsx! {
+                div { class: "alert alert-error",
+                    p { "No se pudieron cargar (¿falta admin.access?)." }
+                    p { class: "muted small", "{e}" }
+                    button { class: "btn btn-small", onclick: move |_| items.restart(), "Reintentar" }
+                }
+            },
+            Some(Ok(paged)) => {
+                let current = *page.read();
+                let total_pages = (paged.total + paged.per_page.max(1) - 1) / paged.per_page.max(1);
+                let total_pages = total_pages.max(1);
+                rsx! {
+                    div { class: "table-wrap card",
+                        table { class: "table",
+                            thead {
+                                tr {
+                                    th { "Nombre" }
+                                    th { "Email" }
+                                    th { "Acciones" }
+                                }
+                            }
+                            tbody {
+                                for u in &paged.data {
+                                    {
+                                        let key = u.id.to_string();
+                                        let id_v = key.clone();
+                                        let uname = u.name.clone();
+                                        let uemail = u.email.clone();
+                                        let tok = token_of.clone();
+                                        rsx! {
+                                            tr { key: "{key}",
+                                                td { "{uname}" }
+                                                td { "{uemail}" }
+                                                td {
+                                                    button {
+                                                        class: "link-btn small",
+                                                        onclick: move |_| {
+                                                            let tk = tok.clone();
+                                                            let iv = id_v.clone();
+                                                            spawn(async move {
+                                                                if let Some(t) = tk {
+                                                                    let _ = api::admin_delete_user(&t, &iv).await;
+                                                                }
+                                                                items.restart();
+                                                            });
+                                                        },
+                                                        "eliminar"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    div { class: "pagination",
+                        button {
+                            class: "btn btn-small",
+                            disabled: current <= 1,
+                            onclick: move |_| page.set(current.saturating_sub(1).max(1)),
+                            "← Anterior"
+                        }
+                        span { class: "muted small", "Página {current} de {total_pages}" }
+                        button {
+                            class: "btn btn-small",
+                            disabled: current as i64 >= total_pages,
+                            onclick: move |_| page.set(current + 1),
+                            "Siguiente →"
                         }
                     }
                 }

@@ -69,8 +69,8 @@ pub enum Route {
     Notifications {},
     #[route("/cuenta")]
     Account {},
-    #[route("/buscar")]
-    Search {},
+    #[route("/buscar?:q")]
+    Search { q: String },
     #[route("/auditoria")]
     Audit {},
     #[route("/admin")]

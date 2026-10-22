@@ -87,15 +87,54 @@ pub fn Dashboard() -> Element {
                 Some(Ok(s)) => {
                     let revenue = format!("${:.0}", s.total_revenue);
                     rsx! {
-                        section { class: "grid grid-cols-2 gap-4 lg:grid-cols-4",
-                            Kpi { label: "Contactos", value: s.total_contacts.to_string(), sub: "en base".to_string() }
-                            Kpi { label: "Negocios activos", value: s.active_deals.to_string(), sub: "en curso".to_string() }
+                        section { class: "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4",
                             Kpi {
-                                label: "Ganados / Perdidos",
-                                value: format!("{} / {}", s.won_deals, s.lost_deals),
-                                sub: "cerrados".to_string(),
+                                label: "Ingresos totales",
+                                value: revenue,
+                                sub: "negocios cerrados".to_string(),
+                                tile: "bg-green-100 text-green-700".to_string(),
+                                glyph: "$".to_string(),
                             }
-                            Kpi { label: "Ingresos", value: revenue, sub: "negocios cerrados".to_string() }
+                            Kpi {
+                                label: "Contactos",
+                                value: s.total_contacts.to_string(),
+                                sub: "en base".to_string(),
+                                tile: "bg-blue-100 text-blue-700".to_string(),
+                                glyph: "C".to_string(),
+                            }
+                            Kpi {
+                                label: "Empresas",
+                                value: s.total_companies.to_string(),
+                                sub: "registradas".to_string(),
+                                tile: "bg-purple-100 text-purple-700".to_string(),
+                                glyph: "E".to_string(),
+                            }
+                            Kpi {
+                                label: "Negocios activos",
+                                value: s.active_deals.to_string(),
+                                sub: "en curso".to_string(),
+                                tile: "bg-orange-100 text-orange-700".to_string(),
+                                glyph: "N".to_string(),
+                            }
+                        }
+                        section { class: "card",
+                            div { class: "flex flex-wrap gap-6",
+                                MiniStat {
+                                    label: "Ganados".to_string(),
+                                    value: s.won_deals.to_string(),
+                                    cls: "text-green-700".to_string(),
+                                }
+                                MiniStat {
+                                    label: "Perdidos".to_string(),
+                                    value: s.lost_deals.to_string(),
+                                    cls: "text-red-700".to_string(),
+                                }
+                                MiniStat {
+                                    label: "Negocios totales".to_string(),
+                                    value: s.total_deals.to_string(),
+                                    cls: "text-blue-700".to_string(),
+                                }
+                            }
                         }
                     }
                 },
@@ -218,14 +257,32 @@ pub fn Dashboard() -> Element {
     }
 }
 
-/// Tarjeta de indicador.
+/// Tarjeta de indicador con mosaico de color, como el original.
 #[component]
-fn Kpi(label: String, value: String, sub: String) -> Element {
+fn Kpi(label: String, value: String, sub: String, tile: String, glyph: String) -> Element {
     rsx! {
-        div { class: "card kpi",
-            p { class: "kpi-label", "{label}" }
-            p { class: "kpi-value", "{value}" }
+        div { class: "card",
+            div { class: "flex items-center gap-3",
+                span { class: "flex h-10 w-10 items-center justify-center rounded-lg text-lg font-extrabold {tile}",
+                    "{glyph}"
+                }
+                div {
+                    p { class: "kpi-label", "{label}" }
+                    p { class: "kpi-value", "{value}" }
+                }
+            }
             p { class: "muted small", "{sub}" }
+        }
+    }
+}
+
+/// Mini indicador de una línea.
+#[component]
+fn MiniStat(label: String, value: String, cls: String) -> Element {
+    rsx! {
+        div {
+            p { class: "kpi-label", "{label}" }
+            p { class: "text-xl font-extrabold {cls}", "{value}" }
         }
     }
 }

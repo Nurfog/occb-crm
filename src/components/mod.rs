@@ -54,7 +54,7 @@ pub fn NavBar() -> Element {
                         Link { to: Route::Calendar {}, class: "nav-link", "Calendario" }
                         Link { to: Route::Email {}, class: "nav-link", "Email" }
                         Link { to: Route::Whatsapp {}, class: "nav-link", "WhatsApp" }
-                        Link { to: Route::Search {}, class: "nav-link", "Buscar" }
+                        Link { to: Route::Search { q: String::new() }, class: "nav-link", "Buscar" }
                         Link {
                             to: Route::Notifications {},
                             class: "nav-link",
@@ -162,13 +162,159 @@ fn canonical(route: &Route) -> Route {
 
 /// Shell de la app: sidebar + header + contenido, como el original.
 #[component]
-fn AppShell(title: String, children: Element) -> Element {
+/// Cabecera de la app: menú móvil, buscador global, campana,
+/// botón +Nuevo y avatar con menú (Mi cuenta, Salir). Como el original.
+#[component]
+fn AppHeader(title: String, on_menu: EventHandler<()>) -> Element {
     let mut auth = use_auth();
     let nav = use_navigator();
     let mut busy = use_signal(|| false);
-    let mut open = use_signal(|| false);
+    let mut user_open = use_signal(|| false);
+    let mut new_open = use_signal(|| false);
+    let mut q = use_signal(String::new);
 
     let session = auth.read().session.clone();
+    let user_is_open = *user_open.read();
+    let new_is_open = *new_open.read();
+    let initials = session
+        .as_ref()
+        .map(|s| {
+            s.user
+                .name
+                .split_whitespace()
+                .filter_map(|w| w.chars().next())
+                .take(2)
+                .collect::<String>()
+                .to_uppercase()
+        })
+        .unwrap_or_default();
+
+    rsx! {
+        header { class: "flex h-14 flex-shrink-0 items-center gap-2 border-b border-border bg-card px-4",
+            button {
+                class: "rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden",
+                onclick: move |_| on_menu.call(()),
+                "☰"
+            }
+            span { class: "hidden truncate text-sm font-semibold md:block lg:hidden", "{title}" }
+            form {
+                class: "mx-auto w-full max-w-lg flex-1 px-2",
+                onsubmit: move |e| {
+                    e.prevent_default();
+                    let query = q.read().trim().to_string();
+                    nav.push(Route::Search { q: query });
+                },
+                input {
+                    id: "global-search",
+                    class: "w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary",
+                    r#type: "search",
+                    placeholder: "Buscar contactos, empresas, negocios…",
+                    value: "{q}",
+                    oninput: move |e| q.set(e.value()),
+                }
+            }
+            div { class: "ml-auto flex items-center gap-1",
+                Link {
+                    to: Route::Notifications {},
+                    class: "relative rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground",
+                    title: "Notificaciones",
+                    svg {
+                        xmlns: "http://www.w3.org/2000/svg",
+                        fill: "none",
+                        view_box: "0 0 24 24",
+                        stroke_width: "1.5",
+                        stroke: "currentColor",
+                        class: "h-5 w-5",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0",
+                        }
+                    }
+                    UnreadBadge {}
+                }
+                div { class: "relative",
+                    button {
+                        class: "rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:opacity-90",
+                        onclick: move |_| new_open.set(!new_is_open),
+                        "+ Nuevo"
+                    }
+                    if *new_open.read() {
+                        div { class: "absolute right-0 z-50 mt-1 w-44 rounded-lg border border-border bg-card p-1 shadow-lg",
+                            Link {
+                                to: Route::Contacts {},
+                                class: "block rounded-md px-3 py-2 text-sm hover:bg-muted",
+                                onclick: move |_| new_open.set(false),
+                                "Contacto"
+                            }
+                            Link {
+                                to: Route::Companies {},
+                                class: "block rounded-md px-3 py-2 text-sm hover:bg-muted",
+                                onclick: move |_| new_open.set(false),
+                                "Empresa"
+                            }
+                            Link {
+                                to: Route::Deals {},
+                                class: "block rounded-md px-3 py-2 text-sm hover:bg-muted",
+                                onclick: move |_| new_open.set(false),
+                                "Negocio"
+                            }
+                        }
+                    }
+                }
+                match session {
+                    Some(s) => {
+                        let email = s.user.email.clone();
+                        let access = s.access_token.clone();
+                        let refresh = s.refresh_token.clone();
+                        rsx! {
+                            div { class: "relative",
+                                button {
+                                    class: "flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white",
+                                    title: "{email}",
+                                    onclick: move |_| user_open.set(!user_is_open),
+                                    "{initials}"
+                                }
+                                if *user_open.read() {
+                                    div { class: "absolute right-0 z-50 mt-1 w-52 rounded-lg border border-border bg-card p-1 shadow-lg",
+                                        p { class: "truncate px-3 py-2 text-xs text-muted-foreground", "{email}" }
+                                        Link {
+                                            to: Route::Account {},
+                                            class: "block rounded-md px-3 py-2 text-sm hover:bg-muted",
+                                            onclick: move |_| user_open.set(false),
+                                            "Mi cuenta"
+                                        }
+                                        button {
+                                            class: "block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50",
+                                            disabled: *busy.read(),
+                                            onclick: move |_| {
+                                                let access_v = access.clone();
+                                                let refresh_v = refresh.clone();
+                                                busy.set(true);
+                                                spawn(async move {
+                                                    let _ = api::logout(&access_v, &refresh_v).await;
+                                                    auth.write().session = None;
+                                                    busy.set(false);
+                                                    nav.push(Route::Home {});
+                                                });
+                                            },
+                                            "Salir"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None => rsx! {},
+                }
+            }
+        }
+    }
+}
+/// Shell de la app: sidebar + header + contenido, como el original.
+#[component]
+fn AppShell(title: String, children: Element) -> Element {
+    let mut open = use_signal(|| false);
     let current = canonical(&use_route::<Route>());
     let link_cls = |to: &Route| {
         if current == *to {
@@ -211,81 +357,32 @@ fn AppShell(title: String, children: Element) -> Element {
                         "Principal"
                     }
                     Link { to: Route::Dashboard {}, class: link_cls(&Route::Dashboard {}), "Panel" }
-                    Link { to: Route::Search {}, class: link_cls(&Route::Search {}), "Buscar" }
                     p { class: "px-3 pt-4 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase",
                         "CRM"
                     }
-                    Link { to: Route::Leads {}, class: link_cls(&Route::Leads {}), "Prospectos" }
                     Link { to: Route::Contacts {}, class: link_cls(&Route::Contacts {}), "Contactos" }
                     Link { to: Route::Companies {}, class: link_cls(&Route::Companies {}), "Empresas" }
                     Link { to: Route::Deals {}, class: link_cls(&Route::Deals {}), "Negocios" }
-                    p { class: "px-3 pt-4 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase",
-                        "Productividad"
-                    }
-                    Link { to: Route::Activities {}, class: link_cls(&Route::Activities {}), "Actividades" }
-                    Link { to: Route::Calendar {}, class: link_cls(&Route::Calendar {}), "Calendario" }
-                    Link { to: Route::Documents {}, class: link_cls(&Route::Documents {}), "Documentos" }
+                    Link { to: Route::Leads {}, class: link_cls(&Route::Leads {}), "Prospectos" }
                     Link { to: Route::Email {}, class: link_cls(&Route::Email {}), "Email" }
+                    Link { to: Route::Calendar {}, class: link_cls(&Route::Calendar {}), "Calendario" }
+                    Link { to: Route::Activities {}, class: link_cls(&Route::Activities {}), "Actividades" }
+                    Link { to: Route::Reports {}, class: link_cls(&Route::Reports {}), "Informes" }
+                    Link { to: Route::Documents {}, class: link_cls(&Route::Documents {}), "Documentos" }
                     Link { to: Route::Whatsapp {}, class: link_cls(&Route::Whatsapp {}), "WhatsApp" }
                     p { class: "px-3 pt-4 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase",
-                        "Gestión"
+                        "Sistema"
                     }
-                    Link { to: Route::Reports {}, class: link_cls(&Route::Reports {}), "Informes" }
-                    Link {
-                        to: Route::Notifications {},
-                        class: link_cls(&Route::Notifications {}),
-                        "Notificaciones"
-                        UnreadBadge {}
-                    }
-                    Link { to: Route::Users {}, class: link_cls(&Route::Users {}), "Usuarios" }
-                    Link { to: Route::Audit {}, class: link_cls(&Route::Audit {}), "Auditoría" }
-                    Link { to: Route::Admin {}, class: link_cls(&Route::Admin {}), "Admin" }
                     Link { to: Route::Settings {}, class: link_cls(&Route::Settings {}), "Ajustes" }
-                    Link { to: Route::Account {}, class: link_cls(&Route::Account {}), "Mi cuenta" }
+                    Link { to: Route::Admin {}, class: link_cls(&Route::Admin {}), "Admin" }
                     Link { to: Route::Help {}, class: link_cls(&Route::Help {}), "Ayuda" }
+                    Link { to: Route::Audit {}, class: link_cls(&Route::Audit {}), "Auditoría" }
                 }
             }
             div { class: "flex min-w-0 flex-1 flex-col",
-                header { class: "flex h-14 flex-shrink-0 items-center gap-3 border-b border-border bg-card px-4",
-                    button {
-                        class: "rounded-lg p-1.5 text-muted-foreground hover:bg-muted lg:hidden",
-                        onclick: move |_| open.set(true),
-                        "☰"
-                    }
-                    span { class: "truncate text-sm font-semibold", "{title}" }
-                    div { class: "ml-auto flex items-center gap-3",
-                        match session {
-                            Some(s) => {
-                                let email = s.user.email.clone();
-                                let access = s.access_token.clone();
-                                let refresh = s.refresh_token.clone();
-                                rsx! {
-                                    Link {
-                                        to: Route::Account {},
-                                        class: "hidden max-w-55 truncate text-sm text-muted-foreground hover:text-foreground sm:block",
-                                        "{email}"
-                                    }
-                                    button {
-                                        class: "rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50",
-                                        disabled: *busy.read(),
-                                        onclick: move |_| {
-                                            let access_v = access.clone();
-                                            let refresh_v = refresh.clone();
-                                            busy.set(true);
-                                            spawn(async move {
-                                                let _ = api::logout(&access_v, &refresh_v).await;
-                                                auth.write().session = None;
-                                                busy.set(false);
-                                                nav.push(Route::Home {});
-                                            });
-                                        },
-                                        "Salir"
-                                    }
-                                }
-                            }
-                            None => rsx! {},
-                        }
-                    }
+                AppHeader {
+                    title: title.clone(),
+                    on_menu: move |_| open.set(true),
                 }
                 main { class: "flex-1 overflow-y-auto",
                     div { class: "mx-auto w-full max-w-[1360px] p-4 sm:p-6 lg:p-8",
