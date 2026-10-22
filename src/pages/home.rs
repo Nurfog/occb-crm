@@ -28,7 +28,7 @@ pub fn Home() -> Element {
                 format!("Sistema en línea · v{ver}")
             };
             rsx! {
-                p { class: "hero-status",
+                p { class: "mt-4 flex items-center gap-2 text-sm text-slate-300",
                     span { class: "dot dot-ok" }
                     "{tag}"
                 }
@@ -39,40 +39,51 @@ pub fn Home() -> Element {
 
     rsx! {
         Layout { title: "".to_string(),
-            section { class: "hero-pro",
-                div { class: "hero-grid",
-                    div { class: "hero-copy",
-                        p { class: "eyebrow", "OCCB · CRM" }
-                        h1 { class: "hero-title",
-                            "Toda tu relación con clientes, "
-                            span { class: "grad-text", "en un solo lugar" }
+            // HERO
+            section { class: "relative overflow-hidden rounded-3xl bg-slate-950",
+                div { class: "pointer-events-none absolute -top-32 -right-24 h-96 w-96 rounded-full bg-blue-600/30 blur-3xl" }
+                div { class: "pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-violet-600/20 blur-3xl" }
+                div { class: "relative grid items-center gap-10 p-8 md:grid-cols-2 md:p-12",
+                    div {
+                        p { class: "mb-3 text-xs font-extrabold tracking-[0.2em] text-blue-300",
+                            "OCCB · CRM"
                         }
-                        p { class: "hero-sub",
+                        h1 { class: "text-4xl leading-tight font-extrabold text-white md:text-5xl",
+                            "Toda tu relación con clientes, "
+                            span { class: "bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent",
+                                "en un solo lugar"
+                            }
+                        }
+                        p { class: "mt-4 max-w-xl text-lg text-slate-300",
                             "Prospectos, contactos, empresas y negocios con tablero kanban, "
                             "actividades, documentos, informes y comunicación integrada. "
                             "Tus datos en tu infraestructura, bajo Ley 21.719."
                         }
-                        div { class: "row hero-cta",
+                        div { class: "mt-7 flex flex-wrap gap-3",
                             Link {
                                 to: Route::Register {},
-                                class: "btn btn-primary btn-large btn-shadow",
+                                class: "rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-blue-600/40 transition hover:-translate-y-0.5 hover:bg-blue-500",
                                 "Crear cuenta gratis"
                             }
                             Link {
                                 to: Route::Login {},
-                                class: "btn btn-large btn-outline",
+                                class: "rounded-xl border border-white/25 px-6 py-3 text-base font-semibold text-white transition hover:bg-white/10",
                                 "Entrar"
                             }
                         }
                         {status_pill}
-                        div { class: "hero-points",
+                        div { class: "mt-5 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-400",
                             span { "✓ Sin tarjetas" }
                             span { "✓ Importa por CSV" }
                             span { "✓ Ley 21.719 incluida" }
                         }
                     }
-                    div { class: "hero-visual",
-                        img { class: "hero-img", src: "{HERO_IMG}", alt: "Equipo comercial trabajando" }
+                    div { class: "relative",
+                        img {
+                            class: "aspect-[4/3.4] w-full rounded-2xl object-cover shadow-2xl shadow-black/50",
+                            src: "{HERO_IMG}",
+                            alt: "Equipo comercial trabajando"
+                        }
                         div { class: "float-card float-a",
                             strong { "+$48.500" }
                             span { "ganado este mes" }
@@ -85,148 +96,173 @@ pub fn Home() -> Element {
                 }
             }
 
-            section { class: "stats-band",
-                div { class: "stat-light",
-                    strong { "8+" }
-                    span { "módulos integrados" }
+            // STATS
+            section { class: "mt-6 grid grid-cols-2 gap-4 rounded-2xl bg-gradient-to-r from-blue-900 to-blue-600 p-6 text-white shadow-xl shadow-blue-600/20 md:grid-cols-4",
+                div { class: "text-center",
+                    p { class: "text-3xl font-extrabold", "8+" }
+                    p { class: "text-sm text-blue-100", "módulos integrados" }
                 }
-                div { class: "stat-light",
-                    strong { "6" }
-                    span { "etapas de venta" }
+                div { class: "text-center",
+                    p { class: "text-3xl font-extrabold", "6" }
+                    p { class: "text-sm text-blue-100", "etapas de venta" }
                 }
-                div { class: "stat-light",
-                    strong { "100%" }
-                    span { "datos bajo tu control" }
+                div { class: "text-center",
+                    p { class: "text-3xl font-extrabold", "100%" }
+                    p { class: "text-sm text-blue-100", "datos bajo tu control" }
                 }
-                div { class: "stat-light",
-                    strong { "24/7" }
-                    span { "tu operación en línea" }
+                div { class: "text-center",
+                    p { class: "text-3xl font-extrabold", "24/7" }
+                    p { class: "text-sm text-blue-100", "tu operación en línea" }
                 }
             }
 
-            section { class: "section",
-                p { class: "eyebrow eyebrow-center", "Módulos" }
-                h2 { class: "section-title section-center", "Un sistema, todo el ciclo comercial" }
-                p { class: "subtitle subtitle-center",
+            // MÓDULOS
+            section { class: "mt-14",
+                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-blue-600",
+                    "MÓDULOS"
+                }
+                h2 { class: "mt-1 text-center text-3xl font-extrabold tracking-tight",
+                    "Un sistema, todo el ciclo comercial"
+                }
+                p { class: "mx-auto mt-2 max-w-2xl text-center text-slate-500",
                     "Desde el primer contacto hasta el cierre y la postventa."
                 }
-                div { class: "cards-media",
-                    div { class: "card card-media",
-                        img { src: "{MEET_IMG}", alt: "Captura de prospectos" }
-                        div { class: "card-media-body",
-                            h3 { "Prospectos" }
-                            p { "Califica por puntaje y convierte a contacto, empresa y negocio con un clic." }
-                            Link { to: Route::Leads {}, class: "link", "Ver prospectos →" }
-                        }
+                div { class: "mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3",
+                    ModuleCard {
+                        img: MEET_IMG,
+                        alt: "Captura de prospectos",
+                        title: "Prospectos",
+                        desc: "Califica por puntaje y convierte a contacto, empresa y negocio con un clic.",
+                        to: Route::Leads {},
+                        cta: "Ver prospectos →",
                     }
-                    div { class: "card card-media",
-                        img { src: "{TEAM_IMG}", alt: "Equipo junto a clientes" }
-                        div { class: "card-media-body",
-                            h3 { "Contactos y empresas" }
-                            p { "Fichas completas con etiquetas, actividad ligada e ingresos por empresa." }
-                            Link { to: Route::Contacts {}, class: "link", "Ver contactos →" }
-                        }
+                    ModuleCard {
+                        img: TEAM_IMG,
+                        alt: "Equipo junto a clientes",
+                        title: "Contactos y empresas",
+                        desc: "Fichas completas con etiquetas, actividad ligada e ingresos por empresa.",
+                        to: Route::Contacts {},
+                        cta: "Ver contactos →",
                     }
-                    div { class: "card card-media",
-                        img { src: "{DEAL_IMG}", alt: "Cierre de negocio" }
-                        div { class: "card-media-body",
-                            h3 { "Negocios" }
-                            p { "Tablero kanban de 6 etapas con valores, cierres e importación CSV." }
-                            Link { to: Route::Deals {}, class: "link", "Ver tablero →" }
-                        }
+                    ModuleCard {
+                        img: DEAL_IMG,
+                        alt: "Cierre de negocio",
+                        title: "Negocios",
+                        desc: "Tablero kanban de 6 etapas con valores, cierres e importación CSV.",
+                        to: Route::Deals {},
+                        cta: "Ver tablero →",
                     }
-                    div { class: "card card-media",
-                        img { src: "{DATA_IMG}", alt: "Análisis de datos" }
-                        div { class: "card-media-body",
-                            h3 { "Actividades e informes" }
-                            p { "Tareas con vencimientos, calendario sincronizado y reportes de pipeline." }
-                            Link { to: Route::Activities {}, class: "link", "Ver actividades →" }
-                        }
+                    ModuleCard {
+                        img: DATA_IMG,
+                        alt: "Análisis de datos",
+                        title: "Actividades e informes",
+                        desc: "Tareas con vencimientos, calendario sincronizado y reportes de pipeline.",
+                        to: Route::Activities {},
+                        cta: "Ver actividades →",
                     }
-                    div { class: "card card-media",
-                        img { src: "{OFFICE_IMG}", alt: "Oficina moderna" }
-                        div { class: "card-media-body",
-                            h3 { "Documentos" }
-                            p { "Sube, descarga y organiza los archivos de cada negocio y cliente." }
-                            Link { to: Route::Documents {}, class: "link", "Ver documentos →" }
-                        }
+                    ModuleCard {
+                        img: OFFICE_IMG,
+                        alt: "Oficina moderna",
+                        title: "Documentos",
+                        desc: "Sube, descarga y organiza los archivos de cada negocio y cliente.",
+                        to: Route::Documents {},
+                        cta: "Ver documentos →",
                     }
-                    div { class: "card card-media",
-                        img { src: "{HERO_IMG}", alt: "Equipo comercial" }
-                        div { class: "card-media-body",
-                            h3 { "Comunicación total" }
-                            p { "Email con plantillas, WhatsApp por contacto y notificaciones." }
-                            Link { to: Route::Reports {}, class: "link", "Ver informes →" }
-                        }
-                    }
-                }
-            }
-
-            section { class: "section",
-                p { class: "eyebrow eyebrow-center", "Por qué OCCB" }
-                h2 { class: "section-title section-center", "Hecho para equipos que venden" }
-                div { class: "feature-row",
-                    img { class: "feature-img", src: "{TEAM_IMG}", alt: "Equipo trabajando junto" }
-                    div {
-                        span { class: "step-num", "01" }
-                        h3 { "Trabajo en equipo" }
-                        p { class: "muted",
-                            "Reparto automático de prospectos, notificaciones, bitácora de actividad "
-                            "y permisos por perfil: cada persona ve lo que le toca."
-                        }
-                    }
-                }
-                div { class: "feature-row feature-reverse",
-                    img { class: "feature-img", src: "{DATA_IMG}", alt: "Análisis de datos en un computador" }
-                    div {
-                        span { class: "step-num", "02" }
-                        h3 { "Decisiones con datos" }
-                        p { class: "muted",
-                            "Estadísticas del negocio, mejores negocios, conversión de prospectos y "
-                            "reportes exportables. Sin planillas paralelas."
-                        }
-                    }
-                }
-                div { class: "feature-row",
-                    img { class: "feature-img", src: "{MEET_IMG}", alt: "Reunión de planificación" }
-                    div {
-                        span { class: "step-num", "03" }
-                        h3 { "Comunicación integrada" }
-                        p { class: "muted",
-                            "Email con plantillas y bitácora, WhatsApp con hilos por contacto y "
-                            "calendario sincronizado con Google."
-                        }
+                    ModuleCard {
+                        img: HERO_IMG,
+                        alt: "Equipo comercial",
+                        title: "Comunicación total",
+                        desc: "Email con plantillas, WhatsApp por contacto y notificaciones.",
+                        to: Route::Reports {},
+                        cta: "Ver informes →",
                     }
                 }
             }
 
-            section { class: "steps-band",
-                p { class: "eyebrow eyebrow-center eyebrow-light", "Cómo empezar" }
-                h2 { class: "section-title section-center section-light", "Empieza en 3 pasos" }
-                div { class: "steps-grid",
-                    div { class: "step",
-                        span { class: "step-dot", "1" }
-                        h3 { "Crea tu cuenta" }
-                        p { "Regístrate en un minuto. La primera cuenta queda como administradora." }
+            // POR QUÉ
+            section { class: "mt-14",
+                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-blue-600",
+                    "POR QUÉ OCCB"
+                }
+                h2 { class: "mt-1 text-center text-3xl font-extrabold tracking-tight",
+                    "Hecho para equipos que venden"
+                }
+                div { class: "mt-8 space-y-5",
+                    FeatureRow {
+                        img: TEAM_IMG,
+                        alt: "Equipo trabajando junto",
+                        num: "01",
+                        title: "Trabajo en equipo",
+                        desc: "Reparto automático de prospectos, notificaciones, bitácora de actividad y permisos por perfil: cada persona ve lo que le toca.",
+                        reverse: false,
                     }
-                    div { class: "step",
-                        span { class: "step-dot", "2" }
-                        h3 { "Carga tus datos" }
-                        p { "Importa tus contactos y empresas por CSV o créalos a mano." }
+                    FeatureRow {
+                        img: DATA_IMG,
+                        alt: "Análisis de datos en un computador",
+                        num: "02",
+                        title: "Decisiones con datos",
+                        desc: "Estadísticas del negocio, mejores negocios, conversión de prospectos y reportes exportables. Sin planillas paralelas.",
+                        reverse: true,
                     }
-                    div { class: "step",
-                        span { class: "step-dot", "3" }
-                        h3 { "Vende y mide" }
-                        p { "Mueve negocios por el tablero y sigue el avance en informes." }
+                    FeatureRow {
+                        img: MEET_IMG,
+                        alt: "Reunión de planificación",
+                        num: "03",
+                        title: "Comunicación integrada",
+                        desc: "Email con plantillas y bitácora, WhatsApp con hilos por contacto y calendario sincronizado con Google.",
+                        reverse: false,
                     }
                 }
-                div { class: "row steps-cta",
+            }
+
+            // PASOS
+            section { class: "relative mt-14 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-800 p-8 text-white md:p-12",
+                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-blue-300",
+                    "CÓMO EMPEZAR"
+                }
+                h2 { class: "mt-1 text-center text-3xl font-extrabold tracking-tight",
+                    "Empieza en 3 pasos"
+                }
+                div { class: "mt-8 grid gap-4 md:grid-cols-3",
+                    div { class: "rounded-2xl border border-white/15 bg-white/5 p-6 backdrop-blur",
+                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-blue-700",
+                            "1"
+                        }
+                        h3 { class: "mt-3 text-lg font-bold", "Crea tu cuenta" }
+                        p { class: "mt-1 text-sm text-slate-300",
+                            "Regístrate en un minuto. La primera cuenta queda como administradora."
+                        }
+                    }
+                    div { class: "rounded-2xl border border-white/15 bg-white/5 p-6 backdrop-blur",
+                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-blue-700",
+                            "2"
+                        }
+                        h3 { class: "mt-3 text-lg font-bold", "Carga tus datos" }
+                        p { class: "mt-1 text-sm text-slate-300",
+                            "Importa tus contactos y empresas por CSV o créalos a mano."
+                        }
+                    }
+                    div { class: "rounded-2xl border border-white/15 bg-white/5 p-6 backdrop-blur",
+                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-blue-700",
+                            "3"
+                        }
+                        h3 { class: "mt-3 text-lg font-bold", "Vende y mide" }
+                        p { class: "mt-1 text-sm text-slate-300",
+                            "Mueve negocios por el tablero y sigue el avance en informes."
+                        }
+                    }
+                }
+                div { class: "mt-8 flex flex-wrap justify-center gap-3",
                     Link {
                         to: Route::Register {},
-                        class: "btn btn-large btn-white",
+                        class: "rounded-xl bg-white px-6 py-3 text-base font-semibold text-slate-950 transition hover:-translate-y-0.5",
                         "Crear cuenta gratis"
                     }
-                    Link { to: Route::Login {}, class: "btn btn-large btn-outline-light", "Entrar" }
+                    Link {
+                        to: Route::Login {},
+                        class: "rounded-xl border border-white/25 px-6 py-3 text-base font-semibold text-white transition hover:bg-white/10",
+                        "Entrar"
+                    }
                 }
             }
 
@@ -240,6 +276,48 @@ pub fn Home() -> Element {
                     Link { to: Route::Privacy {}, class: "link", "Política de Privacidad →" }
                     Link { to: Route::Rights {}, class: "link", "Ejercer derechos →" }
                 }
+            }
+        }
+    }
+}
+
+/// Tarjeta de módulo con foto.
+#[component]
+fn ModuleCard(
+    img: String,
+    alt: String,
+    title: String,
+    desc: String,
+    to: Route,
+    cta: String,
+) -> Element {
+    rsx! {
+        div { class: "group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-xl",
+            img { class: "h-40 w-full bg-slate-200 object-cover", src: "{img}", alt: "{alt}" }
+            div { class: "p-5",
+                h3 { class: "text-lg font-bold", "{title}" }
+                p { class: "mt-1 text-sm text-slate-500", "{desc}" }
+                p { class: "mt-3",
+                    Link { to: to, class: "link text-sm font-semibold", "{cta}" }
+                }
+            }
+        }
+    }
+}
+
+/// Fila alternada imagen/texto.
+#[component]
+fn FeatureRow(img: String, alt: String, num: String, title: String, desc: String, reverse: bool) -> Element {
+    let dir = if reverse { "md:flex-row-reverse" } else { "" };
+    rsx! {
+        div { class: "flex flex-col items-center gap-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row {dir}",
+            img { class: "w-full rounded-xl object-cover md:w-72 aspect-[4/3] bg-slate-200", src: "{img}", alt: "{alt}" }
+            div {
+                span { class: "inline-block rounded-full bg-blue-50 px-3 py-0.5 text-xs font-extrabold text-blue-700",
+                    "{num}"
+                }
+                h3 { class: "mt-2 text-xl font-bold", "{title}" }
+                p { class: "mt-1 text-slate-500", "{desc}" }
             }
         }
     }

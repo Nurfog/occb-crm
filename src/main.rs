@@ -15,6 +15,7 @@ mod route;
 use dioxus::prelude::*;
 
 static MAIN_CSS: Asset = asset!("/assets/main.css");
+static TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 
 fn main() {
     dioxus::launch(App);
@@ -26,6 +27,7 @@ fn App() -> Element {
     privacy::provide_consent();
     rsx! {
         document::Link { rel: "stylesheet", href: MAIN_CSS }
+        document::Link { rel: "stylesheet", href: TAILWIND_CSS }
         Router::<route::Route> {}
     }
 }
