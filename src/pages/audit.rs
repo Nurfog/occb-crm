@@ -23,7 +23,6 @@ const ENTITY_TYPES: [&str; 7] = [
 #[component]
 pub fn Audit() -> Element {
     let auth = use_auth();
-    let mut entity_type = use_signal(String::new);
     let mut entity_id = use_signal(String::new);
     let mut applied_type = use_signal(String::new);
     let mut applied_id = use_signal(String::new);
@@ -63,23 +62,44 @@ pub fn Audit() -> Element {
             p { class: "muted small",
                 "Quién hizo qué y cuándo. Requiere permiso de auditoría."
             }
+            div { class: "row",
+                button {
+                    class: if applied_type.read().is_empty() { "btn btn-small btn-primary" } else { "btn btn-small" },
+                    onclick: move |_| {
+                        applied_type.set(String::new());
+                        applied_id.set(String::new());
+                        entity_id.set(String::new());
+                        page.set(1);
+                    },
+                    "Todos"
+                }
+                for t in ENTITY_TYPES {
+                    {
+                        let active = *applied_type.read() == *t;
+                        let cls = if active { "btn btn-small btn-primary" } else { "btn btn-small" };
+                        let tv = t.to_string();
+                        let label = t.to_string();
+                        rsx! {
+                            button { key: "{t}", class: "{cls}",
+                                onclick: move |_| {
+                                    applied_type.set(tv.clone());
+                                    applied_id.set(String::new());
+                                    entity_id.set(String::new());
+                                    page.set(1);
+                                },
+                                "{label}"
+                            }
+                        }
+                    }
+                }
+            }
             form {
                 class: "toolbar card",
                 onsubmit: move |e| {
                     e.prevent_default();
-                    applied_type.set(entity_type.read().clone());
                     applied_id.set(entity_id.read().trim().to_string());
                     page.set(1);
                 },
-                select {
-                    class: "input",
-                    value: "{entity_type}",
-                    onchange: move |e| entity_type.set(e.value()),
-                    option { value: "", "Todas las entidades" }
-                    for t in ENTITY_TYPES {
-                        option { value: "{t}", "{t}" }
-                    }
-                }
                 input {
                     class: "input",
                     placeholder: "ID de entidad (UUID, opcional)",
@@ -107,32 +127,13 @@ pub fn Audit() -> Element {
                     if list.is_empty() {
                         p { class: "muted", "Sin movimientos." }
                     } else {
-                        div { class: "table-wrap card",
-                            table { class: "table",
-                                thead {
-                                    tr {
-                                        th { "Fecha (UTC)" }
-                                        th { "Acción" }
-                                        th { "Entidad" }
-                                        th { "Detalle" }
-                                    }
-                                }
-                                tbody {
-                                    for l in list {
-                                        {
-                                            let key = l.id.to_string();
-                                            let when = l.created_at.format("%Y-%m-%d %H:%M").to_string();
-                                            let action = l.action.clone();
-                                            let entity = format!("{} {}", l.entity_type, l.entity_id);
-                                            let detail = audit_detail(l);
-                                            rsx! {
-                                                tr { key: "{key}",
-                                                    td { class: "muted", "{when}" }
-                                                    td { "{action}" }
-                                                    td { class: "muted small", "{entity}" }
-                                                    td { class: "muted small", "{detail}" }
-                                                }
-                                            }
+                        section { class: "card audit-list",
+                            ul {
+                                for l in list {
+                                    {
+                                        let key = l.id.to_string();
+                                        rsx! {
+                                            AuditRow { key: "{key}", entry: l.clone() }
                                         }
                                     }
                                 }
@@ -142,6 +143,58 @@ pub fn Audit() -> Element {
                 },
             }
         }
+    }
+}
+
+/// Una fila de auditoría con icono por acción y detalle expandible.
+#[component]
+fn AuditRow(entry: api::AuditLog) -> Element {
+    let mut open = use_signal(|| false);
+
+    let when = entry.created_at.format("%d %b %H:%M").to_string();
+    let action = entry.action.clone();
+    let entity = entry.entity_type.clone();
+    let short_id = entry.id.to_string().chars().take(8).collect::<String>();
+    let (tile, glyph) = audit_badge(&entry.action);
+    let detail = audit_detail(&entry);
+    let is_open = *open.read();
+
+    rsx! {
+        li { class: "audit-row",
+            span { class: "tile-sm {tile}", "{glyph}" }
+            div { class: "audit-main",
+                p {
+                    strong { "{action}" }
+                    span { class: "tag tag-muted", "{entity}" }
+                    span { class: "muted small", " #{short_id}" }
+                }
+                p { class: "muted small", "{when}" }
+                button {
+                    class: "link-btn small",
+                    onclick: move |_| open.set(!is_open),
+                    if is_open { "ocultar detalle" } else { "ver detalle" }
+                }
+                if is_open {
+                    pre { class: "audit-json", "{detail}" }
+                }
+            }
+        }
+    }
+}
+
+/// Icono por tipo de acción.
+fn audit_badge(action: &str) -> (&'static str, &'static str) {
+    let a = action.to_lowercase();
+    if a.contains("delete") || a.contains("remove") {
+        ("tile-note", "−")
+    } else if a.contains("create") || a.contains("convert") {
+        ("tile-ok", "+")
+    } else if a.contains("update") || a.contains("edit") || a.contains("stage") {
+        ("tile-email", "✎")
+    } else if a.contains("login") {
+        ("tile-meeting", "→")
+    } else {
+        ("tile-call", "•")
     }
 }
 

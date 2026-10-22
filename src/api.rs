@@ -1825,10 +1825,14 @@ pub struct Document {
 pub async fn list_documents(
     access_token: &str,
     search: &str,
+    folder: &str,
 ) -> Result<Vec<Document>, ApiError> {
     let mut query: Vec<(&str, String)> = Vec::new();
     if !search.trim().is_empty() {
         query.push(("search", search.trim().to_string()));
+    }
+    if !folder.trim().is_empty() {
+        query.push(("folder", folder.trim().to_string()));
     }
     get_json(access_token, "/api/v1/documents", &query).await
 }

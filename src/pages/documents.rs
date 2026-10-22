@@ -52,6 +52,7 @@ pub fn Documents() -> Element {
     let auth = use_auth();
     let mut search = use_signal(String::new);
     let mut applied = use_signal(String::new);
+    let mut folder = use_signal(String::new);
     let mut busy_id = use_signal(|| None::<String>);
 
     let token_of = auth.read().session.clone().map(|s| s.access_token);
@@ -62,9 +63,10 @@ pub fn Documents() -> Element {
     let mut items = use_resource(move || {
         let token = token_of.clone();
         let q = applied.read().clone();
+        let f = folder.read().clone();
         async move {
             match token {
-                Some(t) => api::list_documents(&t, &q).await,
+                Some(t) => api::list_documents(&t, &q, &f).await,
                 None => Err(ApiError::no_session()),
             }
         }
@@ -94,11 +96,14 @@ pub fn Documents() -> Element {
                         r#type: "file",
                         id: "doc-upload",
                     }
-                    input {
+                    select {
                         class: "input",
-                        placeholder: "Carpeta (opcional)",
                         value: "{up_folder}",
-                        oninput: move |e| up_folder.set(e.value()),
+                        onchange: move |e| up_folder.set(e.value()),
+                        option { value: "", "Sin carpeta" }
+                        for f in DOC_FOLDERS {
+                            option { value: f, "{f}" }
+                        }
                     }
                     button {
                         class: "btn btn-small btn-primary",
@@ -162,6 +167,27 @@ pub fn Documents() -> Element {
                 }
                 button { class: "btn btn-small btn-primary", r#type: "submit", "Buscar" }
             }
+            div { class: "row",
+                button {
+                    class: if folder.read().is_empty() { "btn btn-small btn-primary" } else { "btn btn-small" },
+                    onclick: move |_| folder.set(String::new()),
+                    "Todas"
+                }
+                for f in DOC_FOLDERS {
+                    {
+                        let active = folder.read().clone() == f;
+                        let cls = if active { "btn btn-small btn-primary" } else { "btn btn-small" };
+                        let fv = f.to_string();
+                        let label = f.to_string();
+                        rsx! {
+                            button { key: "{f}", class: "{cls}",
+                                onclick: move |_| folder.set(fv.clone()),
+                                "{label}"
+                            }
+                        }
+                    }
+                }
+            }
             match &*items.read() {
                 None => rsx! { p { class: "muted", "Cargando documentos…" } },
                 Some(Err(e)) => rsx! {
@@ -186,7 +212,7 @@ pub fn Documents() -> Element {
                                 thead {
                                     tr {
                                         th { "Nombre" }
-                                        th { "Tipo" }
+                                        th { "Carpeta" }
                                         th { "Tamaño" }
                                         th { "Acciones" }
                                     }
@@ -196,7 +222,13 @@ pub fn Documents() -> Element {
                                         {
                                             let key = d.id.to_string();
                                             let name = d.original_name.clone();
-                                            let mime = d.mime_type.clone().unwrap_or_else(|| "—".to_string());
+                                            let ext = name
+                                                .rsplit('.')
+                                                .next()
+                                                .unwrap_or("")
+                                                .to_ascii_uppercase();
+                                            let folder_name =
+                                                d.folder.clone().unwrap_or_else(|| "—".to_string());
                                             let size = format_size(d.file_size);
                                             let downloading = busy_id.read().clone() == Some(key.clone());
                                             let token_base = auth
@@ -210,8 +242,13 @@ pub fn Documents() -> Element {
                                             let key_del = key.clone();
                                             rsx! {
                                                 tr { key: "{key}",
-                                                    td { "{name}" }
-                                                    td { class: "muted small", "{mime}" }
+                                                    td {
+                                                        span { class: "tag tag-muted", "{ext}" }
+                                                        " {name}"
+                                                    }
+                                                    td {
+                                                        span { class: "tag", "{folder_name}" }
+                                                    }
                                                     td { class: "muted", "{size}" }
                                                     td {
                                                         button {
@@ -274,6 +311,9 @@ pub fn Documents() -> Element {
         }
     }
 }
+
+/// Carpetas conocidas (como el original).
+pub const DOC_FOLDERS: [&str; 5] = ["Contracts", "Reports", "Invoices", "Proposals", "Other"];
 
 fn format_size(bytes: i64) -> String {
     if bytes < 1024 {

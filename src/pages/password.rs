@@ -55,7 +55,7 @@ pub fn ForgotPassword() -> Element {
                 }
             } else {
                 form {
-                    class: "form card",
+                    class: "form card auth-card",
                     onsubmit: move |e| {
                         e.prevent_default();
                         let em = email.read().trim().to_lowercase();
@@ -128,7 +128,7 @@ pub fn ResetPassword() -> Element {
                 }
             } else {
                 form {
-                    class: "form card",
+                    class: "form card auth-card",
                     onsubmit: move |e| {
                         e.prevent_default();
                         let tok = token.read().trim().to_string();

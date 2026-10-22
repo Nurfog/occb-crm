@@ -36,7 +36,7 @@ pub fn Login() -> Element {
     rsx! {
         Layout { title: "Iniciar sesión".to_string(),
             form {
-                class: "form card",
+                class: "form card auth-card",
                 onsubmit: move |e| {
                     e.prevent_default();
                     let email_v = email.read().trim().to_lowercase();
@@ -138,7 +138,7 @@ pub fn Register() -> Element {
     rsx! {
         Layout { title: "Crear cuenta".to_string(),
             form {
-                class: "form card",
+                class: "form card auth-card",
                 onsubmit: move |e| {
                     e.prevent_default();
                     let name_v = name.read().trim().to_string();

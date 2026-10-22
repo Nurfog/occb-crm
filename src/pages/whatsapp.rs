@@ -15,6 +15,7 @@ pub fn Whatsapp() -> Element {
     let auth = use_auth();
     let mut active = use_signal(String::new);
 
+    let mut search = use_signal(String::new);
     let token_of = auth.read().session.clone().map(|s| s.access_token);
     let token_c = token_of.clone();
     let mut convs = use_resource(move || {
@@ -53,14 +54,14 @@ pub fn Whatsapp() -> Element {
     }
 
     let current = active.read().clone();
+    let filter = search.read().trim().to_lowercase();
 
     rsx! {
         Layout { title: "WhatsApp".to_string(),
-            section { class: "card",
-                h2 { class: "card-title", "Estado" }
+            section { class: "card wa-status",
                 match &*config.read() {
                     None => rsx! { p { class: "muted", "Cargando…" } },
-                    Some(Err(_)) => rsx! { p { class: "muted", "Sin configuración (se envía nada hasta configurarlo)." } },
+                    Some(Err(_)) => rsx! { p { class: "muted", "Sin configuración." } },
                     Some(Ok(c)) => {
                         let state = if c.is_active { "activo" } else { "pausado" };
                         let num = c.phone_number.clone().unwrap_or_else(|| "—".to_string());
@@ -69,27 +70,39 @@ pub fn Whatsapp() -> Element {
                 }
                 Link {
                     to: Route::WhatsappConfig {},
-                    class: "btn btn-small",
-                    "Configurar"
+                    class: "link small",
+                    "Configurar →"
                 }
             }
-            section { class: "card",
-                h2 { class: "card-title", "Conversaciones" }
-                match &*convs.read() {
-                    None => rsx! { p { class: "muted", "Cargando…" } },
-                    Some(Err(e)) => rsx! {
-                        div { class: "alert alert-error",
-                            p { "No se pudieron cargar." }
-                            p { class: "muted small", "{e}" }
-                            button { class: "btn btn-small", onclick: move |_| convs.restart(), "Reintentar" }
-                        }
-                    },
-                    Some(Ok(list)) => rsx! {
-                        if list.is_empty() {
-                            p { class: "muted", "Sin conversaciones." }
-                        } else {
-                            ul {
-                                for c in list {
+            div { class: "wa-layout",
+                section { class: "card wa-list",
+                    input {
+                        class: "input",
+                        r#type: "search",
+                        placeholder: "Buscar conversación…",
+                        value: "{search}",
+                        oninput: move |e| search.set(e.value()),
+                    }
+                    match &*convs.read() {
+                        None => rsx! { p { class: "muted", "Cargando…" } },
+                        Some(Err(e)) => rsx! {
+                            div { class: "alert alert-error",
+                                p { "No se pudieron cargar." }
+                                p { class: "muted small", "{e}" }
+                                button { class: "btn btn-small", onclick: move |_| convs.restart(), "Reintentar" }
+                            }
+                        },
+                        Some(Ok(list)) => rsx! {
+                            ul { class: "wa-convs",
+                                for c in list.iter().filter(|c| {
+                                    filter.is_empty()
+                                        || c.phone.to_lowercase().contains(&filter)
+                                        || c.contact_name
+                                            .clone()
+                                            .unwrap_or_default()
+                                            .to_lowercase()
+                                            .contains(&filter)
+                                }) {
                                     {
                                         let cphone = c.phone.clone();
                                         let who = c
@@ -99,27 +112,36 @@ pub fn Whatsapp() -> Element {
                                         let last = c.last_message.clone();
                                         let dir = if c.last_direction == "outbound" { "→" } else { "←" };
                                         let key = cphone.clone();
+                                        let sel = current == key;
+                                        let cls = if sel { "wa-conv wa-active" } else { "wa-conv" };
                                         rsx! {
                                             li { key: "{key}",
                                                 button {
-                                                    class: "link-btn",
+                                                    class: "{cls}",
                                                     onclick: move |_| {
                                                         active.set(cphone.clone());
                                                     },
-                                                    "{who}"
+                                                    strong { "{who}" }
+                                                    span { class: "muted small", "{key}" }
+                                                    p { class: "muted small wa-preview", "{dir} {last}" }
                                                 }
-                                                p { class: "muted small", "{dir} {last}" }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                    },
+                        },
+                    }
                 }
-            }
-            if !current.is_empty() {
-                Thread { phone: current, on_sent: move || convs.restart() }
+                div { class: "wa-thread",
+                    if !current.is_empty() {
+                        Thread { phone: current, on_sent: move || convs.restart() }
+                    } else {
+                        section { class: "card wa-empty",
+                            p { class: "muted", "Elige una conversación para empezar." }
+                        }
+                    }
+                }
             }
         }
     }

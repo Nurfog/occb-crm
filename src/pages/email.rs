@@ -285,32 +285,15 @@ fn TemplatesSection() -> Element {
                 if list.is_empty() {
                     p { class: "muted", "Sin plantillas." }
                 } else {
-                    ul {
+                    div { class: "grid-cards",
                         for t in list {
                             {
-                                let key = t.id.to_string();
-                                let id_v = key.clone();
-                                let tname = t.name.clone();
-                                let tsubj = t.subject.clone();
-                                let tok = token_of.clone();
+                                let tid = t.id.to_string();
                                 rsx! {
-                                    li { key: "{key}",
-                                        strong { "{tname}" }
-                                        span { class: "muted small", " · {tsubj} " }
-                                        button {
-                                            class: "link-btn small",
-                                            onclick: move |_| {
-                                                let tk = tok.clone();
-                                                let iv = id_v.clone();
-                                                spawn(async move {
-                                                    if let Some(x) = tk {
-                                                        let _ = api::delete_template(&x, &iv).await;
-                                                    }
-                                                    items.restart();
-                                                });
-                                            },
-                                            "eliminar"
-                                        }
+                                    TemplateCard {
+                                        key: "{tid}",
+                                        template: t.clone(),
+                                        on_changed: move || items.restart(),
                                     }
                                 }
                             }
@@ -318,6 +301,195 @@ fn TemplatesSection() -> Element {
                     }
                 }
             },
+        }
+    }
+}
+
+/// Tarjeta de plantilla: vista previa, enviar, editar y borrar.
+#[component]
+fn TemplateCard(template: api::EmailTemplate, on_changed: EventHandler<()>) -> Element {
+    let auth = use_auth();
+    let mut editing = use_signal(|| false);
+    let mut sending = use_signal(|| false);
+    let mut name = use_signal(|| template.name.clone());
+    let mut subject = use_signal(|| template.subject.clone());
+    let mut body = use_signal(|| template.body.clone());
+    let mut to = use_signal(String::new);
+    let mut busy = use_signal(|| false);
+    let mut msg = use_signal(|| None::<String>);
+
+    let token_of = auth.read().session.clone().map(|s| s.access_token);
+    let tid = template.id.to_string();
+    let token_send = token_of.clone();
+    let token_edit = token_of.clone();
+    let token_del = token_of.clone();
+    let tid_send = tid.clone();
+    let tid_edit = tid.clone();
+    let tid_del = tid.clone();
+    let editing_open = *editing.read();
+    let sending_open = *sending.read();
+    let busy_v = *busy.read();
+
+    rsx! {
+        div { class: "card",
+            div { class: "row",
+                h3 { class: "card-title", "{template.name}" }
+                span { class: "tag tag-muted", "{template.category}" }
+            }
+            p { class: "muted small", "Asunto: {template.subject}" }
+            p { class: "muted small template-preview", "{template.body}" }
+            div { class: "row",
+                button {
+                    class: "btn btn-small btn-primary",
+                    onclick: move |_| sending.set(!sending_open),
+                    if sending_open { "Cerrar envío" } else { "Enviar" }
+                }
+                button {
+                    class: "btn btn-small",
+                    onclick: move |_| editing.set(!editing_open),
+                    if editing_open { "Cerrar" } else { "Editar" }
+                }
+                button {
+                    class: "btn btn-small danger-btn",
+                    disabled: busy_v,
+                    onclick: move |_| {
+                        let tok = token_del.clone();
+                        let iv = tid_del.clone();
+                        busy.set(true);
+                        spawn(async move {
+                            if let Some(t) = tok {
+                                let _ = api::delete_template(&t, &iv).await;
+                            }
+                            busy.set(false);
+                            on_changed.call(());
+                        });
+                    },
+                    "Eliminar"
+                }
+            }
+            if sending_open {
+                div { class: "form",
+                    label { class: "field", "Para *" }
+                    input {
+                        class: "input",
+                        r#type: "email",
+                        value: "{to}",
+                        oninput: move |e| to.set(e.value()),
+                    }
+                    button {
+                        class: "btn btn-small btn-primary",
+                        disabled: busy_v,
+                        onclick: move |_| {
+                            let tok = token_send.clone();
+                            let iv = tid_send.clone();
+                            let to_v = to.read().trim().to_string();
+                            let subj_v = subject.read().clone();
+                            let body_v = body.read().clone();
+                            if to_v.is_empty() {
+                                msg.set(Some("Indica el destinatario.".to_string()));
+                                return;
+                            }
+                            busy.set(true);
+                            msg.set(None);
+                            spawn(async move {
+                                let res = match tok {
+                                    Some(t) => {
+                                        api::send_from_template(
+                                                &t,
+                                                &iv,
+                                                &api::SendEmailBody {
+                                                    from: None,
+                                                    to: &to_v,
+                                                    cc: None,
+                                                    bcc: None,
+                                                    subject: &subj_v,
+                                                    body: &body_v,
+                                                    body_html: None,
+                                                },
+                                            )
+                                            .await
+                                            .map(|l| format!("Enviado: {} ({})", l.id, l.status))
+                                            .map_err(|e| e.to_string())
+                                    }
+                                    None => Err("Sin sesión.".to_string()),
+                                };
+                                busy.set(false);
+                                msg.set(Some(res.unwrap_or_else(|e| e)));
+                            });
+                        },
+                        "Enviar con esta plantilla"
+                    }
+                }
+            }
+            if editing_open {
+                div { class: "form",
+                    label { class: "field", "Nombre" }
+                    input {
+                        class: "input",
+                        value: "{name}",
+                        oninput: move |e| name.set(e.value()),
+                    }
+                    label { class: "field", "Asunto" }
+                    input {
+                        class: "input",
+                        value: "{subject}",
+                        oninput: move |e| subject.set(e.value()),
+                    }
+                    label { class: "field", "Cuerpo" }
+                    textarea {
+                        class: "input",
+                        rows: 4,
+                        value: "{body}",
+                        oninput: move |e| body.set(e.value()),
+                    }
+                    button {
+                        class: "btn btn-small btn-primary",
+                        disabled: busy_v,
+                        onclick: move |_| {
+                            let tok = token_edit.clone();
+                            let iv = tid_edit.clone();
+                            let n = name.read().trim().to_string();
+                            let s = subject.read().trim().to_string();
+                            let b = body.read().clone();
+                            busy.set(true);
+                            msg.set(None);
+                            spawn(async move {
+                                let res = match tok {
+                                    Some(t) => {
+                                        api::update_template(
+                                                &t,
+                                                &iv,
+                                                &api::UpdateTemplateBody {
+                                                    name: if n.is_empty() { None } else { Some(n.as_str()) },
+                                                    subject: if s.is_empty() { None } else { Some(s.as_str()) },
+                                                    body: Some(b.as_str()),
+                                                    body_html: None,
+                                                    category: None,
+                                                },
+                                            )
+                                            .await
+                                            .map(|_| "Plantilla actualizada.".to_string())
+                                            .map_err(|e| e.to_string())
+                                    }
+                                    None => Err("Sin sesión.".to_string()),
+                                };
+                                busy.set(false);
+                                match res {
+                                    Ok(m) => {
+                                        msg.set(Some(m));
+                                        on_changed.call(());
+                                    }
+                                    Err(e) => msg.set(Some(e)),
+                                }
+                            });
+                        },
+                        "Guardar"
+                    }
+                }
+            }
+            if let Some(m) = msg.read().clone() {
+                p { class: "alert alert-info small", "{m}" }
+            }
         }
     }
 }
