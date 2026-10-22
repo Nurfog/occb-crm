@@ -248,6 +248,45 @@ li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
 .tile-note { background: #fef9c3; color: #a16207; }
 .tile-ok { background: #dcfce7; color: #15803d; }
 
+/* Calendario mensual */
+.cal-head { align-items: center; }
+.cal-title { margin: 0 0 0 0.5rem; }
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 0.8rem;
+}
+.cal-dow { font-size: 0.75rem; font-weight: 700; color: var(--muted); text-align: center; padding: 0.2rem 0; }
+.cal-day {
+  min-height: 96px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.3rem;
+  background: var(--surface);
+  overflow: hidden;
+}
+.cal-empty { background: transparent; border: none; }
+.cal-today { border: 2px solid var(--brand); }
+.cal-num { font-size: 0.8rem; font-weight: 700; }
+.cal-evt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 0.72rem;
+  background: rgb(1 118 211 / 0.1);
+  color: var(--ink);
+  border: none;
+  border-radius: 6px;
+  padding: 0.1rem 0.3rem;
+  margin-top: 0.15rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-evt:hover { background: rgb(1 118 211 / 0.2); }
+
 /* Avatar de iniciales */
 .avatar {
   display: inline-flex;
