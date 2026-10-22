@@ -241,6 +241,7 @@ fn AppShell(title: String, children: Element) -> Element {
                     Link { to: Route::Audit {}, class: link_cls(&Route::Audit {}), "Auditoría" }
                     Link { to: Route::Admin {}, class: link_cls(&Route::Admin {}), "Admin" }
                     Link { to: Route::Settings {}, class: link_cls(&Route::Settings {}), "Ajustes" }
+                    Link { to: Route::Account {}, class: link_cls(&Route::Account {}), "Mi cuenta" }
                     Link { to: Route::Help {}, class: link_cls(&Route::Help {}), "Ayuda" }
                 }
             }
@@ -259,7 +260,9 @@ fn AppShell(title: String, children: Element) -> Element {
                                 let access = s.access_token.clone();
                                 let refresh = s.refresh_token.clone();
                                 rsx! {
-                                    span { class: "hidden max-w-55 truncate text-sm text-muted-foreground sm:block",
+                                    Link {
+                                        to: Route::Account {},
+                                        class: "hidden max-w-55 truncate text-sm text-muted-foreground hover:text-foreground sm:block",
                                         "{email}"
                                     }
                                     button {

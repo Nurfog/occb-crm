@@ -41,16 +41,16 @@ pub fn Home() -> Element {
         Layout { title: "".to_string(),
             // HERO
             section { class: "relative overflow-hidden rounded-3xl bg-slate-950",
-                div { class: "pointer-events-none absolute -top-32 -right-24 h-96 w-96 rounded-full bg-blue-600/30 blur-3xl" }
+                div { class: "pointer-events-none absolute -top-32 -right-24 h-96 w-96 rounded-full bg-[#0176D3]/30 blur-3xl" }
                 div { class: "pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-violet-600/20 blur-3xl" }
                 div { class: "relative grid items-center gap-10 p-8 md:grid-cols-2 md:p-12",
                     div {
-                        p { class: "mb-3 text-xs font-extrabold tracking-[0.2em] text-blue-300",
+                        p { class: "mb-3 text-xs font-extrabold tracking-[0.2em] text-[#7CC4F8]",
                             "OCCB · CRM"
                         }
                         h1 { class: "text-4xl leading-tight font-extrabold text-white md:text-5xl",
                             "Toda tu relación con clientes, "
-                            span { class: "bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent",
+                            span { class: "bg-gradient-to-r from-[#1B96FF] to-violet-400 bg-clip-text text-transparent",
                                 "en un solo lugar"
                             }
                         }
@@ -62,7 +62,7 @@ pub fn Home() -> Element {
                         div { class: "mt-7 flex flex-wrap gap-3",
                             Link {
                                 to: Route::Register {},
-                                class: "rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-blue-600/40 transition hover:-translate-y-0.5 hover:bg-blue-500",
+                                class: "rounded-xl bg-[#0176D3] px-6 py-3 text-base font-semibold text-white shadow-lg shadow-[#0176D3]/40 transition hover:-translate-y-0.5 hover:bg-[#014486]",
                                 "Crear cuenta gratis"
                             }
                             Link {
@@ -97,28 +97,28 @@ pub fn Home() -> Element {
             }
 
             // STATS
-            section { class: "mt-6 grid grid-cols-2 gap-4 rounded-2xl bg-gradient-to-r from-blue-900 to-blue-600 p-6 text-white shadow-xl shadow-blue-600/20 md:grid-cols-4",
+            section { class: "mt-6 grid grid-cols-2 gap-4 rounded-2xl bg-gradient-to-r from-[#032D60] to-[#0176D3] p-6 text-white shadow-xl shadow-[#0176D3]/20 md:grid-cols-4",
                 div { class: "text-center",
                     p { class: "text-3xl font-extrabold", "8+" }
-                    p { class: "text-sm text-blue-100", "módulos integrados" }
+                    p { class: "text-sm text-[#D4E9F9]", "módulos integrados" }
                 }
                 div { class: "text-center",
                     p { class: "text-3xl font-extrabold", "6" }
-                    p { class: "text-sm text-blue-100", "etapas de venta" }
+                    p { class: "text-sm text-[#D4E9F9]", "etapas de venta" }
                 }
                 div { class: "text-center",
                     p { class: "text-3xl font-extrabold", "100%" }
-                    p { class: "text-sm text-blue-100", "datos bajo tu control" }
+                    p { class: "text-sm text-[#D4E9F9]", "datos bajo tu control" }
                 }
                 div { class: "text-center",
                     p { class: "text-3xl font-extrabold", "24/7" }
-                    p { class: "text-sm text-blue-100", "tu operación en línea" }
+                    p { class: "text-sm text-[#D4E9F9]", "tu operación en línea" }
                 }
             }
 
             // MÓDULOS
             section { class: "mt-14",
-                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-blue-600",
+                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-[#0176D3]",
                     "MÓDULOS"
                 }
                 h2 { class: "mt-1 text-center text-3xl font-extrabold tracking-tight",
@@ -181,7 +181,7 @@ pub fn Home() -> Element {
 
             // POR QUÉ
             section { class: "mt-14",
-                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-blue-600",
+                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-[#0176D3]",
                     "POR QUÉ OCCB"
                 }
                 h2 { class: "mt-1 text-center text-3xl font-extrabold tracking-tight",
@@ -216,8 +216,8 @@ pub fn Home() -> Element {
             }
 
             // PASOS
-            section { class: "relative mt-14 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-800 p-8 text-white md:p-12",
-                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-blue-300",
+            section { class: "relative mt-14 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-[#032D60] p-8 text-white md:p-12",
+                p { class: "text-center text-xs font-extrabold tracking-[0.2em] text-[#7CC4F8]",
                     "CÓMO EMPEZAR"
                 }
                 h2 { class: "mt-1 text-center text-3xl font-extrabold tracking-tight",
@@ -225,7 +225,7 @@ pub fn Home() -> Element {
                 }
                 div { class: "mt-8 grid gap-4 md:grid-cols-3",
                     div { class: "rounded-2xl border border-white/15 bg-white/5 p-6 backdrop-blur",
-                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-blue-700",
+                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-[#014486]",
                             "1"
                         }
                         h3 { class: "mt-3 text-lg font-bold", "Crea tu cuenta" }
@@ -234,7 +234,7 @@ pub fn Home() -> Element {
                         }
                     }
                     div { class: "rounded-2xl border border-white/15 bg-white/5 p-6 backdrop-blur",
-                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-blue-700",
+                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-[#014486]",
                             "2"
                         }
                         h3 { class: "mt-3 text-lg font-bold", "Carga tus datos" }
@@ -243,7 +243,7 @@ pub fn Home() -> Element {
                         }
                     }
                     div { class: "rounded-2xl border border-white/15 bg-white/5 p-6 backdrop-blur",
-                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-blue-700",
+                        span { class: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-white font-extrabold text-[#014486]",
                             "3"
                         }
                         h3 { class: "mt-3 text-lg font-bold", "Vende y mide" }
@@ -313,7 +313,7 @@ fn FeatureRow(img: String, alt: String, num: String, title: String, desc: String
         div { class: "flex flex-col items-center gap-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row {dir}",
             img { class: "w-full rounded-xl object-cover md:w-72 aspect-[4/3] bg-slate-200", src: "{img}", alt: "{alt}" }
             div {
-                span { class: "inline-block rounded-full bg-blue-50 px-3 py-0.5 text-xs font-extrabold text-blue-700",
+                span { class: "inline-block rounded-full bg-[#E8F3FC] px-3 py-0.5 text-xs font-extrabold text-[#014486]",
                     "{num}"
                 }
                 h3 { class: "mt-2 text-xl font-bold", "{title}" }

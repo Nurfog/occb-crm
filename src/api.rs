@@ -1044,6 +1044,31 @@ pub async fn dashboard_top_deals(access_token: &str) -> Result<TopDeals, ApiErro
     get_json(access_token, "/api/v1/dashboard/top-deals", &[]).await
 }
 
+/// `GET /api/v1/dashboard/recent-activities` — últimas 10.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct RecentActivity {
+    pub id: Uuid,
+    #[serde(rename = "type", default)]
+    pub activity_type: String,
+    #[serde(default)]
+    pub subject: String,
+    #[serde(default)]
+    pub contact_name: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct RecentActivities {
+    #[serde(default)]
+    pub activities: Vec<RecentActivity>,
+}
+
+pub async fn dashboard_recent_activities(
+    access_token: &str,
+) -> Result<RecentActivities, ApiError> {
+    get_json(access_token, "/api/v1/dashboard/recent-activities", &[]).await
+}
+
 /// `GET /api/v1/search?q=…` — búsqueda global (5 por entidad).
 pub async fn global_search(access_token: &str, q: &str) -> Result<SearchResults, ApiError> {
     let query = vec![("q", q.trim().to_string())];

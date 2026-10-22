@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::{api, auth::use_auth, components::Layout, route::Route};
+use crate::{api, auth::{use_auth, Session}, components::Layout, route::Route};
 
 /// Lee `?token=` de la URL en el navegador (para pre-rellenar el reset).
 fn query_token() -> String {
@@ -199,7 +199,101 @@ pub fn ResetPassword() -> Element {
     }
 }
 
-/// Cambio de clave con sesión (tarjeta para el Panel).
+/// Rectificación directa: edita nombre/email vía `PUT /api/v1/auth/profile`.
+/// Al guardar, avisa al padre para recargar y actualiza la sesión local.
+#[component]
+pub fn EditProfile(on_saved: EventHandler<()>) -> Element {
+    let mut auth = use_auth();
+    let mut name = use_signal(String::new);
+    let mut email = use_signal(String::new);
+    let mut busy = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+    let mut ok = use_signal(|| false);
+
+    let busy_v = *busy.read();
+    let label = if busy_v { "Guardando…" } else { "Guardar cambios" };
+    let was_ok = *ok.read();
+
+    rsx! {
+        form {
+            class: "form",
+            onsubmit: move |e| {
+                e.prevent_default();
+                let name_v = name.read().trim().to_string();
+                let email_v = email.read().trim().to_lowercase();
+                if name_v.is_empty() && email_v.is_empty() {
+                    error.set(Some("Cambia tu nombre o tu email para guardar.".to_string()));
+                    return;
+                }
+                let token = auth
+                    .read()
+                    .session
+                    .clone()
+                    .map(|s| s.access_token)
+                    .unwrap_or_default();
+                busy.set(true);
+                error.set(None);
+                ok.set(false);
+                spawn(async move {
+                    let email_opt = if email_v.is_empty() {
+                        None
+                    } else {
+                        Some(email_v.as_str())
+                    };
+                    let name_opt = if name_v.is_empty() { None } else { Some(name_v.as_str()) };
+                    match api::update_profile(&token, email_opt, name_opt).await {
+                        Ok(updated) => {
+                            let current = auth.read().session.clone();
+                            if let Some(mut session) = current {
+                                session.user.email = updated.email.clone();
+                                session.user.name = updated.name.clone();
+                                auth.write().session = Some(session);
+                            }
+                            ok.set(true);
+                            on_saved.call(());
+                        }
+                        Err(err) => error.set(Some(err.to_string())),
+                    }
+                    busy.set(false);
+                });
+            },
+            h3 { class: "card-title", "Rectificar mis datos" }
+            if let Some(msg) = error.read().clone() {
+                div { class: "alert alert-error", "{msg}" }
+            }
+            if was_ok {
+                div { class: "alert alert-ok", "Datos actualizados." }
+            }
+            label { class: "field", r#for: "edit-name", "Nombre" }
+            input {
+                id: "edit-name",
+                class: "input",
+                r#type: "text",
+                value: "{name}",
+                oninput: move |e| name.set(e.value()),
+                maxlength: 100,
+                autocomplete: "name",
+            }
+            label { class: "field", r#for: "edit-email", "Email" }
+            input {
+                id: "edit-email",
+                class: "input",
+                r#type: "email",
+                value: "{email}",
+                oninput: move |e| email.set(e.value()),
+                autocomplete: "email",
+            }
+            button {
+                class: "btn btn-small",
+                r#type: "submit",
+                disabled: busy_v,
+                "{label}"
+            }
+        }
+    }
+}
+
+/// Cambio de clave con sesión (tarjeta para Mi cuenta).
 #[component]
 pub fn ChangePassword() -> Element {
     let auth = use_auth();

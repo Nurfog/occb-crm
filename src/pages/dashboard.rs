@@ -1,38 +1,25 @@
-//! Panel: perfil (`GET /api/v1/auth/me`) y gestión de la sesión.
+//! Panel: tablero operativo para usuarios (KPIs, embudo, destacados).
+//!
+//! El perfil y la seguridad viven en `/cuenta`.
 
 use dioxus::prelude::*;
 
 use crate::{
     api::{self, ApiError},
-    auth::{use_auth, Session},
+    auth::use_auth,
     components::Layout,
-    pages::password::ChangePassword,
     route::Route,
 };
 
+/// Tablero con métricas del negocio. Requiere sesión.
 #[component]
 pub fn Dashboard() -> Element {
-    let mut auth = use_auth();
-    let nav = use_navigator();
-    let mut action_error = use_signal(|| None::<String>);
-    let mut busy = use_signal(|| false);
+    let auth = use_auth();
 
-    // Se suscribe a la sesión: al renovar el token se recarga el perfil.
-    let mut me = use_resource(move || {
-        let token = auth.read().session.clone().map(|s| s.access_token);
-        async move {
-            match token {
-                Some(t) => api::me(&t).await,
-                None => Err(ApiError::no_session()),
-            }
-        }
-    });
-
-    // Resumen CRM del negocio.
-    let token_crm = auth.read().session.clone().map(|s| s.access_token);
-    let token_top = token_crm.clone();
+    let token_of = auth.read().session.clone().map(|s| s.access_token);
+    let token_s = token_of.clone();
     let mut stats = use_resource(move || {
-        let token = token_crm.clone();
+        let token = token_s.clone();
         async move {
             match token {
                 Some(t) => api::dashboard_stats(&t).await,
@@ -40,10 +27,32 @@ pub fn Dashboard() -> Element {
             }
         }
     });
-    let top = use_resource(move || {        let token = token_top.clone();
+    let token_t = token_of.clone();
+    let mut top = use_resource(move || {
+        let token = token_t.clone();
         async move {
             match token {
                 Some(t) => api::dashboard_top_deals(&t).await,
+                None => Err(ApiError::no_session()),
+            }
+        }
+    });
+    let token_p = token_of.clone();
+    let mut funnel = use_resource(move || {
+        let token = token_p.clone();
+        async move {
+            match token {
+                Some(t) => api::dashboard_pipeline(&t).await,
+                None => Err(ApiError::no_session()),
+            }
+        }
+    });
+    let token_r = token_of.clone();
+    let mut recent = use_resource(move || {
+        let token = token_r.clone();
+        async move {
+            match token {
+                Some(t) => api::dashboard_recent_activities(&t).await,
                 None => Err(ApiError::no_session()),
             }
         }
@@ -66,166 +75,136 @@ pub fn Dashboard() -> Element {
 
     rsx! {
         Layout { title: "Panel".to_string(),
-            if let Some(msg) = action_error.read().clone() {
-                div { class: "alert alert-error", "{msg}" }
-            }
-            match &*me.read() {
-                None => rsx! {
-                    p { class: "muted", "Cargando tu perfil…" }
-                },
-                Some(Ok(user)) => {
-                    let refresh_token = auth
-                        .read()
-                        .session
-                        .clone()
-                        .map(|s| s.refresh_token)
-                        .unwrap_or_default();
-                    let perms = if user.permissions.is_empty() {
-                        "—".to_string()
-                    } else {
-                        user.permissions.join(", ")
-                    };
-                    rsx! {
-                        section { class: "card",
-                            h2 { class: "card-title", "Tu perfil" }
-                            dl { class: "detail-list",
-                                div {
-                                    dt { "Nombre" }
-                                    dd { "{user.name}" }
-                                }
-                                div {
-                                    dt { "Email" }
-                                    dd { "{user.email}" }
-                                }
-                                if let Some(first) = user.first_name.clone() {
-                                    div {
-                                        dt { "Nombres" }
-                                        dd { "{first}" }
-                                    }
-                                }
-                                if let Some(last) = user.last_name.clone() {
-                                    div {
-                                        dt { "Apellidos" }
-                                        dd { "{last}" }
-                                    }
-                                }
-                                div {
-                                    dt { "Permisos" }
-                                    dd { class: "muted small", "{perms}" }
-                                }
-                            }
-                            EditProfile { on_saved: move |_| me.restart() }
-                            div { class: "row",
-                                button {
-                                    class: "btn btn-small",
-                                    disabled: *busy.read(),
-                                    onclick: move |_| {
-                                        let refresh_v = refresh_token.clone();
-                                        action_error.set(None);
-                                        busy.set(true);
-                                        spawn(async move {
-                                            match api::refresh(&refresh_v).await {
-                                                Ok(pair) => {
-                                                    auth.write().session = Some(Session::from_pair(pair));
-                                                    me.restart();
-                                                }
-                                                Err(err) => action_error.set(Some(err.to_string())),
-                                            }
-                                            busy.set(false);
-                                        });
-                                    },
-                                    if *busy.read() {
-                                        "Renovando…"
-                                    } else {
-                                        "Renovar tokens"
-                                    }
-                                }
-                                button { class: "btn btn-small", onclick: move |_| me.restart(), "Recargar perfil" }
-                                Link { to: Route::Users {}, class: "btn btn-small", "Ver usuarios" }
-                            }
-                            p { class: "muted small",
-                                "Renovar rota el refresh token en el backend: el anterior queda revocado."
-                            }
-                        }
-                    }
-                }
+            match &*stats.read() {
+                None => rsx! { p { class: "muted", "Cargando resumen…" } },
                 Some(Err(e)) => rsx! {
                     div { class: "alert alert-error",
-                        p { "No se pudo cargar tu perfil." }
+                        p { "No se pudo cargar el resumen." }
                         p { class: "muted small", "{e}" }
-                        div { class: "row",
-                            button { class: "btn btn-small", onclick: move |_| me.restart(), "Reintentar" }
-                            button {
-                                class: "btn btn-small",
-                                onclick: move |_| {
-                                    auth.write().session = None;
-                                    nav.push(Route::Login {});
-                                },
-                                "Cerrar sesión local"
+                        button { class: "btn btn-small", onclick: move |_| stats.restart(), "Reintentar" }
+                    }
+                },
+                Some(Ok(s)) => {
+                    let revenue = format!("${:.0}", s.total_revenue);
+                    rsx! {
+                        section { class: "grid grid-cols-2 gap-4 lg:grid-cols-4",
+                            Kpi { label: "Contactos", value: s.total_contacts.to_string(), sub: "en base".to_string() }
+                            Kpi { label: "Negocios activos", value: s.active_deals.to_string(), sub: "en curso".to_string() }
+                            Kpi {
+                                label: "Ganados / Perdidos",
+                                value: format!("{} / {}", s.won_deals, s.lost_deals),
+                                sub: "cerrados".to_string(),
                             }
+                            Kpi { label: "Ingresos", value: revenue, sub: "negocios cerrados".to_string() }
                         }
                     }
                 },
             }
-            section { class: "card",
-                h2 { class: "card-title", "El negocio hoy" }
-                match &*stats.read() {
-                    None => rsx! { p { class: "muted", "Cargando resumen…" } },
-                    Some(Err(e)) => rsx! {
-                        p { class: "muted small",
-                            "Sin resumen (¿falta permiso?): {e} "
-                            button { class: "btn btn-small", onclick: move |_| stats.restart(), "Reintentar" }
-                        }
-                    },
-                    Some(Ok(s)) => {
-                        let revenue = format!("{:.0}", s.total_revenue);
-                        rsx! {
-                            div { class: "grid-cards",
-                                div { class: "card",
-                                    h2 { class: "card-title", "Contactos" }
-                                    p { "{s.total_contacts}" }
-                                }
-                                div { class: "card",
-                                    h2 { class: "card-title", "Negocios activos" }
-                                    p { "{s.active_deals}" }
-                                }
-                                div { class: "card",
-                                    h2 { class: "card-title", "Ganados / Perdidos" }
-                                    p { "{s.won_deals} / {s.lost_deals}" }
-                                }
-                                div { class: "card",
-                                    h2 { class: "card-title", "Ingresos (cerrados)" }
-                                    p { "{revenue}" }
+            div { class: "mt-4 grid gap-4 lg:grid-cols-2",
+                section { class: "card",
+                    div { class: "mb-2 flex items-center justify-between",
+                        h2 { class: "card-title", "Embudo por etapa" }
+                        Link { to: Route::Deals {}, class: "link small", "Abrir tablero →" }
+                    }
+                    match &*funnel.read() {
+                        None => rsx! { p { class: "muted", "Cargando…" } },
+                        Some(Err(e)) => rsx! { p { class: "muted small", "No se pudo cargar: {e}" } },
+                        Some(Ok(f)) => {
+                            let max = f.stages.iter().map(|s| s.count).max().unwrap_or(1).max(1) as f64;
+                            rsx! {
+                                div { class: "flex flex-col gap-2",
+                                    for st in &f.stages {
+                                        {
+                                            let label = api::deal_stage_label(&st.stage).to_string();
+                                            let detail = format!("{} · ${:.0}", st.count, st.total_value);
+                                            let width = (st.count as f64 / max * 100.0).max(4.0);
+                                            let bar = format!("width: {:.0}%", width);
+                                            rsx! {
+                                                div { key: "{st.stage}",
+                                                    div { class: "flex justify-between text-sm",
+                                                        span { class: "font-semibold", "{label}" }
+                                                        span { class: "muted", "{detail}" }
+                                                    }
+                                                    div { class: "mt-1 h-2.5 overflow-hidden rounded-full bg-muted",
+                                                        div { class: "h-full rounded-full bg-primary", style: "{bar}" }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    },
+                        },
+                    }
+                }
+                section { class: "card",
+                    div { class: "mb-2 flex items-center justify-between",
+                        h2 { class: "card-title", "Mejores negocios" }
+                        Link { to: Route::Reports {}, class: "link small", "Ver informes →" }
+                    }
+                    match &*top.read() {
+                        None => rsx! { p { class: "muted", "Cargando…" } },
+                        Some(Err(e)) => rsx! { p { class: "muted small", "No se pudo cargar: {e}" } },
+                        Some(Ok(t)) => rsx! {
+                            if t.deals.is_empty() {
+                                p { class: "muted", "Aún no hay negocios." }
+                            } else {
+                                ul { class: "flex flex-col gap-2",
+                                    for d in &t.deals {
+                                        {
+                                            let did = d.id.to_string();
+                                            let title = d.title.clone();
+                                            let st = api::deal_stage_label(&d.stage).to_string();
+                                            let amount = format!("${:.0}", d.value);
+                                            rsx! {
+                                                li { key: "{did}", class: "flex items-center justify-between gap-2",
+                                                    Link {
+                                                        to: Route::DealDetail { id: did },
+                                                        class: "link truncate",
+                                                        "{title}"
+                                                    }
+                                                    span { class: "shrink-0 text-sm text-muted", "{st} · {amount}" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    }
                 }
             }
             section { class: "card",
-                h2 { class: "card-title", "Mejores negocios" }
-                match &*top.read() {
+                div { class: "mb-2 flex items-center justify-between",
+                    h2 { class: "card-title", "Actividad reciente" }
+                    Link { to: Route::Activities {}, class: "link small", "Ver actividades →" }
+                }
+                match &*recent.read() {
                     None => rsx! { p { class: "muted", "Cargando…" } },
                     Some(Err(e)) => rsx! { p { class: "muted small", "No se pudo cargar: {e}" } },
-                    Some(Ok(t)) => rsx! {
-                        if t.deals.is_empty() {
-                            p { class: "muted", "Aún no hay negocios." }
+                    Some(Ok(r)) => rsx! {
+                        if r.activities.is_empty() {
+                            p { class: "muted", "Sin actividad todavía." }
                         } else {
-                            ul {
-                                for d in &t.deals {
+                            ul { class: "timeline",
+                                for a in &r.activities {
                                     {
-                                        let did = d.id.to_string();
-                                        let title = d.title.clone();
-                                        let st = api::deal_stage_label(&d.stage).to_string();
-                                        let amount = format!("{:.0}", d.value);
+                                        let key = a.id.to_string();
+                                        let subject = a.subject.clone();
+                                        let kind = api::activity_type_label(&a.activity_type).to_string();
+                                        let who = a
+                                            .contact_name
+                                            .clone()
+                                            .map(|c| format!(" · {c}"))
+                                            .unwrap_or_default();
+                                        let when = a.created_at.format("%d %b %H:%M").to_string();
                                         rsx! {
-                                            li { key: "{did}",
-                                                Link {
-                                                    to: Route::DealDetail { id: did },
-                                                    class: "link",
-                                                    "{title}"
+                                            li { key: "{key}", class: "timeline-item",
+                                                span { class: "timeline-dot" }
+                                                div {
+                                                    strong { "{subject}" }
+                                                    p { class: "muted small", "{kind}{who} · {when}" }
                                                 }
-                                                span { class: "muted small", " · {st} · {amount}" }
                                             }
                                         }
                                     }
@@ -234,109 +213,19 @@ pub fn Dashboard() -> Element {
                         }
                     },
                 }
-                div { class: "row",
-                    Link { to: Route::Contacts {}, class: "btn btn-small", "Ir a contactos" }
-                    Link { to: Route::Deals {}, class: "btn btn-small btn-primary", "Ir al tablero" }
-                }
-            }
-            section { class: "card",
-                h2 { class: "card-title", "Seguridad" }
-                ChangePassword {}
             }
         }
     }
 }
 
-/// Rectificación directa: edita nombre/email vía `PUT /api/v1/auth/profile`.
-/// Al guardar, avisa al padre para recargar y actualiza la sesión local.
+/// Tarjeta de indicador.
 #[component]
-fn EditProfile(on_saved: EventHandler<()>) -> Element {
-    let mut auth = use_auth();
-    let mut name = use_signal(String::new);
-    let mut email = use_signal(String::new);
-    let mut busy = use_signal(|| false);
-    let mut error = use_signal(|| None::<String>);
-    let mut ok = use_signal(|| false);
-
+fn Kpi(label: String, value: String, sub: String) -> Element {
     rsx! {
-        form {
-            class: "form",
-            onsubmit: move |e| {
-                e.prevent_default();
-                let name_v = name.read().trim().to_string();
-                let email_v = email.read().trim().to_lowercase();
-                if name_v.is_empty() && email_v.is_empty() {
-                    error.set(Some("Cambia tu nombre o tu email para guardar.".to_string()));
-                    return;
-                }
-                let token = auth
-                    .read()
-                    .session
-                    .clone()
-                    .map(|s| s.access_token)
-                    .unwrap_or_default();
-                busy.set(true);
-                error.set(None);
-                ok.set(false);
-                spawn(async move {
-                    let email_opt = if email_v.is_empty() {
-                        None
-                    } else {
-                        Some(email_v.as_str())
-                    };
-                    let name_opt = if name_v.is_empty() { None } else { Some(name_v.as_str()) };
-                    match api::update_profile(&token, email_opt, name_opt).await {
-                        Ok(updated) => {
-                            let current = auth.read().session.clone();
-                            if let Some(mut session) = current {
-                                session.user.email = updated.email.clone();
-                                session.user.name = updated.name.clone();
-                                auth.write().session = Some(session);
-                            }
-                            ok.set(true);
-                            on_saved.call(());
-                        }
-                        Err(err) => error.set(Some(err.to_string())),
-                    }
-                    busy.set(false);
-                });
-            },
-            h3 { class: "card-title", "Rectificar mis datos" }
-            if let Some(msg) = error.read().clone() {
-                div { class: "alert alert-error", "{msg}" }
-            }
-            if *ok.read() {
-                div { class: "alert alert-ok", "Datos actualizados." }
-            }
-            label { class: "field", r#for: "edit-name", "Nombre" }
-            input {
-                id: "edit-name",
-                class: "input",
-                r#type: "text",
-                value: "{name}",
-                oninput: move |e| name.set(e.value()),
-                maxlength: 100,
-                autocomplete: "name",
-            }
-            label { class: "field", r#for: "edit-email", "Email" }
-            input {
-                id: "edit-email",
-                class: "input",
-                r#type: "email",
-                value: "{email}",
-                oninput: move |e| email.set(e.value()),
-                autocomplete: "email",
-            }
-            button {
-                class: "btn btn-small",
-                r#type: "submit",
-                disabled: *busy.read(),
-                if *busy.read() {
-                    "Guardando…"
-                } else {
-                    "Guardar cambios"
-                }
-            }
+        div { class: "card kpi",
+            p { class: "kpi-label", "{label}" }
+            p { class: "kpi-value", "{value}" }
+            p { class: "muted small", "{sub}" }
         }
     }
 }

@@ -6,8 +6,8 @@
   --ink: #1c2533;
   --muted: #64748b;
   --line: #e2e8f0;
-  --brand: #1f5eff;
-  --brand-dark: #1748c4;
+  --brand: #0176d3;
+  --brand-dark: #014486;
   --ok: #15803d;
   --bad: #b91c1c;
   --radius: 10px;
@@ -102,6 +102,22 @@ li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
 @keyframes rise {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
+}
+
+.kpi { border-top: 3px solid var(--brand); }
+.kpi-label { font-size: 0.8rem; font-weight: 600; color: var(--muted); margin: 0; }
+.kpi-value { font-size: 1.7rem; font-weight: 800; margin: 0.1rem 0; }
+
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.timeline-item { display: flex; gap: 0.7rem; padding: 0.45rem 0; border-bottom: 1px solid var(--line); }
+.timeline-item:last-child { border-bottom: none; }
+.timeline-dot {
+  flex-shrink: 0;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--brand);
+  margin-top: 0.4rem;
 }
 
 .privacy-strip { border-left: 4px solid var(--brand); }

@@ -3,6 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::pages::{
+    account::Account,
     activities::Activities,
     admin::Admin,
     audit::Audit,
@@ -66,6 +67,8 @@ pub enum Route {
     Reports {},
     #[route("/notificaciones")]
     Notifications {},
+    #[route("/cuenta")]
+    Account {},
     #[route("/buscar")]
     Search {},
     #[route("/auditoria")]
