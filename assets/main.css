@@ -215,6 +215,24 @@ li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
 .revenue-box { background: #f0fdf4; border-color: #bbf7d0; }
 .revenue-value { font-size: 1.5rem; font-weight: 800; color: var(--ok); margin: 0; }
 
+/* Tarjetas de pipeline al convertir */
+.pipe-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin: 0.3rem 0 0.6rem; }
+.pipe-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  text-align: left;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.pipe-card:hover { border-color: var(--brand); }
+.pipe-sel { border-color: var(--brand); background: rgb(1 118 211 / 0.06); }
+
 /* Vista previa de plantilla (3 líneas) */
 .template-preview {
   display: -webkit-box;
@@ -271,6 +289,14 @@ li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0.4rem 0 0;
+}
+
+/* Grilla de checkboxes de permisos */
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.15rem 0.8rem;
+  margin: 0.3rem 0 0.6rem;
 }
 
 /* WhatsApp: lista + hilo lado a lado */

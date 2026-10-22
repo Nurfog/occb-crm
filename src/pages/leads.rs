@@ -910,17 +910,34 @@ fn ConvertLead(
                     if list.is_empty() {
                         p { class: "muted", "No hay pipelines activos." }
                     } else {
-                        label { class: "field", "Pipeline del negocio" }
-                        select {
-                            class: "input",
-                            value: "{pipeline}",
-                            onchange: move |e| pipeline.set(e.value()),
-                            option { value: "", "Elegir…" }
+                        p { class: "field", "Pipeline del negocio" }
+                        div { class: "pipe-cards",
                             for p in list {
                                 {
                                     let pid = p.pipeline.id.to_string();
                                     let pname = p.pipeline.name.clone();
-                                    rsx! { option { value: "{pid}", "{pname}" } }
+                                    let etype = if p.pipeline.entity_type == "company" {
+                                        "Empresa"
+                                    } else {
+                                        "Persona"
+                                    };
+                                    let sel = *pipeline.read() == pid;
+                                    let cls = if sel {
+                                        "pipe-card pipe-sel"
+                                    } else {
+                                        "pipe-card"
+                                    };
+                                    let pid_c = pid.clone();
+                                    rsx! {
+                                        button {
+                                            key: "{pid}",
+                                            class: "{cls}",
+                                            r#type: "button",
+                                            onclick: move |_| pipeline.set(pid_c.clone()),
+                                            strong { "{pname}" }
+                                            span { class: "muted small", "{etype}" }
+                                        }
+                                    }
                                 }
                             }
                         }

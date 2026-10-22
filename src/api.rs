@@ -688,6 +688,8 @@ pub struct Pipeline {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
+    pub entity_type: String,
+    #[serde(default)]
     pub is_default: bool,
 }
 

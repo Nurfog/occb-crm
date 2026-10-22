@@ -276,12 +276,40 @@ fn PipelineCard(pipe: api::PipelineWithStages, on_changed: EventHandler<()>) -> 
     }
 }
 
+/// Permisos asignables a un perfil (subconjunto operativo del backend).
+const ALL_PERMISSIONS: [&str; 24] = [
+    "contacts.view",
+    "contacts.create",
+    "contacts.edit",
+    "contacts.delete",
+    "companies.view",
+    "companies.create",
+    "companies.edit",
+    "companies.delete",
+    "deals.view",
+    "deals.create",
+    "deals.edit",
+    "deals.delete",
+    "leads.view",
+    "leads.convert",
+    "activities.view",
+    "activities.create",
+    "documents.view",
+    "documents.upload",
+    "reports.view",
+    "dashboard.view",
+    "search.view",
+    "tags.view",
+    "audit.view",
+    "admin.access",
+];
+
 /// Perfiles y permisos.
 #[component]
 fn ProfilesSection() -> Element {
     let auth = use_auth();
     let mut name = use_signal(String::new);
-    let mut perms = use_signal(String::new);
+    let mut picked = use_signal(Vec::<String>::new);
     let mut error = use_signal(|| None::<String>);
 
     let token_of = auth.read().session.clone().map(|s| s.access_token);
@@ -299,30 +327,45 @@ fn ProfilesSection() -> Element {
     rsx! {
         section { class: "card",
             h2 { class: "card-title", "Nuevo perfil" }
-            div { class: "row",
-                input {
-                    class: "input",
-                    placeholder: "Nombre *",
-                    value: "{name}",
-                    oninput: move |e| name.set(e.value()),
+            label { class: "field", "Nombre *" }
+            input {
+                class: "input",
+                value: "{name}",
+                oninput: move |e| name.set(e.value()),
+            }
+            p { class: "muted small", "Permisos" }
+            div { class: "perm-grid",
+                for p in ALL_PERMISSIONS {
+                    {
+                        let on = picked.read().contains(&p.to_string());
+                        let pv = p.to_string();
+                        rsx! {
+                            label { key: "{p}", class: "consent-opt",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: on,
+                                    onclick: move |_| {
+                                        let mut s = picked.read().clone();
+                                        if s.contains(&pv) {
+                                            s.retain(|x| x != &pv);
+                                        } else {
+                                            s.push(pv.clone());
+                                        }
+                                        picked.set(s);
+                                    },
+                                }
+                                " {p}"
+                            }
+                        }
+                    }
                 }
-                input {
-                    class: "input",
-                    placeholder: "Permisos separados por coma",
-                    value: "{perms}",
-                    oninput: move |e| perms.set(e.value()),
-                }
+            }
                 button {
                     class: "btn btn-small btn-primary",
                     onclick: move |_| {
                         let tok = token_of.clone();
                         let n = name.read().trim().to_string();
-                        let list: Vec<String> = perms
-                            .read()
-                            .split(',')
-                            .map(|s| s.trim().to_string())
-                            .filter(|s| !s.is_empty())
-                            .collect();
+                        let list = picked.read().clone();
                         if n.is_empty() {
                             error.set(Some("El nombre es obligatorio.".to_string()));
                             return;
@@ -343,7 +386,7 @@ fn ProfilesSection() -> Element {
                                 {
                                     Ok(_) => {
                                         name.set(String::new());
-                                        perms.set(String::new());
+                                        picked.set(Vec::new());
                                         items.restart();
                                     }
                                     Err(e) => error.set(Some(e.to_string())),
@@ -353,7 +396,6 @@ fn ProfilesSection() -> Element {
                     },
                     "Crear"
                 }
-            }
             if let Some(msg) = error.read().clone() {
                 p { class: "alert alert-error", "{msg}" }
             }
