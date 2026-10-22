@@ -1,6 +1,7 @@
 //! Calendario: eventos locales, estado de conexión y sincronización.
 
 use dioxus::prelude::*;
+use chrono::Datelike as _;
 
 use crate::{
     api::{self, ApiError},
@@ -23,6 +24,110 @@ fn open_url(url: &str) {
     }
 }
 
+/// Resta/suma meses a un `AAAA-MM`.
+fn shift_cal_month(month: &mut Signal<String>, delta: i32) {
+    let cur = month.read().clone();
+    let (mut y, mut m): (i32, u32) = cur
+        .split_once('-')
+        .and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))
+        .unwrap_or((2026, 1));
+    m = (m as i32 + delta) as u32;
+    while m < 1 {
+        m += 12;
+        y -= 1;
+    }
+    while m > 12 {
+        m -= 12;
+        y += 1;
+    }
+    month.set(format!("{y:04}-{m:02}"));
+}
+
+/// Mes con los eventos del calendario.
+#[component]
+fn CalendarMonth(
+    year_month: String,
+    events: Vec<api::CalendarEvent>,
+    on_prev: EventHandler<()>,
+    on_next: EventHandler<()>,
+    on_today: EventHandler<()>,
+) -> Element {
+    use chrono::{Datelike, NaiveDate};
+
+    let (y, m): (i32, u32) = year_month
+        .split_once('-')
+        .and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))
+        .unwrap_or((2026, 1));
+    let first = NaiveDate::from_ymd_opt(y, m, 1).unwrap_or(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+    let lead = first.weekday().num_days_from_monday() as usize;
+    let next_first = if m == 12 {
+        NaiveDate::from_ymd_opt(y + 1, 1, 1).unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(y, m + 1, 1).unwrap()
+    };
+    let days = (next_first - first).num_days() as u32;
+    let title = first.format("%B %Y").to_string();
+    let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+
+    let mut by_day: std::collections::HashMap<String, Vec<api::CalendarEvent>> =
+        std::collections::HashMap::new();
+    for e in &events {
+        by_day
+            .entry(e.start_time.date_naive().format("%Y-%m-%d").to_string())
+            .or_default()
+            .push(e.clone());
+    }
+
+    let mut cells: Vec<Element> = Vec::new();
+    for _ in 0..lead {
+        cells.push(rsx! { div { class: "cal-day cal-empty" } });
+    }
+    for d in 1..=days {
+        let key = format!("{y:04}-{m:02}-{d:02}");
+        let is_today = key == today;
+        let evts = by_day.get(&key).cloned().unwrap_or_default();
+        let shown: Vec<api::CalendarEvent> = evts.iter().take(3).cloned().collect();
+        let more = evts.len().saturating_sub(3);
+        let day_cls = if is_today { "cal-day cal-today" } else { "cal-day" };
+        cells.push(rsx! {
+            div { class: "{day_cls}", key: "{key}",
+                span { class: "cal-num", "{d}" }
+                for e in shown {
+                    {
+                        let title = e.title.clone();
+                        let when = e.start_time.format("%H:%M").to_string();
+                        rsx! {
+                            div { class: "cal-evt", key: "{title}-{when}", "{when} {title}" }
+                        }
+                    }
+                }
+                if more > 0 {
+                    span { class: "muted small", "+{more}" }
+                }
+            }
+        });
+    }
+
+    rsx! {
+        section { class: "card",
+            div { class: "row cal-head",
+                button { class: "btn btn-small", onclick: move |_| on_prev.call(()), "‹" }
+                button { class: "btn btn-small", onclick: move |_| on_today.call(()), "Hoy" }
+                button { class: "btn btn-small", onclick: move |_| on_next.call(()), "›" }
+                h2 { class: "card-title cal-title", "{title}" }
+            }
+            div { class: "cal-grid",
+                for w in ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"] {
+                    div { class: "cal-dow", key: "{w}", "{w}" }
+                }
+                for cell in cells {
+                    {cell}
+                }
+            }
+        }
+    }
+}
+
 /// Eventos, conexión OAuth y alta. Requiere sesión.
 #[component]
 pub fn Calendar() -> Element {
@@ -32,6 +137,10 @@ pub fn Calendar() -> Element {
     let mut end = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut sync_msg = use_signal(|| None::<String>);
+    let mut month = use_signal(|| {
+        let now = chrono::Utc::now().date_naive();
+        format!("{:04}-{:02}", now.year(), now.month())
+    });
 
     let token_of = auth.read().session.clone().map(|s| s.access_token);
     let token_e = token_of.clone();
@@ -76,6 +185,21 @@ pub fn Calendar() -> Element {
 
     rsx! {
         Layout { title: "Calendario".to_string(),
+            match &*events.read() {
+                Some(Ok(list)) => rsx! {
+                    CalendarMonth {
+                        year_month: month.read().clone(),
+                        events: list.clone(),
+                        on_prev: move |_| shift_cal_month(&mut month, -1),
+                        on_next: move |_| shift_cal_month(&mut month, 1),
+                        on_today: move |_| {
+                            let now = chrono::Utc::now().date_naive();
+                            month.set(format!("{:04}-{:02}", now.year(), now.month()));
+                        },
+                    }
+                },
+                _ => rsx! {},
+            }
             section { class: "card",
                 h2 { class: "card-title", "Conexiones" }
                 match &*status.read() {
