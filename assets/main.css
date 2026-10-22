@@ -215,6 +215,39 @@ li.unread { border-left: 3px solid var(--brand); padding-left: 0.5rem; }
 .revenue-box { background: #f0fdf4; border-color: #bbf7d0; }
 .revenue-value { font-size: 1.5rem; font-weight: 800; color: var(--ok); margin: 0; }
 
+/* Gráfico de barras verticales */
+.bar-chart { display: flex; align-items: flex-end; gap: 0.8rem; height: 220px; padding-top: 0.5rem; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; height: 100%; justify-content: flex-end; }
+.bar-value { font-size: 0.8rem; font-weight: 800; }
+.bar-track { width: 100%; max-width: 44px; height: 150px; background: var(--secondary); border-radius: 6px 6px 0 0; display: flex; align-items: flex-end; }
+.bar-fill { width: 100%; border-radius: 6px 6px 0 0; background: var(--brand); }
+.bar-lead { background: #64748b; }
+.bar-qualified { background: #3b82f6; }
+.bar-proposal { background: #8b5cf6; }
+.bar-negotiation { background: #f59e0b; }
+.bar-closed_won { background: #10b981; }
+.bar-closed_lost { background: #f43f5e; }
+.bar-label { font-size: 0.7rem; color: var(--muted); }
+
+/* Mosaicos de actividad */
+.tile-sm {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  margin-top: 0.1rem;
+}
+.tile-call { background: #dcfce7; color: #15803d; }
+.tile-email { background: #dbeafe; color: #1d4ed8; }
+.tile-meeting { background: #ede9fe; color: #6d28d9; }
+.tile-note { background: #fef9c3; color: #a16207; }
+.tile-ok { background: #dcfce7; color: #15803d; }
+
 /* Avatar de iniciales */
 .avatar {
   display: inline-flex;

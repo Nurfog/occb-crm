@@ -151,27 +151,26 @@ pub fn Dashboard() -> Element {
                         Some(Ok(f)) => {
                             let max = f.stages.iter().map(|s| s.count).max().unwrap_or(1).max(1) as f64;
                             rsx! {
-                                div { class: "flex flex-col gap-2",
+                                div { class: "bar-chart",
                                     for st in &f.stages {
                                         {
                                             let label = api::deal_stage_label(&st.stage).to_string();
-                                            let detail = format!("{} · ${:.0}", st.count, st.total_value);
-                                            let width = (st.count as f64 / max * 100.0).max(4.0);
-                                            let bar = format!("width: {:.0}%", width);
+                                            let short: String = label.chars().take(4).collect();
+                                            let h = (st.count as f64 / max * 100.0).max(4.0);
+                                            let style = format!("height: {:.0}%", h);
                                             rsx! {
-                                                div { key: "{st.stage}",
-                                                    div { class: "flex justify-between text-sm",
-                                                        span { class: "font-semibold", "{label}" }
-                                                        span { class: "muted", "{detail}" }
+                                                div { class: "bar-col", key: "{st.stage}",
+                                                    span { class: "bar-value", "{st.count}" }
+                                                    div { class: "bar-track",
+                                                        div { class: "bar-fill bar-{st.stage}", style: "{style}" }
                                                     }
-                                                    div { class: "mt-1 h-2.5 overflow-hidden rounded-full bg-muted",
-                                                        div { class: "h-full rounded-full bg-primary", style: "{bar}" }
-                                                    }
+                                                    span { class: "bar-label", "{short}" }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                                p { class: "muted small", "Negocios por etapa." }
                             }
                         },
                     }
@@ -188,21 +187,35 @@ pub fn Dashboard() -> Element {
                             if t.deals.is_empty() {
                                 p { class: "muted", "Aún no hay negocios." }
                             } else {
-                                ul { class: "flex flex-col gap-2",
-                                    for d in &t.deals {
-                                        {
-                                            let did = d.id.to_string();
-                                            let title = d.title.clone();
-                                            let st = api::deal_stage_label(&d.stage).to_string();
-                                            let amount = format!("${:.0}", d.value);
-                                            rsx! {
-                                                li { key: "{did}", class: "flex items-center justify-between gap-2",
-                                                    Link {
-                                                        to: Route::DealDetail { id: did },
-                                                        class: "link truncate",
-                                                        "{title}"
+                                div { class: "table-wrap",
+                                    table { class: "table",
+                                        thead {
+                                            tr {
+                                                th { "Negocio" }
+                                                th { "Monto" }
+                                                th { "Etapa" }
+                                            }
+                                        }
+                                        tbody {
+                                            for d in &t.deals {
+                                                {
+                                                    let did = d.id.to_string();
+                                                    let title = d.title.clone();
+                                                    let st = api::deal_stage_label(&d.stage).to_string();
+                                                    let amount = format!("${:.0}", d.value);
+                                                    rsx! {
+                                                        tr { key: "{did}",
+                                                            td {
+                                                                Link {
+                                                                    to: Route::DealDetail { id: did },
+                                                                    class: "link",
+                                                                    "{title}"
+                                                                }
+                                                            }
+                                                            td { "{amount}" }
+                                                            td { "{st}" }
+                                                        }
                                                     }
-                                                    span { class: "shrink-0 text-sm text-muted", "{st} · {amount}" }
                                                 }
                                             }
                                         }
@@ -231,6 +244,7 @@ pub fn Dashboard() -> Element {
                                         let key = a.id.to_string();
                                         let subject = a.subject.clone();
                                         let kind = api::activity_type_label(&a.activity_type).to_string();
+                                        let (tile, glyph) = activity_badge(&a.activity_type, a.completed);
                                         let who = a
                                             .contact_name
                                             .clone()
@@ -239,7 +253,7 @@ pub fn Dashboard() -> Element {
                                         let when = a.created_at.format("%d %b %H:%M").to_string();
                                         rsx! {
                                             li { key: "{key}", class: "timeline-item",
-                                                span { class: "timeline-dot" }
+                                                span { class: "tile-sm {tile}", "{glyph}" }
                                                 div {
                                                     strong { "{subject}" }
                                                     p { class: "muted small", "{kind}{who} · {when}" }
@@ -254,6 +268,19 @@ pub fn Dashboard() -> Element {
                 }
             }
         }
+    }
+}
+
+/// Mosaico de color + letra por tipo de actividad (como el original).
+fn activity_badge(kind: &str, completed: bool) -> (&'static str, &'static str) {
+    if completed {
+        return ("tile-ok", "✓");
+    }
+    match kind {
+        "call" => ("tile-call", "L"),
+        "email" => ("tile-email", "@"),
+        "meeting" => ("tile-meeting", "R"),
+        _ => ("tile-note", "T"),
     }
 }
 
