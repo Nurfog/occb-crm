@@ -1,12 +1,17 @@
 //! Frontal OCCB en Dioxus, todo en español con i18n ES/EN.
 //!
-//! Buenas prácticas: textos centralizados en `occb-core::i18n`, componentes
-//! pequeños por responsabilidad y estado local con señales.
+//! Buenas prácticas: textos centralizados en `occb-core::i18n`, un módulo
+//! `cliente` para hablar con la API y componentes pequeños por vista.
+//! Las vistas leen y escriben en la API (`:3001`); si no responde,
+//! muestran datos de demostración locales.
+
+mod cliente;
 
 use dioxus::prelude::*;
 use occb_core::{
-    Empresa, EtapaOportunidad, Idioma, Oportunidad, Persona, calcular_resumen,
-    datos_semilla_empresas, datos_semilla_oportunidades, datos_semilla_personas, textos,
+    CrearEmpresa, CrearOportunidad, CrearPersona, Empresa, EtapaOportunidad, Idioma, Oportunidad,
+    Persona, calcular_resumen, datos_semilla_empresas, datos_semilla_oportunidades,
+    datos_semilla_personas, textos,
 };
 
 /// Hoja de estilos del frontal.
@@ -116,12 +121,10 @@ fn BarraLateral() -> Element {
                 Link { to: Ruta::VistaPersonas {}, class: "side-item",
                     span { class: "ico", "○" }
                     span { "{t.personas}" }
-                    span { class: "count", "5" }
                 }
                 Link { to: Ruta::VistaEmpresas {}, class: "side-item",
                     span { class: "ico", "□" }
                     span { "{t.empresas}" }
-                    span { class: "count", "6" }
                 }
                 Link { to: Ruta::VistaOportunidades {}, class: "side-item active",
                     span { class: "ico", "◇" }
@@ -191,7 +194,7 @@ fn BarraSuperior(titulo: String, subtitulo: String) -> Element {
     }
 }
 
-/// Carga las empresas de demostración (en Fase 1.1 vendrán de `/api/empresas`).
+/// Carga las empresas de demostración (respaldo si la API no responde).
 fn cargar_empresas_demo() -> Vec<Empresa> {
     datos_semilla_empresas()
 }
@@ -207,33 +210,95 @@ fn cargar_personas_demo(ids_empresas: &[uuid::Uuid]) -> Vec<Persona> {
     lista
 }
 
-/// Vista del panel principal con tarjetas y resumen.
+/// Recarga empresas desde la API; usa demo solo si aún no hay nada.
+fn recargar_empresas(mut empresas: Signal<Vec<Empresa>>) {
+    spawn(async move {
+        match cliente::listar_empresas().await {
+            Ok(lista) => empresas.set(lista),
+            Err(_) if empresas.read().is_empty() => empresas.set(cargar_empresas_demo()),
+            Err(_) => {}
+        }
+    });
+}
+
+/// Recarga personas desde la API; usa demo solo si aún no hay nada.
+fn recargar_personas(mut personas: Signal<Vec<Persona>>, ids_empresas: Vec<uuid::Uuid>) {
+    spawn(async move {
+        match cliente::listar_personas().await {
+            Ok(lista) => personas.set(lista),
+            Err(_) if personas.read().is_empty() => {
+                personas.set(cargar_personas_demo(&ids_empresas))
+            }
+            Err(_) => {}
+        }
+    });
+}
+
+/// Recarga oportunidades desde la API; usa demo solo si aún no hay nada.
+fn recargar_oportunidades(
+    mut oportunidades: Signal<Vec<Oportunidad>>,
+    ids_empresas: Vec<uuid::Uuid>,
+    ids_personas: Vec<uuid::Uuid>,
+) {
+    spawn(async move {
+        match cliente::listar_oportunidades().await {
+            Ok(lista) => oportunidades.set(lista),
+            Err(_) if oportunidades.read().is_empty() => {
+                if !ids_empresas.is_empty() && !ids_personas.is_empty() {
+                    oportunidades.set(datos_semilla_oportunidades(&ids_empresas, &ids_personas));
+                }
+            }
+            Err(_) => {}
+        }
+    });
+}
+
+/// Vista del panel principal con tarjetas y resumen (datos vivos de la API).
 #[component]
 fn Panel() -> Element {
     let idioma = IDIOMA();
     let t = textos(idioma);
-    let empresas: Signal<Vec<Empresa>> = use_signal(cargar_empresas_demo);
-    let personas: Signal<Vec<Persona>> = use_signal(|| {
-        let ids: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
-        cargar_personas_demo(&ids)
-    });
-    let oportunidades: Signal<Vec<Oportunidad>> = use_signal(|| {
-        let ids_empresas: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
-        let ids_personas: Vec<_> = personas.read().iter().map(|p| p.id).collect();
-        if ids_empresas.is_empty() || ids_personas.is_empty() {
-            return vec![];
-        }
-        datos_semilla_oportunidades(&ids_empresas, &ids_personas)
+    let mut empresas = use_signal(Vec::<Empresa>::new);
+    let mut personas = use_signal(Vec::<Persona>::new);
+    let mut oportunidades = use_signal(Vec::<Oportunidad>::new);
+    let mut en_linea = use_signal(|| false);
+
+    use_effect(move || {
+        spawn(async move {
+            match cliente::listar_empresas().await {
+                Ok(lista_e) => {
+                    en_linea.set(true);
+                    let per =
+                        cliente::listar_personas().await.unwrap_or_default();
+                    let opp =
+                        cliente::listar_oportunidades().await.unwrap_or_default();
+                    empresas.set(lista_e);
+                    personas.set(per);
+                    oportunidades.set(opp);
+                }
+                Err(_) => {
+                    let demo_e = cargar_empresas_demo();
+                    let ids: Vec<_> = demo_e.iter().map(|e| e.id).collect();
+                    let demo_p = cargar_personas_demo(&ids);
+                    let ids_p: Vec<_> = demo_p.iter().map(|p| p.id).collect();
+                    let demo_o = datos_semilla_oportunidades(&ids, &ids_p);
+                    empresas.set(demo_e);
+                    personas.set(demo_p);
+                    oportunidades.set(demo_o);
+                }
+            }
+        });
     });
 
     let resumen = calcular_resumen(&empresas.read(), &personas.read(), &oportunidades.read());
     let total = (resumen.valor_tuberia + resumen.valor_ganado).max(1) as f64;
     let porcentaje_abierto = (resumen.valor_tuberia as f64 / total * 100.0) as u32;
+    let estado_api = if en_linea() { "● API :3001" } else { "○ demo local" };
 
     rsx! {
         BarraSuperior {
             titulo: t.panel.to_string(),
-            subtitulo: t.bienvenida_panel.to_string(),
+            subtitulo: format!("{} · {estado_api}", t.bienvenida_panel),
         }
         div { class: "cards",
             div { class: "card",
@@ -257,7 +322,7 @@ fn Panel() -> Element {
             }
             div { class: "card",
                 div { class: "card-label", "{t.motor_api}" }
-                div { class: "card-value small", "axum :3001" }
+                div { class: "card-value small", "{estado_api}" }
                 div { class: "card-sub", "GET /api/panel → postgres:18" }
             }
         }
@@ -303,16 +368,22 @@ fn Panel() -> Element {
     }
 }
 
-/// Vista de personas con búsqueda en español.
+/// Vista de personas: lista viva con búsqueda, alta y baja.
 #[component]
 fn VistaPersonas() -> Element {
     let idioma = IDIOMA();
     let t = textos(idioma);
     let mut busqueda = use_signal(String::new);
-    let empresas = use_signal(cargar_empresas_demo);
-    let personas = use_signal(|| {
-        let ids: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
-        cargar_personas_demo(&ids)
+    let personas = use_signal(Vec::<Persona>::new);
+    let mut listo = use_signal(|| false);
+    let mut aviso = use_signal(String::new);
+    let mut nombre = use_signal(String::new);
+    let mut apellido = use_signal(String::new);
+    let mut correo = use_signal(String::new);
+
+    use_effect(move || {
+        recargar_personas(personas, vec![]);
+        listo.set(true);
     });
 
     let consulta = busqueda.read().to_lowercase();
@@ -328,13 +399,28 @@ fn VistaPersonas() -> Element {
         .collect();
     let total = filas.len();
 
-    let nombre_empresa = move |id: Option<uuid::Uuid>| -> String {
-        empresas
-            .read()
-            .iter()
-            .find(|e| Some(e.id) == id)
-            .map(|e| e.nombre.clone())
-            .unwrap_or_else(|| "—".into())
+    let crear = move |_| {
+        let datos = CrearPersona {
+            nombre: nombre.read().clone(),
+            apellido: apellido.read().clone(),
+            correo: correo.read().clone(),
+            telefono: String::new(),
+            puesto: String::new(),
+            empresa_id: None,
+            ciudad: String::new(),
+        };
+        spawn(async move {
+            match cliente::crear_persona(&datos).await {
+                Ok(_) => {
+                    aviso.set(String::new());
+                    nombre.set(String::new());
+                    apellido.set(String::new());
+                    correo.set(String::new());
+                    recargar_personas(personas, vec![]);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
     };
 
     rsx! {
@@ -350,30 +436,76 @@ fn VistaPersonas() -> Element {
                 oninput: move |e| busqueda.set(e.value()),
             }
             span { class: "pill", "{t.tabla}" }
-            span { class: "pill dim", "{t.kanban}" }
+        }
+        div { class: "panel form",
+            label { if idioma == Idioma::Es { "Nueva persona" } else { "New person" } }
+            div { class: "row",
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Nombre" } else { "First name" },
+                    value: "{nombre}",
+                    oninput: move |e| nombre.set(e.value()),
+                }
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Apellidos" } else { "Last name" },
+                    value: "{apellido}",
+                    oninput: move |e| apellido.set(e.value()),
+                }
+                input {
+                    class: "input",
+                    placeholder: "{t.correo}",
+                    value: "{correo}",
+                    oninput: move |e| correo.set(e.value()),
+                }
+                button { class: "btn-primary", onclick: crear, "{t.nueva}" }
+            }
+            if !aviso.read().is_empty() {
+                p { class: "muted small", "{aviso}" }
+            }
         }
         div { class: "panel",
-            table { class: "tbl",
-                thead {
-                    tr {
-                        th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
-                        th { "{t.correo}" }
-                        th { if idioma == Idioma::Es { "Puesto" } else { "Role" } }
-                        th { if idioma == Idioma::Es { "Empresa" } else { "Company" } }
-                        th { if idioma == Idioma::Es { "Ciudad" } else { "City" } }
+            if !listo() {
+                p { class: "muted", "…" }
+            } else {
+                table { class: "tbl",
+                    thead {
+                        tr {
+                            th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
+                            th { "{t.correo}" }
+                            th { if idioma == Idioma::Es { "Puesto" } else { "Role" } }
+                            th { if idioma == Idioma::Es { "Ciudad" } else { "City" } }
+                            th { "" }
+                        }
                     }
-                }
-                tbody {
-                    for p in filas.iter() {
-                        tr { key: "{p.id}",
-                            td { class: "strong",
-                                span { class: "mini-avatar", "{p.iniciales()}" }
-                                "{p.nombre_completo()}"
+                    tbody {
+                        for p in filas.iter() {
+                            tr { key: "{p.id}",
+                                td { class: "strong",
+                                    span { class: "mini-avatar", "{p.iniciales()}" }
+                                    "{p.nombre_completo()}"
+                                }
+                                td { class: "muted", "{p.correo}" }
+                                td { "{p.puesto}" }
+                                td { "{p.ciudad}" }
+                                td {
+                                    button {
+                                        class: "btn-mini",
+                                        title: "✕",
+                                        onclick: {
+                                            let id = p.id;
+                                            move |_| {
+                                                spawn(async move {
+                                                    if cliente::eliminar_persona(id).await.is_ok() {
+                                                        recargar_personas(personas, vec![]);
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        "✕"
+                                    }
+                                }
                             }
-                            td { class: "muted", "{p.correo}" }
-                            td { "{p.puesto}" }
-                            td { "{nombre_empresa(p.empresa_id)}" }
-                            td { "{p.ciudad}" }
                         }
                     }
                 }
@@ -382,12 +514,21 @@ fn VistaPersonas() -> Element {
     }
 }
 
-/// Vista de empresas con tarjetas y búsqueda.
+/// Vista de empresas: tarjetas vivas con alta, búsqueda y baja.
 #[component]
 fn VistaEmpresas() -> Element {
-    let t = textos(IDIOMA());
+    let idioma = IDIOMA();
+    let t = textos(idioma);
     let mut busqueda = use_signal(String::new);
-    let empresas = use_signal(cargar_empresas_demo);
+    let empresas = use_signal(Vec::<Empresa>::new);
+    let mut aviso = use_signal(String::new);
+    let mut nombre = use_signal(String::new);
+    let mut dominio = use_signal(String::new);
+    let mut ciudad = use_signal(String::new);
+
+    use_effect(move || {
+        recargar_empresas(empresas);
+    });
 
     let consulta = busqueda.read().to_lowercase();
     let filas: Vec<Empresa> = empresas
@@ -403,6 +544,28 @@ fn VistaEmpresas() -> Element {
         .collect();
     let total_empleados: i32 = filas.iter().map(|e| e.empleados).sum();
 
+    let crear = move |_| {
+        let datos = CrearEmpresa {
+            nombre: nombre.read().clone(),
+            dominio: dominio.read().clone(),
+            sector: String::new(),
+            empleados: 0,
+            ciudad: ciudad.read().clone(),
+        };
+        spawn(async move {
+            match cliente::crear_empresa(&datos).await {
+                Ok(_) => {
+                    aviso.set(String::new());
+                    nombre.set(String::new());
+                    dominio.set(String::new());
+                    ciudad.set(String::new());
+                    recargar_empresas(empresas);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
     rsx! {
         BarraSuperior {
             titulo: t.empresas.to_string(),
@@ -414,6 +577,33 @@ fn VistaEmpresas() -> Element {
                 placeholder: "{t.buscar}…",
                 value: "{busqueda}",
                 oninput: move |e| busqueda.set(e.value()),
+            }
+        }
+        div { class: "panel form",
+            label { if idioma == Idioma::Es { "Nueva empresa" } else { "New company" } }
+            div { class: "row",
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Nombre *" } else { "Name *" },
+                    value: "{nombre}",
+                    oninput: move |e| nombre.set(e.value()),
+                }
+                input {
+                    class: "input",
+                    placeholder: "dominio.com",
+                    value: "{dominio}",
+                    oninput: move |e| dominio.set(e.value()),
+                }
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Ciudad" } else { "City" },
+                    value: "{ciudad}",
+                    oninput: move |e| ciudad.set(e.value()),
+                }
+                button { class: "btn-primary", onclick: crear, "{t.nueva}" }
+            }
+            if !aviso.read().is_empty() {
+                p { class: "muted small", "{aviso}" }
             }
         }
         div { class: "grid2",
@@ -430,6 +620,21 @@ fn VistaEmpresas() -> Element {
                     div { class: "cc-meta",
                         span { "👥 {e.empleados}" }
                         span { "📍 {e.ciudad}" }
+                        button {
+                            class: "btn-mini",
+                            title: "✕",
+                            onclick: {
+                                let id = e.id;
+                                move |_| {
+                                    spawn(async move {
+                                        if cliente::eliminar_empresa(id).await.is_ok() {
+                                            recargar_empresas(empresas);
+                                        }
+                                    });
+                                }
+                            },
+                            "✕"
+                        }
                     }
                 }
             }
@@ -437,33 +642,40 @@ fn VistaEmpresas() -> Element {
     }
 }
 
-/// Vista kanban de oportunidades: clic en ▶ para avanzar de etapa.
+/// Vista kanban de oportunidades: datos vivos y ▶ que persiste en la API.
 #[component]
 fn VistaOportunidades() -> Element {
     let idioma = IDIOMA();
     let t = textos(idioma);
-    let empresas = use_signal(cargar_empresas_demo);
-    let personas = use_signal(|| {
-        let ids: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
-        cargar_personas_demo(&ids)
-    });
-    let mut oportunidades = use_signal(|| {
-        let ids_empresas: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
-        let ids_personas: Vec<_> = personas.read().iter().map(|p| p.id).collect();
-        if ids_empresas.is_empty() || ids_personas.is_empty() {
-            return vec![];
-        }
-        datos_semilla_oportunidades(&ids_empresas, &ids_personas)
+    let oportunidades = use_signal(Vec::<Oportunidad>::new);
+    let mut aviso = use_signal(String::new);
+    let mut nombre = use_signal(String::new);
+    let mut importe_txt = use_signal(String::new);
+
+    use_effect(move || {
+        recargar_oportunidades(oportunidades, vec![], vec![]);
     });
 
     let total: i64 = oportunidades.read().iter().map(|o| o.importe).sum();
-    let nombre_empresa = move |id: Option<uuid::Uuid>| {
-        empresas
-            .read()
-            .iter()
-            .find(|e| Some(e.id) == id)
-            .map(|e| e.nombre.clone())
-            .unwrap_or_else(|| "—".into())
+
+    let crear = move |_| {
+        let datos = CrearOportunidad {
+            nombre: nombre.read().clone(),
+            importe: importe_txt.read().parse().unwrap_or(0),
+            etapa: EtapaOportunidad::Nueva,
+            empresa_id: None,
+        };
+        spawn(async move {
+            match cliente::crear_oportunidad(&datos).await {
+                Ok(_) => {
+                    aviso.set(String::new());
+                    nombre.set(String::new());
+                    importe_txt.set(String::new());
+                    recargar_oportunidades(oportunidades, vec![], vec![]);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
     };
 
     rsx! {
@@ -473,6 +685,27 @@ fn VistaOportunidades() -> Element {
                 "${total} · {}",
                 if idioma == Idioma::Es { "pulsa ▶ para avanzar de etapa" } else { "click ▶ to advance stage" }
             ),
+        }
+        div { class: "panel form",
+            label { if idioma == Idioma::Es { "Nueva oportunidad" } else { "New opportunity" } }
+            div { class: "row",
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Nombre *" } else { "Name *" },
+                    value: "{nombre}",
+                    oninput: move |e| nombre.set(e.value()),
+                }
+                input {
+                    class: "input",
+                    placeholder: "$",
+                    value: "{importe_txt}",
+                    oninput: move |e| importe_txt.set(e.value()),
+                }
+                button { class: "btn-primary", onclick: crear, "{t.nueva}" }
+            }
+            if !aviso.read().is_empty() {
+                p { class: "muted small", "{aviso}" }
+            }
         }
         div { class: "kanban",
             for etapa in EtapaOportunidad::todas() {
@@ -496,7 +729,6 @@ fn VistaOportunidades() -> Element {
                     for op in oportunidades.read().iter().filter(|o| &o.etapa == etapa).cloned().collect::<Vec<_>>() {
                         div { class: "opp-card", key: "{op.id}",
                             div { class: "opp-name", "{op.nombre}" }
-                            div { class: "opp-sub", "{nombre_empresa(op.empresa_id)}" }
                             div { class: "opp-foot",
                                 span { class: "opp-amt", "${op.importe}" }
                                 span { class: "opp-prob", "{etapa.probabilidad()}%" }
@@ -505,11 +737,18 @@ fn VistaOportunidades() -> Element {
                                     title: if idioma == Idioma::Es { "Avanzar etapa" } else { "Advance stage" },
                                     onclick: {
                                         let id = op.id;
+                                        let siguiente = op.etapa.siguiente().como_texto();
                                         move |_| {
-                                            let mut lista = oportunidades.write();
-                                            if let Some(o) = lista.iter_mut().find(|x| x.id == id) {
-                                                o.etapa = o.etapa.siguiente();
-                                            }
+                                            spawn(async move {
+                                                match cliente::mover_etapa(id, siguiente).await {
+                                                    Ok(_) => recargar_oportunidades(
+                                                        oportunidades,
+                                                        vec![],
+                                                        vec![],
+                                                    ),
+                                                    Err(mensaje) => aviso.set(mensaje),
+                                                }
+                                            });
                                         }
                                     },
                                     "▶"
@@ -541,9 +780,9 @@ fn VistaAjustes() -> Element {
             input { class: "input", value: "postgres://occb:occb@localhost:5432/occb" }
             p { class: "muted small",
                 if IDIOMA() == Idioma::Es {
-                    "El CRUD pasa solo por funciones SECURITY DEFINER con RLS. Ver carpeta /migrations."
+                    "El frontal lee y escribe en la API; el CRUD pasa solo por funciones seguras con RLS. Ver /migrations."
                 } else {
-                    "CRUD goes only through SECURITY DEFINER functions with RLS. See /migrations."
+                    "The frontend reads and writes through the API; CRUD goes only through secure functions with RLS. See /migrations."
                 }
             }
             div { class: "lang-row",
@@ -565,7 +804,7 @@ fn VistaAjustes() -> Element {
     }
 }
 
-/// Pantalla de acceso (demo sin autenticación real en Fase 1).
+/// Pantalla de acceso (demo sin autenticación real en esta fase).
 #[component]
 fn VistaAcceso() -> Element {
     let t = textos(IDIOMA());

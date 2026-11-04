@@ -30,6 +30,10 @@ COPY crates/api ./crates/api
 COPY crates/app ./crates/app
 
 WORKDIR /codigo/crates/app
+
+# URL de la API para el frontal (el navegador la llama; por defecto localhost).
+ARG API_BASE_URL=http://127.0.0.1:3001
+ENV API_BASE_URL=$API_BASE_URL
 RUN dx build --web @client --release
 
 # ---------- Etapa 2: servido ----------

@@ -28,6 +28,21 @@ services:
       retries: 10
     volumes:
       - datos_redis:/data
+  api:
+    build:
+      context: .
+      dockerfile: ./crates/api/Dockerfile
+    image: occb-api:local
+    container_name: occb-api
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgres://occb:occb@bd:5432/occb
+      PUERTO_API: 3001
+      RUST_LOG: info
+    depends_on:
+      bd:
+        condition: service_healthy
   frontal:
     build:
       context: .

@@ -3890,6 +3890,7 @@ dependencies = [
  "chrono",
  "dioxus",
  "occb-core",
+ "reqwest",
  "serde",
  "serde_json",
  "uuid",
