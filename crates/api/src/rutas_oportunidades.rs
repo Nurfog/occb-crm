@@ -112,6 +112,42 @@ pub async fn eliminar(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// PATCH /api/oportunidades/:id — edición completa vía `actualizar_oportunidad()`.
+pub async fn actualizar(
+    State(pool): State<PgPool>,
+    Path(id): Path<Uuid>,
+    Json(cuerpo): Json<CuerpoOportunidad>,
+) -> Result<Json<occb_core::Oportunidad>, ErrorApi> {
+    cuerpo
+        .validate()
+        .map_err(|e| ErrorApi::Validacion(e.to_string()))?;
+    let etapa = cuerpo.etapa.as_deref().unwrap_or("nueva");
+    let etapa_enum = occb_core::EtapaOportunidad::desde_texto(&etapa.to_lowercase())
+        .ok_or_else(|| {
+            ErrorApi::Validacion(
+                "Etapa no válida. Use: nueva, contacto, reunion, propuesta o cliente.".into(),
+            )
+        })?;
+    let entrada = occb_core::validar_oportunidad(occb_core::CrearOportunidad {
+        nombre: cuerpo.nombre,
+        importe: cuerpo.importe.unwrap_or(0),
+        etapa: etapa_enum,
+        empresa_id: cuerpo.empresa_id,
+    })?;
+    let fila = sqlx::query(
+        "select * from actualizar_oportunidad($1, $2, $3, $4, $5)",
+    )
+    .bind(id)
+    .bind(&entrada.nombre)
+    .bind(entrada.importe)
+    .bind(entrada.etapa.como_texto())
+    .bind(entrada.empresa_id)
+    .fetch_optional(&pool)
+    .await?
+    .ok_or_else(|| ErrorApi::NoEncontrado("Oportunidad no encontrada.".into()))?;
+    Ok(Json(bd::fila_a_oportunidad(&fila)))
+}
+
 /// GET /api/panel — resumen calculado en la base de datos.
 pub async fn panel(
     State(pool): State<PgPool>,

@@ -62,7 +62,9 @@ async fn main() {
         )
         .route(
             "/api/personas/{id}",
-            get(rutas_personas::obtener).delete(rutas_personas::eliminar),
+            get(rutas_personas::obtener)
+                .patch(rutas_personas::actualizar)
+                .delete(rutas_personas::eliminar),
         )
         .route(
             "/api/oportunidades",
@@ -74,7 +76,8 @@ async fn main() {
         )
         .route(
             "/api/oportunidades/{id}",
-            axum::routing::delete(rutas_oportunidades::eliminar),
+            axum::routing::patch(rutas_oportunidades::actualizar)
+                .delete(rutas_oportunidades::eliminar),
         )
         .route("/api/panel", get(rutas_oportunidades::panel))
         // Alias en inglés (compatibilidad con el MVP anterior).

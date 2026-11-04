@@ -88,6 +88,11 @@ pub async fn listar_empresas() -> Result<Vec<Empresa>, String> {
     obtener_json("/api/empresas?limite=100").await
 }
 
+/// Una empresa por id (`obtener_empresa()`).
+pub async fn obtener_empresa(id: Uuid) -> Result<Empresa, String> {
+    obtener_json(&format!("/api/empresas/{id}")).await
+}
+
 /// Crea una empresa vía `crear_empresa()` (valida en API y en PG).
 pub async fn crear_empresa(datos: &CrearEmpresa) -> Result<Empresa, String> {
     enviar_json("POST", "/api/empresas", datos).await
@@ -98,9 +103,19 @@ pub async fn eliminar_empresa(id: Uuid) -> Result<(), String> {
     borrar(&format!("/api/empresas/{id}")).await
 }
 
+/// Actualiza una empresa vía `actualizar_empresa()`.
+pub async fn actualizar_empresa(id: Uuid, datos: &CrearEmpresa) -> Result<Empresa, String> {
+    enviar_json("PATCH", &format!("/api/empresas/{id}"), datos).await
+}
+
 /// Lista de personas desde `listar_personas()`.
 pub async fn listar_personas() -> Result<Vec<Persona>, String> {
     obtener_json("/api/personas?limite=100").await
+}
+
+/// Una persona por id (`obtener_persona()`).
+pub async fn obtener_persona(id: Uuid) -> Result<Persona, String> {
+    obtener_json(&format!("/api/personas/{id}")).await
 }
 
 /// Crea una persona vía `crear_persona()`.
@@ -113,6 +128,11 @@ pub async fn eliminar_persona(id: Uuid) -> Result<(), String> {
     borrar(&format!("/api/personas/{id}")).await
 }
 
+/// Actualiza una persona vía `actualizar_persona()`.
+pub async fn actualizar_persona(id: Uuid, datos: &CrearPersona) -> Result<Persona, String> {
+    enviar_json("PATCH", &format!("/api/personas/{id}"), datos).await
+}
+
 /// Lista de oportunidades desde `listar_oportunidades()`.
 pub async fn listar_oportunidades() -> Result<Vec<Oportunidad>, String> {
     obtener_json("/api/oportunidades?limite=200").await
@@ -121,6 +141,11 @@ pub async fn listar_oportunidades() -> Result<Vec<Oportunidad>, String> {
 /// Crea una oportunidad vía `crear_oportunidad()`.
 pub async fn crear_oportunidad(datos: &CrearOportunidad) -> Result<Oportunidad, String> {
     enviar_json("POST", "/api/oportunidades", datos).await
+}
+
+/// Actualiza una oportunidad vía `actualizar_oportunidad()`.
+pub async fn actualizar_oportunidad(id: Uuid, datos: &CrearOportunidad) -> Result<Oportunidad, String> {
+    enviar_json("PATCH", &format!("/api/oportunidades/{id}"), datos).await
 }
 
 /// Mueve una oportunidad de etapa vía `mover_etapa_oportunidad()`.

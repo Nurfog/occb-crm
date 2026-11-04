@@ -106,3 +106,38 @@ pub async fn eliminar(
         .ok_or_else(|| ErrorApi::NoEncontrado("Persona no encontrada.".into()))?;
     Ok(StatusCode::NO_CONTENT)
 }
+
+/// PATCH /api/personas/:id — valida y llama a `actualizar_persona()`.
+pub async fn actualizar(
+    State(pool): State<PgPool>,
+    Path(id): Path<Uuid>,
+    Json(cuerpo): Json<CuerpoPersona>,
+) -> Result<Json<occb_core::Persona>, ErrorApi> {
+    cuerpo
+        .validate()
+        .map_err(|e| ErrorApi::Validacion(e.to_string()))?;
+    let entrada = occb_core::validar_persona(occb_core::CrearPersona {
+        nombre: cuerpo.nombre,
+        apellido: cuerpo.apellido,
+        correo: cuerpo.correo,
+        telefono: cuerpo.telefono.unwrap_or_default(),
+        puesto: cuerpo.puesto.unwrap_or_default(),
+        empresa_id: cuerpo.empresa_id,
+        ciudad: cuerpo.ciudad.unwrap_or_default(),
+    })?;
+    let fila = sqlx::query(
+        "select * from actualizar_persona($1, $2, $3, $4, $5, $6, $7, $8)",
+    )
+    .bind(id)
+    .bind(&entrada.nombre)
+    .bind(&entrada.apellido)
+    .bind(&entrada.correo)
+    .bind(&entrada.telefono)
+    .bind(&entrada.puesto)
+    .bind(entrada.empresa_id)
+    .bind(&entrada.ciudad)
+    .fetch_optional(&pool)
+    .await?
+    .ok_or_else(|| ErrorApi::NoEncontrado("Persona no encontrada.".into()))?;
+    Ok(Json(bd::fila_a_persona(&fila)))
+}

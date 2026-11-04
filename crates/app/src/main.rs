@@ -8,6 +8,7 @@
 mod cliente;
 
 use dioxus::prelude::*;
+use uuid::Uuid;
 use occb_core::{
     CrearEmpresa, CrearOportunidad, CrearPersona, Empresa, EtapaOportunidad, Idioma, Oportunidad,
     Persona, calcular_resumen, datos_semilla_empresas, datos_semilla_oportunidades,
@@ -42,8 +43,12 @@ enum Ruta {
         Panel {},
         #[route("/personas")]
         VistaPersonas {},
+        #[route("/personas/:id")]
+        DetallePersona { id: Uuid },
         #[route("/empresas")]
         VistaEmpresas {},
+        #[route("/empresas/:id")]
+        DetalleEmpresa { id: Uuid },
         #[route("/oportunidades")]
         VistaOportunidades {},
         #[route("/ajustes")]
@@ -375,14 +380,24 @@ fn VistaPersonas() -> Element {
     let t = textos(idioma);
     let mut busqueda = use_signal(String::new);
     let personas = use_signal(Vec::<Persona>::new);
+    let mut empresas = use_signal(Vec::<Empresa>::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
     let mut nombre = use_signal(String::new);
     let mut apellido = use_signal(String::new);
     let mut correo = use_signal(String::new);
+    let mut telefono = use_signal(String::new);
+    let mut puesto = use_signal(String::new);
+    let mut ciudad = use_signal(String::new);
+    let mut empresa_sel = use_signal(String::new);
 
     use_effect(move || {
         recargar_personas(personas, vec![]);
+        spawn(async move {
+            if let Ok(lista) = cliente::listar_empresas().await {
+                empresas.set(lista);
+            }
+        });
         listo.set(true);
     });
 
@@ -400,14 +415,19 @@ fn VistaPersonas() -> Element {
     let total = filas.len();
 
     let crear = move |_| {
+        let empresa_id = if empresa_sel.read().is_empty() {
+            None
+        } else {
+            Uuid::parse_str(&empresa_sel.read()).ok()
+        };
         let datos = CrearPersona {
             nombre: nombre.read().clone(),
             apellido: apellido.read().clone(),
             correo: correo.read().clone(),
-            telefono: String::new(),
-            puesto: String::new(),
-            empresa_id: None,
-            ciudad: String::new(),
+            telefono: telefono.read().clone(),
+            puesto: puesto.read().clone(),
+            empresa_id,
+            ciudad: ciudad.read().clone(),
         };
         spawn(async move {
             match cliente::crear_persona(&datos).await {
@@ -416,6 +436,10 @@ fn VistaPersonas() -> Element {
                     nombre.set(String::new());
                     apellido.set(String::new());
                     correo.set(String::new());
+                    telefono.set(String::new());
+                    puesto.set(String::new());
+                    ciudad.set(String::new());
+                    empresa_sel.set(String::new());
                     recargar_personas(personas, vec![]);
                 }
                 Err(mensaje) => aviso.set(mensaje),
@@ -458,6 +482,33 @@ fn VistaPersonas() -> Element {
                     value: "{correo}",
                     oninput: move |e| correo.set(e.value()),
                 }
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Teléfono" } else { "Phone" },
+                    value: "{telefono}",
+                    oninput: move |e| telefono.set(e.value()),
+                }
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Puesto" } else { "Role" },
+                    value: "{puesto}",
+                    oninput: move |e| puesto.set(e.value()),
+                }
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Ciudad" } else { "City" },
+                    value: "{ciudad}",
+                    oninput: move |e| ciudad.set(e.value()),
+                }
+                select {
+                    class: "input",
+                    value: "{empresa_sel}",
+                    onchange: move |e| empresa_sel.set(e.value()),
+                    option { value: "", "—" }
+                    for e in empresas.read().iter() {
+                        option { value: "{e.id}", "{e.nombre}" }
+                    }
+                }
                 button { class: "btn-primary", onclick: crear, "{t.nueva}" }
             }
             if !aviso.read().is_empty() {
@@ -483,7 +534,9 @@ fn VistaPersonas() -> Element {
                             tr { key: "{p.id}",
                                 td { class: "strong",
                                     span { class: "mini-avatar", "{p.iniciales()}" }
-                                    "{p.nombre_completo()}"
+                                    Link { to: Ruta::DetallePersona { id: p.id }, class: "link",
+                                        "{p.nombre_completo()}"
+                                    }
                                 }
                                 td { class: "muted", "{p.correo}" }
                                 td { "{p.puesto}" }
@@ -524,6 +577,8 @@ fn VistaEmpresas() -> Element {
     let mut aviso = use_signal(String::new);
     let mut nombre = use_signal(String::new);
     let mut dominio = use_signal(String::new);
+    let mut sector = use_signal(String::new);
+    let mut empleados_txt = use_signal(String::new);
     let mut ciudad = use_signal(String::new);
 
     use_effect(move || {
@@ -548,8 +603,8 @@ fn VistaEmpresas() -> Element {
         let datos = CrearEmpresa {
             nombre: nombre.read().clone(),
             dominio: dominio.read().clone(),
-            sector: String::new(),
-            empleados: 0,
+            sector: sector.read().clone(),
+            empleados: empleados_txt.read().parse().unwrap_or(0),
             ciudad: ciudad.read().clone(),
         };
         spawn(async move {
@@ -558,6 +613,8 @@ fn VistaEmpresas() -> Element {
                     aviso.set(String::new());
                     nombre.set(String::new());
                     dominio.set(String::new());
+                    sector.set(String::new());
+                    empleados_txt.set(String::new());
                     ciudad.set(String::new());
                     recargar_empresas(empresas);
                 }
@@ -600,6 +657,18 @@ fn VistaEmpresas() -> Element {
                     value: "{ciudad}",
                     oninput: move |e| ciudad.set(e.value()),
                 }
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Sector" } else { "Industry" },
+                    value: "{sector}",
+                    oninput: move |e| sector.set(e.value()),
+                }
+                input {
+                    class: "input",
+                    placeholder: "👥",
+                    value: "{empleados_txt}",
+                    oninput: move |e| empleados_txt.set(e.value()),
+                }
                 button { class: "btn-primary", onclick: crear, "{t.nueva}" }
             }
             if !aviso.read().is_empty() {
@@ -612,7 +681,11 @@ fn VistaEmpresas() -> Element {
                     div { class: "cc-head",
                         div { class: "cc-logo", "{e.nombre.chars().next().unwrap_or('E')}" }
                         div {
-                            div { class: "strong", "{e.nombre}" }
+                            div { class: "strong",
+                                Link { to: Ruta::DetalleEmpresa { id: e.id }, class: "link",
+                                    "{e.nombre}"
+                                }
+                            }
                             div { class: "muted small", "{e.dominio}" }
                         }
                         span { class: "pill", "{e.sector}" }
@@ -648,22 +721,37 @@ fn VistaOportunidades() -> Element {
     let idioma = IDIOMA();
     let t = textos(idioma);
     let oportunidades = use_signal(Vec::<Oportunidad>::new);
+    let mut empresas = use_signal(Vec::<Empresa>::new);
     let mut aviso = use_signal(String::new);
     let mut nombre = use_signal(String::new);
     let mut importe_txt = use_signal(String::new);
+    let mut empresa_sel = use_signal(String::new);
+    let mut editando = use_signal(|| None::<Uuid>);
+    let mut nombre_ed = use_signal(String::new);
+    let mut importe_ed = use_signal(String::new);
 
     use_effect(move || {
         recargar_oportunidades(oportunidades, vec![], vec![]);
+        spawn(async move {
+            if let Ok(lista) = cliente::listar_empresas().await {
+                empresas.set(lista);
+            }
+        });
     });
 
     let total: i64 = oportunidades.read().iter().map(|o| o.importe).sum();
 
     let crear = move |_| {
+        let empresa_id = if empresa_sel.read().is_empty() {
+            None
+        } else {
+            Uuid::parse_str(&empresa_sel.read()).ok()
+        };
         let datos = CrearOportunidad {
             nombre: nombre.read().clone(),
             importe: importe_txt.read().parse().unwrap_or(0),
             etapa: EtapaOportunidad::Nueva,
-            empresa_id: None,
+            empresa_id,
         };
         spawn(async move {
             match cliente::crear_oportunidad(&datos).await {
@@ -671,6 +759,7 @@ fn VistaOportunidades() -> Element {
                     aviso.set(String::new());
                     nombre.set(String::new());
                     importe_txt.set(String::new());
+                    empresa_sel.set(String::new());
                     recargar_oportunidades(oportunidades, vec![], vec![]);
                 }
                 Err(mensaje) => aviso.set(mensaje),
@@ -701,6 +790,15 @@ fn VistaOportunidades() -> Element {
                     value: "{importe_txt}",
                     oninput: move |e| importe_txt.set(e.value()),
                 }
+                select {
+                    class: "input",
+                    value: "{empresa_sel}",
+                    onchange: move |e| empresa_sel.set(e.value()),
+                    option { value: "", "—" }
+                    for e in empresas.read().iter() {
+                        option { value: "{e.id}", "{e.nombre}" }
+                    }
+                }
                 button { class: "btn-primary", onclick: crear, "{t.nueva}" }
             }
             if !aviso.read().is_empty() {
@@ -728,32 +826,335 @@ fn VistaOportunidades() -> Element {
                     }
                     for op in oportunidades.read().iter().filter(|o| &o.etapa == etapa).cloned().collect::<Vec<_>>() {
                         div { class: "opp-card", key: "{op.id}",
-                            div { class: "opp-name", "{op.nombre}" }
-                            div { class: "opp-foot",
-                                span { class: "opp-amt", "${op.importe}" }
-                                span { class: "opp-prob", "{etapa.probabilidad()}%" }
-                                button {
-                                    class: "btn-mini",
-                                    title: if idioma == Idioma::Es { "Avanzar etapa" } else { "Advance stage" },
-                                    onclick: {
-                                        let id = op.id;
-                                        let siguiente = op.etapa.siguiente().como_texto();
-                                        move |_| {
-                                            spawn(async move {
-                                                match cliente::mover_etapa(id, siguiente).await {
-                                                    Ok(_) => recargar_oportunidades(
-                                                        oportunidades,
-                                                        vec![],
-                                                        vec![],
-                                                    ),
-                                                    Err(mensaje) => aviso.set(mensaje),
-                                                }
-                                            });
-                                        }
-                                    },
-                                    "▶"
+                            if editando() == Some(op.id) {
+                                input {
+                                    class: "input",
+                                    value: "{nombre_ed}",
+                                    oninput: move |e| nombre_ed.set(e.value()),
+                                }
+                                input {
+                                    class: "input",
+                                    value: "{importe_ed}",
+                                    oninput: move |e| importe_ed.set(e.value()),
+                                }
+                                div { class: "opp-foot",
+                                    button {
+                                        class: "btn-mini",
+                                        onclick: {
+                                            let id = op.id;
+                                            let etapa_actual = op.etapa;
+                                            let empresa_actual = op.empresa_id;
+                                            move |_| {
+                                                let datos = CrearOportunidad {
+                                                    nombre: nombre_ed.read().clone(),
+                                                    importe: importe_ed.read().parse().unwrap_or(0),
+                                                    etapa: etapa_actual,
+                                                    empresa_id: empresa_actual,
+                                                };
+                                                spawn(async move {
+                                                    match cliente::actualizar_oportunidad(id, &datos).await {
+                                                        Ok(_) => {
+                                                            editando.set(None);
+                                                            recargar_oportunidades(
+                                                                oportunidades,
+                                                                vec![],
+                                                                vec![],
+                                                            );
+                                                        }
+                                                        Err(mensaje) => aviso.set(mensaje),
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        if idioma == Idioma::Es { "Guardar" } else { "Save" }
+                                    }
+                                    button {
+                                        class: "btn-mini",
+                                        onclick: move |_| editando.set(None),
+                                        "✕"
+                                    }
+                                }
+                            } else {
+                                div { class: "opp-name", "{op.nombre}" }
+                                div { class: "opp-foot",
+                                    span { class: "opp-amt", "${op.importe}" }
+                                    span { class: "opp-prob", "{etapa.probabilidad()}%" }
+                                    button {
+                                        class: "btn-mini",
+                                        title: "✎",
+                                        onclick: {
+                                            let (id, nomb, imp) = (op.id, op.nombre.clone(), op.importe.to_string());
+                                            move |_| {
+                                                nombre_ed.set(nomb.clone());
+                                                importe_ed.set(imp.clone());
+                                                editando.set(Some(id));
+                                            }
+                                        },
+                                        "✎"
+                                    }
+                                    button {
+                                        class: "btn-mini",
+                                        title: if idioma == Idioma::Es { "Avanzar etapa" } else { "Advance stage" },
+                                        onclick: {
+                                            let id = op.id;
+                                            let siguiente = op.etapa.siguiente().como_texto();
+                                            move |_| {
+                                                spawn(async move {
+                                                    match cliente::mover_etapa(id, siguiente).await {
+                                                        Ok(_) => recargar_oportunidades(
+                                                            oportunidades,
+                                                            vec![],
+                                                            vec![],
+                                                        ),
+                                                        Err(mensaje) => aviso.set(mensaje),
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        "▶"
+                                    }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Ficha de empresa: datos editables + personas y oportunidades relacionadas.
+#[component]
+fn DetalleEmpresa(id: Uuid) -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut empresa = use_signal(|| None::<Empresa>);
+    let mut personas_rel = use_signal(Vec::<Persona>::new);
+    let mut opps_rel = use_signal(Vec::<Oportunidad>::new);
+    let mut aviso = use_signal(String::new);
+    let mut listo = use_signal(|| false);
+    let mut nombre = use_signal(String::new);
+    let mut dominio = use_signal(String::new);
+    let mut sector = use_signal(String::new);
+    let mut empleados_txt = use_signal(String::new);
+    let mut ciudad = use_signal(String::new);
+
+    use_effect(move || {
+        spawn(async move {
+            match cliente::obtener_empresa(id).await {
+                Ok(e) => {
+                    nombre.set(e.nombre.clone());
+                    dominio.set(e.dominio.clone());
+                    sector.set(e.sector.clone());
+                    empleados_txt.set(e.empleados.to_string());
+                    ciudad.set(e.ciudad.clone());
+                    empresa.set(Some(e));
+                    if let Ok(p) = cliente::listar_personas().await {
+                        personas_rel.set(
+                            p.into_iter().filter(|x| x.empresa_id == Some(id)).collect(),
+                        );
+                    }
+                    if let Ok(o) = cliente::listar_oportunidades().await {
+                        opps_rel.set(o.into_iter().filter(|x| x.empresa_id == Some(id)).collect());
+                    }
+                    listo.set(true);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    });
+
+    let guardar = move |_| {
+        let datos = CrearEmpresa {
+            nombre: nombre.read().clone(),
+            dominio: dominio.read().clone(),
+            sector: sector.read().clone(),
+            empleados: empleados_txt.read().parse().unwrap_or(0),
+            ciudad: ciudad.read().clone(),
+        };
+        spawn(async move {
+            match cliente::actualizar_empresa(id, &datos).await {
+                Ok(e) => {
+                    aviso.set(String::new());
+                    empresa.set(Some(e));
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let titulo = empresa.read().as_ref().map(|e| e.nombre.clone()).unwrap_or_default();
+    rsx! {
+        BarraSuperior {
+            titulo: if titulo.is_empty() { "…".to_string() } else { titulo },
+            subtitulo: (if idioma == Idioma::Es { "Ficha de empresa" } else { "Company record" }).to_string(),
+        }
+        Link { to: Ruta::VistaEmpresas {}, class: "link", "← {t.empresas}" }
+        if !aviso.read().is_empty() && !listo() {
+            div { class: "panel",
+                p { class: "muted", "{aviso}" }
+            }
+        } else {
+            div { class: "panel form",
+                label { if idioma == Idioma::Es { "Datos (se guardan en la API)" } else { "Details (saved to the API)" } }
+                div { class: "row",
+                    input { class: "input", value: "{nombre}", oninput: move |e| nombre.set(e.value()) }
+                    input { class: "input", value: "{dominio}", oninput: move |e| dominio.set(e.value()) }
+                    input { class: "input", value: "{sector}", oninput: move |e| sector.set(e.value()) }
+                }
+                div { class: "row",
+                    input { class: "input", value: "{empleados_txt}", oninput: move |e| empleados_txt.set(e.value()) }
+                    input { class: "input", value: "{ciudad}", oninput: move |e| ciudad.set(e.value()) }
+                    button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                }
+                if !aviso.read().is_empty() {
+                    p { class: "muted small", "{aviso}" }
+                }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{personas_rel.read().len()} · {t.personas}"
+                    }
+                }
+                for p in personas_rel.read().iter() {
+                    div { class: "mini-row", key: "{p.id}",
+                        span { class: "mini-name",
+                            Link { to: Ruta::DetallePersona { id: p.id }, class: "link",
+                                "{p.nombre_completo()}"
+                            }
+                        }
+                        span { class: "mini-amt", "{p.puesto}" }
+                    }
+                }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{opps_rel.read().len()} · {t.oportunidades}"
+                    }
+                }
+                for o in opps_rel.read().iter() {
+                    div { class: "mini-row", key: "{o.id}",
+                        span { class: "mini-name", "{o.nombre}" }
+                        span { class: "mini-amt", "${o.importe}" }
+                        span { class: "stage stage-{o.etapa:?}", "{etiqueta_etapa(o.etapa, idioma)}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Ficha de persona: datos editables + enlace a su empresa.
+#[component]
+fn DetallePersona(id: Uuid) -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut persona = use_signal(|| None::<Persona>);
+    let mut empresas = use_signal(Vec::<Empresa>::new);
+    let mut aviso = use_signal(String::new);
+    let mut listo = use_signal(|| false);
+    let mut nombre = use_signal(String::new);
+    let mut apellido = use_signal(String::new);
+    let mut correo = use_signal(String::new);
+    let mut telefono = use_signal(String::new);
+    let mut puesto = use_signal(String::new);
+    let mut ciudad = use_signal(String::new);
+    let mut empresa_sel = use_signal(String::new);
+
+    use_effect(move || {
+        spawn(async move {
+            if let Ok(lista) = cliente::listar_empresas().await {
+                empresas.set(lista);
+            }
+            match cliente::obtener_persona(id).await {
+                Ok(p) => {
+                    nombre.set(p.nombre.clone());
+                    apellido.set(p.apellido.clone());
+                    correo.set(p.correo.clone());
+                    telefono.set(p.telefono.clone());
+                    puesto.set(p.puesto.clone());
+                    ciudad.set(p.ciudad.clone());
+                    empresa_sel.set(p.empresa_id.map(|u| u.to_string()).unwrap_or_default());
+                    persona.set(Some(p));
+                    listo.set(true);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    });
+
+    let guardar = move |_| {
+        let empresa_id = if empresa_sel.read().is_empty() {
+            None
+        } else {
+            Uuid::parse_str(&empresa_sel.read()).ok()
+        };
+        let datos = CrearPersona {
+            nombre: nombre.read().clone(),
+            apellido: apellido.read().clone(),
+            correo: correo.read().clone(),
+            telefono: telefono.read().clone(),
+            puesto: puesto.read().clone(),
+            empresa_id,
+            ciudad: ciudad.read().clone(),
+        };
+        spawn(async move {
+            match cliente::actualizar_persona(id, &datos).await {
+                Ok(p) => {
+                    aviso.set(String::new());
+                    persona.set(Some(p));
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let titulo = persona.read().as_ref().map(|p| p.nombre_completo()).unwrap_or_default();
+    let empresa_actual: Option<Uuid> = persona.read().as_ref().and_then(|p| p.empresa_id);
+    rsx! {
+        BarraSuperior {
+            titulo: if titulo.is_empty() { "…".to_string() } else { titulo },
+            subtitulo: (if idioma == Idioma::Es { "Ficha de persona" } else { "Person record" }).to_string(),
+        }
+        Link { to: Ruta::VistaPersonas {}, class: "link", "← {t.personas}" }
+        if !aviso.read().is_empty() && !listo() {
+            div { class: "panel",
+                p { class: "muted", "{aviso}" }
+            }
+        } else {
+            div { class: "panel form",
+                label { if idioma == Idioma::Es { "Datos (se guardan en la API)" } else { "Details (saved to the API)" } }
+                div { class: "row",
+                    input { class: "input", value: "{nombre}", oninput: move |e| nombre.set(e.value()) }
+                    input { class: "input", value: "{apellido}", oninput: move |e| apellido.set(e.value()) }
+                    input { class: "input", value: "{correo}", oninput: move |e| correo.set(e.value()) }
+                }
+                div { class: "row",
+                    input { class: "input", value: "{telefono}", oninput: move |e| telefono.set(e.value()) }
+                    input { class: "input", value: "{puesto}", oninput: move |e| puesto.set(e.value()) }
+                    input { class: "input", value: "{ciudad}", oninput: move |e| ciudad.set(e.value()) }
+                }
+                div { class: "row",
+                    select {
+                        class: "input",
+                        value: "{empresa_sel}",
+                        onchange: move |e| empresa_sel.set(e.value()),
+                        option { value: "", "—" }
+                        for e in empresas.read().iter() {
+                            option { value: "{e.id}", "{e.nombre}" }
+                        }
+                    }
+                    button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                }
+                if !aviso.read().is_empty() {
+                    p { class: "muted small", "{aviso}" }
+                }
+                if let Some(eid) = empresa_actual {
+                    p {
+                        Link { to: Ruta::DetalleEmpresa { id: eid }, class: "link",
+                            if idioma == Idioma::Es { "Ver empresa →" } else { "View company →" }
                         }
                     }
                 }
