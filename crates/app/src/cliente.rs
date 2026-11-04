@@ -64,14 +64,23 @@ where
     leer_cuerpo(respuesta).await
 }
 
-/// DELETE que solo exige éxito (muestra el `mensaje` de la API si falla).
+/// DELETE que solo exige éxito (el 204 no trae cuerpo; el mensaje solo se lee si falla).
 async fn borrar(ruta: &str) -> Result<(), String> {
     let respuesta = reqwest::Client::new()
         .delete(format!("{}{ruta}", base()))
         .send()
         .await
         .map_err(|_| "No se pudo conectar con la API. ¿Está en marcha?".to_string())?;
-    leer_cuerpo::<serde_json::Value>(respuesta).await.map(|_| ())
+    if respuesta.status().is_success() {
+        Ok(())
+    } else {
+        let cuerpo: serde_json::Value = respuesta.json().await.unwrap_or_default();
+        Err(cuerpo
+            .get("mensaje")
+            .and_then(|m| m.as_str())
+            .unwrap_or("La API devolvió un error.")
+            .to_string())
+    }
 }
 
 /// Lista de empresas desde `listar_empresas()`.
