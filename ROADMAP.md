@@ -59,7 +59,7 @@ Idioma por defecto español con i18n ES/EN en todo lo visible.
 
 ## Siguiente (por orden)
 
-### [*] Fase 1.6 — Territorio chileno (Región → Comuna)
+### ✅ Fase 1.6 — Territorio chileno (Región → Comuna)
 - ✅ Dataset oficial (16 regiones + 346 comunas CUT) validado y generado a código.
 - ✅ `core/territorio` con tests (regiones, comunas por región, validación cruzada).
 - ✅ Migración 009: tablas `regiones`/`comunas` + seed + columnas en
@@ -69,21 +69,21 @@ Idioma por defecto español con i18n ES/EN en todo lo visible.
   autocompleta ciudad, valida coherencia).
 - ✅ E2E: cascada filtra + guardado persiste códigos (pruebas 12–13).
 
-### [*] Fase E1 — Colegios y Admisión (track escolar)
+### ✅ Fase E1 — Colegios y Admisión (track escolar)
 Objetivo: el CRM habla de colegios, no de empresas; el embudo es admisión.
 Se ignoran las tablas `crm_sales_*` del sistema escolar externo: el vínculo con
 personas es nuestro.
 
-- [*] Directorio oficial (12.038 vigentes, RBD como clave) validado: comunas
+- ✅ Directorio oficial (12.038 vigentes, RBD como clave) validado: comunas
   calzan 100% con las 346 y regiones con las 16.
-- [*] Migración 010: tabla `colegios` + seed + `listar_colegios` (filtros por
+- ✅ Migración 010: tabla `colegios` + seed + `listar_colegios` (filtros por
   región/comuna/texto, ideal para traslados) + `obtener/crear/eliminar_colegio`.
-- [*] Retiro total de Empresas (tabla, funciones, API, UI, dominio).
-- [*] Oportunidades → Admisión: etapas contacto/postulante/evaluado/aceptado/
+- ✅ Retiro total de Empresas (tabla, funciones, API, UI, dominio).
+- ✅ Oportunidades → Admisión: etapas contacto/postulante/evaluado/aceptado/
   matriculado + columna `colegio_rbd`; personas sin `empresa_id`.
-- [*] UI: Colegios en el menú (directorio filtrable + registro + ficha con
+- ✅ UI: Colegios en el menú (directorio filtrable + registro + ficha con
   postulaciones), kanban de admisión, panel cuenta colegios.
-- [] E2E 13/13 adaptada (colegios CRUD por UI, kanban de admisión, fichas).
+- ✅ E2E 15/15 en verde (colegios CRUD por UI, kanban de admisión, fichas, territorio).
 
 ### ⬜ Fase E2 — Alumnos y Apoderados
 - ⬜ Tablas `alumnos` (RUT único con dígito verificador, nombres, curso/nivel,
@@ -305,7 +305,7 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Oportunidades | ✅ Funcional (CRUD + kanban + inline) | 1 + 1.5 |
 | Fichas y relacionados | ✅ Funcional | 1.5 |
 | Regiones y comunas | ✅ Funcional | 1.6 |
-| Colegios y Admisión | [*] En curso | E1 |
+| Colegios y Admisión | ✅ Funcional | E1 |
 | Alumnos y Apoderados | ⬜ Pendiente | E2 |
 | Traslados | ⬜ Pendiente | E3 |
 | Tareas | [] Pendiente | 2 |
