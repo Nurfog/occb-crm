@@ -16,7 +16,7 @@ create table if not exists empresas (
   ciudad text not null default '',
   creado_en timestamptz not null default now()
 );
-comment on table empresas is 'Empresas cliente (clon de Companies en Twenty)';
+comment on table empresas is 'Empresas cliente';
 comment on column empresas.nombre is 'Nombre comercial, obligatorio';
 
 create table if not exists personas (
@@ -30,7 +30,7 @@ create table if not exists personas (
   ciudad text not null default '',
   creado_en timestamptz not null default now()
 );
-comment on table personas is 'Personas de contacto (clon de People en Twenty)';
+comment on table personas is 'Personas de contacto';
 
 create table if not exists oportunidades (
   id uuid primary key default gen_random_uuid(),
@@ -43,7 +43,7 @@ create table if not exists oportunidades (
   fecha_cierre timestamptz,
   creado_en timestamptz not null default now()
 );
-comment on table oportunidades is 'Oportunidades del embudo (clon de Opportunities en Twenty)';
+comment on table oportunidades is 'Oportunidades del embudo comercial';
 
 create index if not exists idx_empresas_nombre on empresas (nombre);
 create index if not exists idx_personas_correo on personas (correo);
