@@ -44,6 +44,8 @@ fn Aplicacion() -> Element {
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
 enum Ruta {
+    #[route("/acceso")]
+    VistaAcceso {},
     #[layout(DisposicionApp)]
         #[route("/")]
         Panel {},
@@ -57,10 +59,32 @@ enum Ruta {
         VistaOportunidades {},
         #[route("/ajustes")]
         VistaAjustes {},
-    #[route("/acceso")]
-    VistaAcceso {},
     #[route("/:..segmentos")]
     NoEncontrada { segmentos: Vec<String> },
+}
+
+/// Fecha relativa estilo Twenty ("hace 39 minutos" / "39 minutes ago").
+fn hace_tiempo(fecha: chrono::DateTime<chrono::Utc>, idioma: Idioma) -> String {
+    let mins = (chrono::Utc::now() - fecha).num_minutes().max(0);
+    if idioma == Idioma::Es {
+        if mins < 1 {
+            "ahora mismo".to_string()
+        } else if mins < 60 {
+            format!("hace {mins} minutos")
+        } else if mins < 60 * 24 {
+            format!("hace {} horas", mins / 60)
+        } else {
+            format!("hace {} días", mins / 60 / 24)
+        }
+    } else if mins < 1 {
+        "just now".to_string()
+    } else if mins < 60 {
+        format!("{mins} minutes ago")
+    } else if mins < 60 * 24 {
+        format!("{} hours ago", mins / 60)
+    } else {
+        format!("{} days ago", mins / 60 / 24)
+    }
 }
 
 /// Etiqueta de etapa según el idioma (la BD guarda siempre el texto español).
@@ -124,23 +148,24 @@ fn BarraLateral() -> Element {
             div { class: "side-section",
                 div { class: "side-title", "{t.espacio_trabajo}" }
                 Link { to: Ruta::Panel {}, class: "side-item",
-                    span { class: "ico", "▦" }
+                    span { class: "ico ico-panel", "▦" }
                     span { "{t.panel}" }
+                    span { class: "count", "⌘" }
                 }
                 Link { to: Ruta::VistaPersonas {}, class: "side-item",
-                    span { class: "ico", "○" }
+                    span { class: "ico ico-personas", "○" }
                     span { "{t.personas}" }
                 }
                 Link { to: Ruta::VistaOportunidades {}, class: "side-item active",
-                    span { class: "ico", "◇" }
+                    span { class: "ico ico-admision", "◇" }
                     span { "{t.oportunidades}" }
                 }
                 div { class: "side-item dim",
-                    span { class: "ico", "☰" }
+                    span { class: "ico ico-notas", "☰" }
                     span { "{t.notas}" }
                 }
                 div { class: "side-item dim",
-                    span { class: "ico", "✓" }
+                    span { class: "ico ico-tareas", "✓" }
                     span { "{t.tareas}" }
                 }
                 div { class: "side-item dim",
@@ -180,20 +205,14 @@ fn BarraLateral() -> Element {
     }
 }
 
-/// Cabecera de cada vista: título, subtítulo y acciones.
+/// Cabecera de cada vista: título y subtítulo (sin acciones decorativas).
 #[component]
 fn BarraSuperior(titulo: String, subtitulo: String) -> Element {
-    let t = textos(IDIOMA());
     rsx! {
         div { class: "topbar",
             div {
                 h1 { class: "page-title", "{titulo}" }
                 p { class: "page-sub", "{subtitulo}" }
-            }
-            div { class: "top-actions",
-                button { class: "btn-ghost", "{t.filtrar}" }
-                button { class: "btn-ghost", "{t.ordenar}" }
-                button { class: "btn-primary", "{t.nueva}" }
             }
         }
     }
@@ -554,10 +573,10 @@ fn VistaPersonas() -> Element {
                     thead {
                         tr {
                             th { class: "check", "☐" }
-                            th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
-                            th { "{t.correo}" }
-                            th { if idioma == Idioma::Es { "Puesto" } else { "Role" } }
-                            th { if idioma == Idioma::Es { "Ciudad" } else { "City" } }
+                            th { "👤 ", if idioma == Idioma::Es { "Nombre" } else { "Name" } }
+                            th { "✉️ ", "{t.correo}" }
+                            th { "💼 ", if idioma == Idioma::Es { "Puesto" } else { "Role" } }
+                            th { "📍 ", if idioma == Idioma::Es { "Ciudad" } else { "City" } }
                             th { "" }
                         }
                     }
@@ -565,13 +584,15 @@ fn VistaPersonas() -> Element {
                         for p in filas.iter() {
                             tr { key: "{p.id}",
                                 td { class: "check", "☐" }
-                                td { class: "strong",
-                                    span { class: "mini-avatar", "{p.iniciales()}" }
-                                    Link { to: Ruta::DetallePersona { id: p.id }, class: "link",
-                                        "{p.nombre_completo()}"
+                                td {
+                                    span { class: "chip",
+                                        span { class: "mini-avatar", "{p.iniciales()}" }
+                                        Link { to: Ruta::DetallePersona { id: p.id }, class: "link",
+                                            "{p.nombre_completo()}"
+                                        }
                                     }
                                 }
-                                td { class: "muted", "{p.correo}" }
+                                td { span { class: "chip plain", "{p.correo}" } }
                                 td { "{p.puesto}" }
                                 td { "{p.ciudad}" }
                                 td {
@@ -600,7 +621,18 @@ fn VistaPersonas() -> Element {
                                 button {
                                     class: "ghost-new",
                                     onclick: move |_| mostrar_form.set(true),
-                                    "+ Nuevo"
+                                    "+ Agregar nuevo"
+                                }
+                            }
+                        }
+                        tr { class: "tbl-foot",
+                            td { colspan: "2", "Calcular ▾" }
+                            td { colspan: "2", "Contar todo ", b { "{total}" } }
+                            td { colspan: "2", class: "stat",
+                                if idioma == Idioma::Es {
+                                    "Creados ", b { "{hace_tiempo(filas.first().map(|x| x.creado_en).unwrap_or(chrono::Utc::now()), idioma)}" }
+                                } else {
+                                    "Created ", b { "{hace_tiempo(filas.first().map(|x| x.creado_en).unwrap_or(chrono::Utc::now()), idioma)}" }
                                 }
                             }
                         }
@@ -618,6 +650,7 @@ fn VistaOportunidades() -> Element {
     let t = textos(idioma);
     let oportunidades = use_signal(Vec::<Oportunidad>::new);
     let mut colegios = use_signal(Vec::<Colegio>::new);
+    let mut personas = use_signal(Vec::<Persona>::new);
     let mut aviso = use_signal(String::new);
     let mut nombre = use_signal(String::new);
     let mut importe_txt = use_signal(String::new);
@@ -627,12 +660,16 @@ fn VistaOportunidades() -> Element {
     let mut importe_ed = use_signal(String::new);
     let mut mostrar_form = use_signal(|| false);
     let mut vista_tabla = use_signal(|| false);
+    let mut etapa_nueva = use_signal(|| EtapaOportunidad::Contacto);
 
     use_effect(move || {
         recargar_oportunidades(oportunidades);
         spawn(async move {
             if let Ok(lista) = cliente::listar_colegios(None, "", "").await {
                 colegios.set(lista);
+            }
+            if let Ok(lista) = cliente::listar_personas().await {
+                personas.set(lista);
             }
         });
     });
@@ -648,7 +685,7 @@ fn VistaOportunidades() -> Element {
         let datos = CrearOportunidad {
             nombre: nombre.read().clone(),
             importe: importe_txt.read().parse().unwrap_or(0),
-            etapa: EtapaOportunidad::Contacto,
+            etapa: etapa_nueva(),
             colegio_rbd,
         };
         spawn(async move {
@@ -658,6 +695,7 @@ fn VistaOportunidades() -> Element {
                     nombre.set(String::new());
                     importe_txt.set(String::new());
                     colegio_sel.set(String::new());
+                    etapa_nueva.set(EtapaOportunidad::Contacto);
                     recargar_oportunidades(oportunidades);
                 }
                 Err(mensaje) => aviso.set(mensaje),
@@ -687,7 +725,10 @@ fn VistaOportunidades() -> Element {
         }
         if mostrar_form() {
         div { class: "panel form",
-            label { if idioma == Idioma::Es { "Nueva oportunidad" } else { "New opportunity" } }
+            label {
+                if idioma == Idioma::Es { "Nueva oportunidad · " } else { "New opportunity · " }
+                "{etiqueta_etapa(etapa_nueva(), idioma)}"
+            }
             div { class: "row",
                 input {
                     class: "input",
@@ -823,9 +864,40 @@ fn VistaOportunidades() -> Element {
                                     }
                                 }
                             } else {
-                                div { class: "opp-name", "{op.nombre}" }
+                                div { class: "opp-name",
+                                    span { class: "mini-avatar", "{op.nombre.chars().next().unwrap_or('?')}" }
+                                    "{op.nombre}"
+                                }
+                                div { class: "opp-row", "💲 ", span { class: "opp-amt", "${op.importe}" } }
+                                div { class: "opp-row muted",
+                                    "👤 ", if idioma == Idioma::Es { "Sistema" } else { "System" }
+                                }
+                                div { class: "opp-row muted", "📅 {hace_tiempo(op.creado_en, idioma)}" }
+                                if op.colegio_rbd.is_some() {
+                                    div { class: "opp-row",
+                                        "🏫 ",
+                                        span { class: "chip plain",
+                                            "{colegios.read().iter().find(|c| Some(c.rbd.as_str()) == op.colegio_rbd.as_deref()).map(|c| c.nombre.clone()).unwrap_or_default()}"
+                                        }
+                                    }
+                                }
+                                if let Some(pid) = op.contacto_id {
+                                    match personas
+                                        .read()
+                                        .iter()
+                                        .find(|p| p.id == pid)
+                                        .map(|p| p.nombre_completo())
+                                    {
+                                        Some(nomb) => rsx! {
+                                            div { class: "opp-row",
+                                                "👤 ",
+                                                span { class: "chip plain", "{nomb}" }
+                                            }
+                                        },
+                                        None => rsx! {},
+                                    }
+                                }
                                 div { class: "opp-foot",
-                                    span { class: "opp-amt", "${op.importe}" }
                                     span { class: "opp-prob", "{etapa.probabilidad()}%" }
                                     button {
                                         class: "btn-mini",
@@ -861,6 +933,17 @@ fn VistaOportunidades() -> Element {
                             }
                         }
                     }
+                    button {
+                        class: "ghost-new",
+                        onclick: {
+                            let e = *etapa;
+                            move |_| {
+                                etapa_nueva.set(e);
+                                mostrar_form.set(true);
+                            }
+                        },
+                        "+ Nuevo"
+                    }
                 }
             }
         }
@@ -878,9 +961,13 @@ fn DetalleColegio(rbd: String) -> Element {
     let mut aviso = use_signal(String::new);
     let mut listo = use_signal(|| false);
 
-    let rbd_efecto = rbd.clone();
+    // Sigue al rbd de la ruta: si cambia (navegación entre fichas), recarga.
+    let mut rbd_actual = use_signal(|| rbd.clone());
+    if rbd_actual() != rbd {
+        rbd_actual.set(rbd.clone());
+    }
     use_effect(move || {
-        let rbd_clon = rbd_efecto.clone();
+        let rbd_clon = rbd_actual.read().clone();
         spawn(async move {
             match cliente::obtener_colegio(&rbd_clon).await {
                 Ok(c) => {
@@ -899,8 +986,7 @@ fn DetalleColegio(rbd: String) -> Element {
         });
     });
 
-    let titulo = colegio.read().as_ref().map(|c| c.nombre.clone()).unwrap_or_default();
-    let nombre_region = colegio
+    let titulo = colegio.read().as_ref().map(|c| c.nombre.clone()).unwrap_or_default();    let nombre_region = colegio
         .read()
         .as_ref()
         .and_then(|c| occb_core::territorio::region(c.region as u8))
@@ -913,6 +999,7 @@ fn DetalleColegio(rbd: String) -> Element {
         .map(|c| c.nombre.to_string())
         .unwrap_or_default();
     rsx! {
+        Panel {}
         div { class: "record-panel",
         Link { to: Ruta::Panel {}, class: "record-close", "✕ {t.panel}" }
         h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
@@ -956,6 +1043,8 @@ fn DetallePersona(id: Uuid) -> Element {
     let idioma = IDIOMA();
     let t = textos(idioma);
     let mut persona = use_signal(|| None::<Persona>);
+    let mut opps_rel = use_signal(Vec::<Oportunidad>::new);
+    let mut editando = use_signal(|| false);
     let mut aviso = use_signal(String::new);
     let mut listo = use_signal(|| false);
     let mut nombre = use_signal(String::new);
@@ -966,10 +1055,16 @@ fn DetallePersona(id: Uuid) -> Element {
     let mut ciudad = use_signal(String::new);
     let mut region_sel = use_signal(String::new);
     let mut comuna_sel = use_signal(String::new);
+    // Sigue al id de la ruta: si cambia (navegación entre fichas), recarga.
+    let mut id_actual = use_signal(|| id);
+    if id_actual() != id {
+        id_actual.set(id);
+    }
 
     use_effect(move || {
+        let pid = id_actual();
         spawn(async move {
-            match cliente::obtener_persona(id).await {
+            match cliente::obtener_persona(pid).await {
                 Ok(p) => {
                     nombre.set(p.nombre.clone());
                     apellido.set(p.apellido.clone());
@@ -979,7 +1074,10 @@ fn DetallePersona(id: Uuid) -> Element {
                     ciudad.set(p.ciudad.clone());
                     region_sel.set(p.region_codigo.map(|r| r.to_string()).unwrap_or_default());
                     comuna_sel.set(p.comuna_codigo.clone().unwrap_or_default());
-                    persona.set(Some(p));
+                    persona.set(Some(p.clone()));
+                    if let Ok(o) = cliente::listar_oportunidades().await {
+                        opps_rel.set(o.into_iter().filter(|x| x.contacto_id == Some(pid)).collect());
+                    }
                     listo.set(true);
                 }
                 Err(mensaje) => aviso.set(mensaje),
@@ -988,6 +1086,7 @@ fn DetallePersona(id: Uuid) -> Element {
     });
 
     let guardar = move |_| {
+        let pid = id_actual();
         let datos = CrearPersona {
             nombre: nombre.read().clone(),
             apellido: apellido.read().clone(),
@@ -999,10 +1098,11 @@ fn DetallePersona(id: Uuid) -> Element {
             comuna_codigo: comuna_codigo_de(&comuna_sel),
         };
         spawn(async move {
-            match cliente::actualizar_persona(id, &datos).await {
+            match cliente::actualizar_persona(pid, &datos).await {
                 Ok(p) => {
                     aviso.set(String::new());
                     persona.set(Some(p));
+                    editando.set(false);
                 }
                 Err(mensaje) => aviso.set(mensaje),
             }
@@ -1011,6 +1111,7 @@ fn DetallePersona(id: Uuid) -> Element {
 
     let titulo = persona.read().as_ref().map(|p| p.nombre_completo()).unwrap_or_default();
     rsx! {
+        VistaPersonas {}
         div { class: "record-panel",
         Link { to: Ruta::VistaPersonas {}, class: "record-close", "✕ {t.personas}" }
         h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
@@ -1020,8 +1121,21 @@ fn DetallePersona(id: Uuid) -> Element {
                 p { class: "muted", "{aviso}" }
             }
         } else {
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title", if idioma == Idioma::Es { "General" } else { "General" } }
+                    button { class: "btn-mini", onclick: move |_| editando.set(!editando()), "✎" }
+                }
+                if let Some(p) = persona.read().as_ref() {
+                    div { class: "mini-row", span { class: "muted", "✉️ {t.correo}" } span { class: "mini-name", "{p.correo}" } }
+                    div { class: "mini-row", span { class: "muted", "📞" } span { class: "mini-name", "{p.telefono}" } }
+                    div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "💼 Puesto" } else { "💼 Role" } } span { class: "mini-name", "{p.puesto}" } }
+                    div { class: "mini-row", span { class: "muted", "📍" } span { class: "mini-name", "{p.ciudad}" } }
+                }
+            }
+            if editando() {
             div { class: "panel form",
-                label { if idioma == Idioma::Es { "Datos (se guardan en la API)" } else { "Details (saved to the API)" } }
+                label { if idioma == Idioma::Es { "Editar (se guarda en la API)" } else { "Edit (saved to the API)" } }
                 div { class: "row",
                     div { class: "campo",
                         label { if idioma == Idioma::Es { "Nombre *" } else { "First name *" } }
@@ -1057,6 +1171,22 @@ fn DetallePersona(id: Uuid) -> Element {
                 }
                 if !aviso.read().is_empty() {
                     p { class: "muted small", "{aviso}" }
+                }
+            }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{opps_rel.read().len()} · {t.oportunidades}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for o in opps_rel.read().iter() {
+                    div { class: "mini-row", key: "{o.id}",
+                        span { class: "mini-name", "{o.nombre}" }
+                        span { class: "mini-amt", "${o.importe}" }
+                        span { class: "stage stage-{o.etapa:?}", "{etiqueta_etapa(o.etapa, idioma)}" }
+                    }
                 }
             }
         }

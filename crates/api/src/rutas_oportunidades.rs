@@ -59,7 +59,7 @@ pub async fn crear(
     cuerpo
         .validate()
         .map_err(|e| ErrorApi::Validacion(e.to_string()))?;
-    let etapa = cuerpo.etapa.as_deref().unwrap_or("nueva");
+    let etapa = cuerpo.etapa.as_deref().unwrap_or("contacto");
     let etapa_enum = occb_core::EtapaOportunidad::desde_texto(&etapa.to_lowercase())
         .ok_or_else(|| {
             ErrorApi::Validacion(
@@ -121,7 +121,7 @@ pub async fn actualizar(
     cuerpo
         .validate()
         .map_err(|e| ErrorApi::Validacion(e.to_string()))?;
-    let etapa = cuerpo.etapa.as_deref().unwrap_or("nueva");
+    let etapa = cuerpo.etapa.as_deref().unwrap_or("contacto");
     let etapa_enum = occb_core::EtapaOportunidad::desde_texto(&etapa.to_lowercase())
         .ok_or_else(|| {
             ErrorApi::Validacion(

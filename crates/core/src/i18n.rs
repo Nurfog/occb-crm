@@ -95,7 +95,7 @@ pub fn textos(idioma: Idioma) -> Textos {
             ganado_trimestre: "GANADO ESTE TRIMESTRE",
             cuentas: "COLEGIOS",
             motor_api: "MOTOR API",
-            nueva: "+ Nueva",
+            nueva: "+ Crear",
             filtrar: "Filtrar ▾",
             ordenar: "Ordenar ▾",
             tabla: "Tabla",

@@ -130,24 +130,31 @@ await ir(`/colegios/${encodeURIComponent(RBD_UI)}`);
 t = await texto();
 afirma(t.includes('Colegio no encontrado'), 'colegio eliminado muestra aviso en su ficha');
 
-// --- 4. Kanban de admisión: avanzar etapa persiste ---
+// --- 4. Kanban de admisión: avanzar etapa persiste (fila propia) ---
 const ORDEN_ES = ['Contacto', 'Postulante', 'Evaluado', 'Aceptado', 'Matriculado'];
 const A_TEXTO_DB = { Contacto: 'contacto', Postulante: 'postulante', Evaluado: 'evaluado', Aceptado: 'aceptado', Matriculado: 'matriculado' };
+const NOMBRE_OPP = `Kanban ${SELLO}`;
+const oppCreada = await (await fetch(`${API}/api/oportunidades`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: NOMBRE_OPP, importe: 50000 }),
+})).json();
 await ir('/oportunidades');
 await esperarCondicion(`[...document.querySelectorAll('.opp-card button')].some(b => b.textContent.includes('▶'))`);
 const antes = await evaluar(`
   (() => {
-    const boton = [...document.querySelectorAll('.opp-card button')].find(b => b.textContent.includes('▶'));
-    const tarjeta = boton.closest('.opp-card');
-    const columna = boton.closest('.col');
+    const nombre = ${JSON.stringify(NOMBRE_OPP)};
+    const tarjeta = [...document.querySelectorAll('.opp-card')].find(c => c.querySelector('.opp-name').textContent === nombre);
+    const columna = tarjeta.closest('.col');
+    const boton = [...tarjeta.querySelectorAll('button')].find(b => b.textContent.includes('▶'));
+    boton.click();
     return {
-      nombre: tarjeta.querySelector('.opp-name').textContent,
+      nombre,
       etapa: columna.querySelector('.stage').textContent.trim(),
     };
   })()
 `);
 console.log('  kanban antes:', JSON.stringify(antes));
-await evaluar(`[...document.querySelectorAll('.opp-card button')].find(b => b.textContent.includes('▶')).click()`);
 await dormir(2500);
 const idxAntes = ORDEN_ES.indexOf(antes.etapa);
 const esperadoEs = ORDEN_ES[Math.min(idxAntes + 1, ORDEN_ES.length - 1)];
@@ -165,15 +172,24 @@ afirma(
   tocada?.etapa === A_TEXTO_DB[esperadoEs],
   `avance kanban persiste en PG (${antes.nombre}: ${tocada?.etapa})`,
 );
+await fetch(`${API}/api/oportunidades/${oppCreada.id}`, { method: 'DELETE' });
 
 // --- 5. Acceso renderiza en español ---
 await ir('/acceso');
 t = await texto();
 afirma(t.includes('Bienvenido de nuevo'), 'pantalla de acceso en español');
 
-// --- 6. Edición en ficha de persona persiste ---
-const pers = await (await fetch(`${API}/api/personas?limite=1`)).json();
-await ir(`/personas/${pers[0].id}`);
+// --- 6. Edición en ficha de persona persiste (fila propia) ---
+const propia = await (await fetch(`${API}/api/personas`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: 'Edit', apellido: `E2E ${SELLO}`, correo: `edit-${SELLO}@test.cl` }),
+})).json();
+await ir(`/personas/${propia.id}`);
+// Abre edición (✎) antes de rellenar.
+await esperarCondicion(`[...document.querySelectorAll('.record-panel .btn-mini')].some(b => b.textContent.includes('✎'))`);
+await evaluar(`[...document.querySelectorAll('.record-panel .btn-mini')].find(b => b.textContent.includes('✎')).click()`);
+await dormir(800);
 await evaluar(`
   (() => {
     const puesto = [...document.querySelectorAll('.panel.form input')][4];
@@ -184,8 +200,9 @@ await evaluar(`
 `);
 await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Guardar')).click()`);
 await dormir(2500);
-const persEdit = await (await fetch(`${API}/api/personas/${pers[0].id}`)).json();
+const persEdit = await (await fetch(`${API}/api/personas/${propia.id}`)).json();
 afirma(persEdit.puesto === `Puesto E2E ${SELLO}`, 'edición de persona en ficha persiste en PG');
+await fetch(`${API}/api/personas/${propia.id}`, { method: 'DELETE' });
 
 // --- 7. Territorio: la cascada filtra ---
 await ir('/personas');
@@ -220,7 +237,7 @@ await evaluar(`
     comuna.dispatchEvent(new Event('change', { bubbles: true }));
   })()
 `);
-await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Nueva')).click()`);
+await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Crear')).click()`);
 await dormir(2500);
 const filaT = await (await fetch(`${API}/api/personas?busqueda=${encodeURIComponent(NOMBRE_T)}`)).json();
 afirma(
