@@ -1,0 +1,22 @@
+[package]
+name = "occb-app"
+version.workspace = true
+edition.workspace = true
+default-run = "occb-app"
+
+[[bin]]
+name = "occb-app"
+path = "src/main.rs"
+
+[dependencies]
+occb-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+dioxus = { workspace = true, features = ["router"] }
+
+[features]
+default = ["web"]
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]

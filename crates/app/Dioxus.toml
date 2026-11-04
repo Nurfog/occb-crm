@@ -1,0 +1,10 @@
+[application]
+name = "occb-app"
+default_platform = "web"
+
+[web.app]
+title = "OCCB CRM — Twenty clone in Rust + Dioxus"
+
+[web.watcher]
+reload_html = true
+watch_path = ["src", "assets"]
