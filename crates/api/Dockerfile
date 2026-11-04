@@ -8,6 +8,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/core/Cargo.toml ./crates/core/Cargo.toml
 COPY crates/api/Cargo.toml ./crates/api/Cargo.toml
 COPY crates/app/Cargo.toml ./crates/app/Cargo.toml
+COPY migrations ./migrations
 COPY crates ./crates
 
 RUN cargo build --release -p occb-api

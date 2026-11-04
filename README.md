@@ -1,6 +1,7 @@
 # OCCB CRM
 
 CRM en **Rust edition 2024**: frontal **Dioxus 0.7**, API **Axum** y **PostgreSQL 18**.
+Todo en contenedores y funcional de punta a punta.
 
 Idioma por defecto: **español**, con conmutador **ES/EN** en el frontal.
 
@@ -9,35 +10,37 @@ Idioma por defecto: **español**, con conmutador **ES/EN** en el frontal.
 ```
 occb-crm/
   Cargo.toml              # workspace Rust 2024
-  docker-compose.yml      # bd (postgres:18) + redis (redis:8) + frontal (nginx)
+  docker-compose.yml      # bd + redis + api + frontal
   .env.example            # plantilla de variables (muestra)
   .env                    # valores locales (no versionado)
   crates/
     core/                 # dominio en español: dominio, validacion, i18n, semilla
-    api/                  # backend Axum :3001 (solo llama a funciones SQL)
-    app/                  # frontal Dioxus web (Dockerfile + nginx.conf)
+    api/                  # backend Axum (solo llama a funciones SQL) + Dockerfile
+    app/                  # frontal Dioxus web (cliente API + Dockerfile + nginx)
   migrations/             # esquema, funciones seguras + RLS y datos de ejemplo
 ```
 
-## Requisitos
-
-- Rust 1.98+, `wasm32-unknown-unknown`, Dioxus CLI 0.7 (`dx`), Docker.
+## Arranque rápido (todo funcional)
 
 ```bash
-rustup target add wasm32-unknown-unknown
 cp .env.example .env   # solo la primera vez
-```
-
-## Arranque rápido
-
-```bash
-docker compose up -d bd redis        # PostgreSQL 18 + Redis
-cargo run -p occb-api                # API :3001 (aplica migraciones y siembra)
-docker compose up -d frontal         # frontal :8080 (build WASM + nginx)
+docker compose up -d --build   # bd + redis + api (:3001) + frontal (:8080)
 ```
 
 - Frontal: http://localhost:8080 (/, /personas, /empresas, /oportunidades, /ajustes, /acceso)
 - API: http://localhost:3001/api/salud · `/api/panel` · `/api/empresas` · `/api/personas` · `/api/oportunidades`
+
+El frontal lee y escribe en la API (crear/eliminar empresas y personas,
+crear oportunidades, avanzar etapas en el kanban). Si la API no responde,
+muestra datos de demostración locales.
+
+## Desarrollo sin Docker
+
+```bash
+docker compose up -d bd redis
+cargo run -p occb-api          # :3001 (aplica migraciones y siembra)
+cd crates/app && dx serve --web  # :8080 con recarga
+```
 
 ## API (rutas en español + alias en inglés)
 
