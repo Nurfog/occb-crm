@@ -1,6 +1,7 @@
 services:
-  db:
-    image: postgres:16
+  bd:
+    image: postgres:18
+    container_name: occb-bd
     environment:
       POSTGRES_USER: occb
       POSTGRES_PASSWORD: occb
@@ -8,11 +9,40 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - datos_pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U occb -d occb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
   redis:
-    image: redis:7
+    image: redis:8
+    container_name: occb-redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - datos_redis:/data
+  frontal:
+    build:
+      context: .
+      dockerfile: ./crates/app/Dockerfile
+    image: occb-frontal:local
+    container_name: occb-frontal
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
-  pgdata:
+  datos_pg:
+  datos_redis:

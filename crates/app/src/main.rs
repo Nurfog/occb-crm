@@ -1,247 +1,300 @@
-//! Frontend Dioxus estilo Twenty.
-//! Clon visual: sidebar + tablas + kanban + dashboard + login.
+//! Frontal Dioxus estilo Twenty, todo en español con i18n ES/EN.
+//!
+//! Buenas prácticas: textos centralizados en `occb-core::i18n`, componentes
+//! pequeños por responsabilidad y estado local con señales.
 
 use dioxus::prelude::*;
-use occb_core::{Company, Opportunity, OpportunityStage, Person, compute_stats};
+use occb_core::{
+    Empresa, EtapaOportunidad, Idioma, Oportunidad, Persona, calcular_resumen,
+    datos_semilla_empresas, datos_semilla_oportunidades, datos_semilla_personas, textos,
+};
 
+/// Hoja de estilos del clon visual de Twenty.
 const CSS: Asset = asset!("/assets/main.css");
 
+/// Idioma global de la interfaz (español por defecto, conmutable a inglés).
+static IDIOMA: GlobalSignal<Idioma> = Signal::global(|| Idioma::Es);
+
 fn main() {
-    dioxus::launch(App);
+    dioxus::launch(Aplicacion);
 }
 
+/// Componente raíz: estilos + enrutador.
 #[component]
-fn App() -> Element {
+fn Aplicacion() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: CSS }
-        Router::<Route> {}
+        Router::<Ruta> {}
     }
 }
 
+/// Rutas del clon (nombres en español).
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
-enum Route {
-    #[layout(AppLayout)]
+enum Ruta {
+    #[layout(DisposicionApp)]
         #[route("/")]
-        Dashboard {},
-        #[route("/people")]
-        PeoplePage {},
-        #[route("/companies")]
-        CompaniesPage {},
-        #[route("/opportunities")]
-        OpportunitiesPage {},
-        #[route("/settings")]
-        SettingsPage {},
-    #[route("/login")]
-    Login {},
-    #[route("/:..segments")]
-    NotFound { segments: Vec<String> },
+        Panel {},
+        #[route("/personas")]
+        VistaPersonas {},
+        #[route("/empresas")]
+        VistaEmpresas {},
+        #[route("/oportunidades")]
+        VistaOportunidades {},
+        #[route("/ajustes")]
+        VistaAjustes {},
+    #[route("/acceso")]
+    VistaAcceso {},
+    #[route("/:..segmentos")]
+    NoEncontrada { segmentos: Vec<String> },
 }
 
+/// Etiqueta de etapa según el idioma (la BD guarda siempre el texto español).
+fn etiqueta_etapa(etapa: EtapaOportunidad, idioma: Idioma) -> &'static str {
+    match (etapa, idioma) {
+        (EtapaOportunidad::Nueva, Idioma::Es) => "Nueva",
+        (EtapaOportunidad::Cribado, Idioma::Es) => "Cribado",
+        (EtapaOportunidad::Reunion, Idioma::Es) => "Reunión",
+        (EtapaOportunidad::Propuesta, Idioma::Es) => "Propuesta",
+        (EtapaOportunidad::Cliente, Idioma::Es) => "Cliente",
+        (EtapaOportunidad::Nueva, Idioma::En) => "New",
+        (EtapaOportunidad::Cribado, Idioma::En) => "Screening",
+        (EtapaOportunidad::Reunion, Idioma::En) => "Meeting",
+        (EtapaOportunidad::Propuesta, Idioma::En) => "Proposal",
+        (EtapaOportunidad::Cliente, Idioma::En) => "Customer",
+    }
+}
+
+/// Disposición con barra lateral (clon de Twenty).
 #[component]
-fn AppLayout() -> Element {
+fn DisposicionApp() -> Element {
     rsx! {
         div { class: "shell",
-            Sidebar {}
+            BarraLateral {}
             div { class: "main",
-                Outlet::<Route> {}
+                Outlet::<Ruta> {}
             }
         }
     }
 }
 
+/// Barra lateral con navegación y selector de idioma ES/EN.
 #[component]
-fn Sidebar() -> Element {
+fn BarraLateral() -> Element {
+    let t = textos(IDIOMA());
     rsx! {
         aside { class: "sidebar",
             div { class: "brand",
                 div { class: "logo", "◧" }
                 div {
-                    div { class: "brand-name", "OCCB CRM" }
-                    div { class: "brand-sub", "twenty clone · rust" }
+                    div { class: "brand-name", "{t.nombre_app}" }
+                    div { class: "brand-sub", "{t.eslogan}" }
                 }
                 div { class: "avatar", "OC" }
             }
             div { class: "search",
                 span { class: "search-icon", "⌕" }
-                input { placeholder: "Search ⌘K" }
+                input { placeholder: "{t.buscar}" }
             }
             div { class: "side-section",
-                div { class: "side-title", "Favorites" }
-                Link { to: Route::CompaniesPage {}, class: "side-item",
+                div { class: "side-title", "{t.favoritos}" }
+                Link { to: Ruta::VistaEmpresas {}, class: "side-item",
                     span { "★" }
                     span { "Acme Corp" }
                 }
-                Link { to: Route::OpportunitiesPage {}, class: "side-item",
+                Link { to: Ruta::VistaOportunidades {}, class: "side-item",
                     span { "★" }
-                    span { "Q3 Pipeline" }
+                    span { "Q3" }
                 }
             }
             div { class: "side-section",
-                div { class: "side-title", "Workspace" }
-                Link { to: Route::Dashboard {}, class: "side-item",
+                div { class: "side-title", "{t.espacio_trabajo}" }
+                Link { to: Ruta::Panel {}, class: "side-item",
                     span { class: "ico", "▦" }
-                    span { "Dashboard" }
+                    span { "{t.panel}" }
                 }
-                Link { to: Route::PeoplePage {}, class: "side-item",
+                Link { to: Ruta::VistaPersonas {}, class: "side-item",
                     span { class: "ico", "○" }
-                    span { "People" }
+                    span { "{t.personas}" }
                     span { class: "count", "5" }
                 }
-                Link { to: Route::CompaniesPage {}, class: "side-item",
+                Link { to: Ruta::VistaEmpresas {}, class: "side-item",
                     span { class: "ico", "□" }
-                    span { "Companies" }
+                    span { "{t.empresas}" }
                     span { class: "count", "6" }
                 }
-                Link { to: Route::OpportunitiesPage {}, class: "side-item active",
+                Link { to: Ruta::VistaOportunidades {}, class: "side-item active",
                     span { class: "ico", "◇" }
-                    span { "Opportunities" }
+                    span { "{t.oportunidades}" }
                 }
                 div { class: "side-item dim",
                     span { class: "ico", "☰" }
-                    span { "Notes" }
+                    span { "{t.notas}" }
                 }
                 div { class: "side-item dim",
                     span { class: "ico", "✓" }
-                    span { "Tasks" }
+                    span { "{t.tareas}" }
                 }
                 div { class: "side-item dim",
                     span { class: "ico", "⚙" }
-                    span { "Workflows" }
+                    span { "{t.automatizaciones}" }
                 }
             }
             div { class: "side-spacer" }
             div { class: "side-section",
-                Link { to: Route::SettingsPage {}, class: "side-item",
-                    span { class: "ico", "⚙" }
-                    span { "Settings" }
+                div { class: "lang-row",
+                    button {
+                        class: if IDIOMA() == Idioma::Es { "btn-mini active" } else { "btn-mini" },
+                        onclick: move |_| *IDIOMA.write() = Idioma::Es,
+                        "ES"
+                    }
+                    button {
+                        class: if IDIOMA() == Idioma::En { "btn-mini active" } else { "btn-mini" },
+                        onclick: move |_| *IDIOMA.write() = Idioma::En,
+                        "EN"
+                    }
                 }
-                Link { to: Route::Login {}, class: "side-item dim",
+                Link { to: Ruta::VistaAjustes {}, class: "side-item",
+                    span { class: "ico", "⚙" }
+                    span { "{t.ajustes}" }
+                }
+                Link { to: Ruta::VistaAcceso {}, class: "side-item dim",
                     span { class: "ico", "→" }
-                    span { "Sign out" }
+                    span { "{t.salir}" }
                 }
             }
             div { class: "invite",
-                div { class: "invite-title", "Invite teammates" }
-                div { class: "invite-sub", "occb-api :3001 · dioxus web" }
-                button { class: "btn-primary", "Invite" }
+                div { class: "invite-title", "{t.invitar} · OCCB" }
+                div { class: "invite-sub", "{t.invitar_subtitulo}" }
+                button { class: "btn-primary", "{t.invitar}" }
             }
         }
     }
 }
 
+/// Cabecera de cada vista: título, subtítulo y acciones.
 #[component]
-fn Topbar(title: String, subtitle: String) -> Element {
+fn BarraSuperior(titulo: String, subtitulo: String) -> Element {
+    let t = textos(IDIOMA());
     rsx! {
         div { class: "topbar",
             div {
-                h1 { class: "page-title", "{title}" }
-                p { class: "page-sub", "{subtitle}" }
+                h1 { class: "page-title", "{titulo}" }
+                p { class: "page-sub", "{subtitulo}" }
             }
             div { class: "top-actions",
-                button { class: "btn-ghost", "Filter ▾" }
-                button { class: "btn-ghost", "Sort ▾" }
-                button { class: "btn-primary", "+ New" }
+                button { class: "btn-ghost", "{t.filtrar}" }
+                button { class: "btn-ghost", "{t.ordenar}" }
+                button { class: "btn-primary", "{t.nueva}" }
             }
         }
     }
 }
 
-#[component]
-fn Dashboard() -> Element {
-    let companies: Signal<Vec<Company>> = use_signal(|| {
-        let mut c = occb_core::seed_companies();
-        c.sort_by(|a, b| a.name.cmp(&b.name));
-        c
-    });
-    let people: Signal<Vec<Person>> = use_signal(|| {
-        let cids: Vec<_> = companies.read().iter().map(|c| c.id).collect();
-        let mut p = occb_core::seed_people(&cids);
-        for (i, person) in p.iter_mut().enumerate() {
-            if !cids.is_empty() {
-                person.company_id = cids.get(i % cids.len()).copied();
-            }
+/// Carga las empresas de demostración (en Fase 1.1 vendrán de `/api/empresas`).
+fn cargar_empresas_demo() -> Vec<Empresa> {
+    datos_semilla_empresas()
+}
+
+/// Carga las personas de demostración con su empresa asignada.
+fn cargar_personas_demo(ids_empresas: &[uuid::Uuid]) -> Vec<Persona> {
+    let mut lista = datos_semilla_personas();
+    if !ids_empresas.is_empty() {
+        for (i, persona) in lista.iter_mut().enumerate() {
+            persona.empresa_id = ids_empresas.get(i % ids_empresas.len()).copied();
         }
-        p
+    }
+    lista
+}
+
+/// Vista del panel principal con tarjetas y resumen.
+#[component]
+fn Panel() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let empresas: Signal<Vec<Empresa>> = use_signal(cargar_empresas_demo);
+    let personas: Signal<Vec<Persona>> = use_signal(|| {
+        let ids: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
+        cargar_personas_demo(&ids)
     });
-    let opps: Signal<Vec<Opportunity>> = use_signal(|| {
-        let cids: Vec<_> = companies.read().iter().map(|c| c.id).collect();
-        let pids: Vec<_> = people.read().iter().map(|p| p.id).collect();
-        if cids.is_empty() || pids.is_empty() {
+    let oportunidades: Signal<Vec<Oportunidad>> = use_signal(|| {
+        let ids_empresas: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
+        let ids_personas: Vec<_> = personas.read().iter().map(|p| p.id).collect();
+        if ids_empresas.is_empty() || ids_personas.is_empty() {
             return vec![];
         }
-        occb_core::seed_opportunities(&cids, &pids)
+        datos_semilla_oportunidades(&ids_empresas, &ids_personas)
     });
 
-    let stats = compute_stats(&companies.read(), &people.read(), &opps.read());
-    let pipeline_pct = if stats.pipeline_value + stats.won_value > 0 {
-        (stats.pipeline_value as f64 / (stats.pipeline_value + stats.won_value) as f64 * 100.0)
-            as u32
-    } else {
-        0
-    };
+    let resumen = calcular_resumen(&empresas.read(), &personas.read(), &oportunidades.read());
+    let total = (resumen.valor_tuberia + resumen.valor_ganado).max(1) as f64;
+    let porcentaje_abierto = (resumen.valor_tuberia as f64 / total * 100.0) as u32;
 
     rsx! {
-        Topbar {
-            title: "Dashboard".to_string(),
-            subtitle: "Welcome back — here is your pipeline today.".to_string(),
+        BarraSuperior {
+            titulo: t.panel.to_string(),
+            subtitulo: t.bienvenida_panel.to_string(),
         }
         div { class: "cards",
             div { class: "card",
-                div { class: "card-label", "PIPELINE VALUE" }
-                div { class: "card-value", "${stats.pipeline_value}" }
-                div { class: "card-sub", "{stats.total_opportunities} open opportunities" }
+                div { class: "card-label", "{t.valor_tuberia}" }
+                div { class: "card-value", "${resumen.valor_tuberia}" }
+                div { class: "card-sub",
+                    "{resumen.total_oportunidades} · {t.oportunidades.to_lowercase()}"
+                }
             }
             div { class: "card",
-                div { class: "card-label", "WON THIS QUARTER" }
-                div { class: "card-value green", "${stats.won_value}" }
-                div { class: "card-sub", "{stats.win_rate:.1}% win rate" }
+                div { class: "card-label", "{t.ganado_trimestre}" }
+                div { class: "card-value green", "${resumen.valor_ganado}" }
+                div { class: "card-sub", "{resumen.tasa_exito:.1}% ✓" }
             }
             div { class: "card",
-                div { class: "card-label", "COMPANIES" }
-                div { class: "card-value", "{stats.total_companies}" }
-                div { class: "card-sub", "{stats.total_people} people tracked" }
+                div { class: "card-label", "{t.cuentas}" }
+                div { class: "card-value", "{resumen.total_empresas}" }
+                div { class: "card-sub",
+                    "{resumen.total_personas} · {t.personas.to_lowercase()}"
+                }
             }
             div { class: "card",
-                div { class: "card-label", "API BACKEND" }
+                div { class: "card-label", "{t.motor_api}" }
                 div { class: "card-value small", "axum :3001" }
-                div { class: "card-sub", "GET /api/dashboard → live" }
+                div { class: "card-sub", "GET /api/panel → postgres:18" }
             }
         }
         div { class: "panel",
             div { class: "panel-head",
-                span { class: "panel-title", "Pipeline health" }
-                span { class: "pill", "{pipeline_pct}% open" }
+                span { class: "panel-title", "{t.salud_tuberia}" }
+                span { class: "pill", "{porcentaje_abierto}% ✓" }
             }
             div { class: "bar",
-                div { class: "bar-fill", width: "{pipeline_pct}%" }
+                div { class: "bar-fill", width: "{porcentaje_abierto}%" }
             }
             div { class: "panel-grid",
-                for opp in opps.read().iter().take(4) {
-                    div { class: "mini-row", key: "{opp.id}",
-                        span { class: "mini-name", "{opp.name}" }
-                        span { class: "mini-amt", "${opp.amount}" }
-                        span { class: "stage stage-{opp.stage:?}", "{opp.stage.label()}" }
+                for op in oportunidades.read().iter().take(4) {
+                    div { class: "mini-row", key: "{op.id}",
+                        span { class: "mini-name", "{op.nombre}" }
+                        span { class: "mini-amt", "${op.importe}" }
+                        span { class: "stage stage-{op.etapa:?}", "{etiqueta_etapa(op.etapa, idioma)}" }
                     }
                 }
             }
         }
         div { class: "panel",
             div { class: "panel-head",
-                span { class: "panel-title", "Recent companies" }
-                Link { to: Route::CompaniesPage {}, class: "link", "View all →" }
+                span { class: "panel-title", "{t.recientes}" }
+                Link { to: Ruta::VistaEmpresas {}, class: "link", "{t.ver_todo}" }
             }
             table { class: "tbl",
                 thead {
-                    tr { th { "Company" } th { "Domain" } th { "Industry" } th { "Employees" } }
+                    tr { th { "{t.empresas}" } th { "dominio" } th { "sector" } th { "👥" } }
                 }
                 tbody {
-                    for c in companies.read().iter().take(5) {
-                        tr { key: "{c.id}",
-                            td { class: "strong", "{c.name}" }
-                            td { class: "muted", "{c.domain}" }
-                            td { "{c.industry}" }
-                            td { "{c.employees}" }
+                    for e in empresas.read().iter().take(5) {
+                        tr { key: "{e.id}",
+                            td { class: "strong", "{e.nombre}" }
+                            td { class: "muted", "{e.dominio}" }
+                            td { "{e.sector}" }
+                            td { "{e.empleados}" }
                         }
                     }
                 }
@@ -250,84 +303,77 @@ fn Dashboard() -> Element {
     }
 }
 
+/// Vista de personas con búsqueda en español.
 #[component]
-fn PeoplePage() -> Element {
-    let mut query = use_signal(String::new);
-    let companies = use_signal(|| occb_core::seed_companies());
-    let people = use_signal(|| {
-        // ids temporales; se reasignan abajo para mostrar empresa real
-        let tmp = occb_core::seed_companies();
-        let cids: Vec<_> = tmp.iter().map(|c| c.id).collect();
-        occb_core::seed_people(&cids)
+fn VistaPersonas() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut busqueda = use_signal(String::new);
+    let empresas = use_signal(cargar_empresas_demo);
+    let personas = use_signal(|| {
+        let ids: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
+        cargar_personas_demo(&ids)
     });
 
-    let q = query.read().to_lowercase();
-    let rows: Vec<Person> = people
+    let consulta = busqueda.read().to_lowercase();
+    let filas: Vec<Persona> = personas
         .read()
         .iter()
         .filter(|p| {
-            q.is_empty()
-                || p.full_name().to_lowercase().contains(&q)
-                || p.email.to_lowercase().contains(&q)
+            consulta.is_empty()
+                || p.nombre_completo().to_lowercase().contains(&consulta)
+                || p.correo.to_lowercase().contains(&consulta)
         })
         .cloned()
         .collect();
+    let total = filas.len();
 
-    let rows_len = rows.len();
-    let company_name = move |id: Option<uuid::Uuid>| -> String {
-        match id {
-            Some(cid) => companies
-                .read()
-                .iter()
-                .find(|c| c.id == cid)
-                .map(|c| c.name.clone())
-                .unwrap_or_else(|| "—".into()),
-            None => ["Acme Corp", "Globex", "Initech", "Hooli", "Umbrella"]
-                .into_iter()
-                .cycle()
-                .nth(rows_len % 5)
-                .unwrap_or("—")
-                .to_string(),
-        }
+    let nombre_empresa = move |id: Option<uuid::Uuid>| -> String {
+        empresas
+            .read()
+            .iter()
+            .find(|e| Some(e.id) == id)
+            .map(|e| e.nombre.clone())
+            .unwrap_or_else(|| "—".into())
     };
 
     rsx! {
-        Topbar {
-            title: "People".to_string(),
-            subtitle: format!("{} contacts · table view like Twenty", rows_len),
+        BarraSuperior {
+            titulo: t.personas.to_string(),
+            subtitulo: format!("{total} · {}", t.tabla),
         }
         div { class: "toolbar",
             input {
                 class: "input",
-                placeholder: "Search people…",
-                value: "{query}",
-                oninput: move |e| query.set(e.value()),
+                placeholder: "{t.buscar}…",
+                value: "{busqueda}",
+                oninput: move |e| busqueda.set(e.value()),
             }
-            span { class: "pill", "Table" }
-            span { class: "pill dim", "Kanban" }
+            span { class: "pill", "{t.tabla}" }
+            span { class: "pill dim", "{t.kanban}" }
         }
         div { class: "panel",
             table { class: "tbl",
                 thead {
                     tr {
-                        th { "Name" }
-                        th { "Email" }
-                        th { "Job title" }
-                        th { "Company" }
-                        th { "City" }
+                        th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
+                        th { "{t.correo}" }
+                        th { if idioma == Idioma::Es { "Puesto" } else { "Role" } }
+                        th { if idioma == Idioma::Es { "Empresa" } else { "Company" } }
+                        th { if idioma == Idioma::Es { "Ciudad" } else { "City" } }
                     }
                 }
                 tbody {
-                    for p in rows.iter() {
+                    for p in filas.iter() {
                         tr { key: "{p.id}",
                             td { class: "strong",
-                                span { class: "mini-avatar", "{p.first_name.chars().next().unwrap_or('?')}{p.last_name.chars().next().unwrap_or('?')}" }
-                                "{p.full_name()}"
+                                span { class: "mini-avatar", "{p.iniciales()}" }
+                                "{p.nombre_completo()}"
                             }
-                            td { class: "muted", "{p.email}" }
-                            td { "{p.job_title}" }
-                            td { "{company_name(p.company_id)}" }
-                            td { "{p.city}" }
+                            td { class: "muted", "{p.correo}" }
+                            td { "{p.puesto}" }
+                            td { "{nombre_empresa(p.empresa_id)}" }
+                            td { "{p.ciudad}" }
                         }
                     }
                 }
@@ -336,57 +382,54 @@ fn PeoplePage() -> Element {
     }
 }
 
+/// Vista de empresas con tarjetas y búsqueda.
 #[component]
-fn CompaniesPage() -> Element {
-    let mut query = use_signal(String::new);
-    let companies = use_signal(|| {
-        let mut c = occb_core::seed_companies();
-        c.sort_by(|a, b| a.name.cmp(&b.name));
-        c
-    });
+fn VistaEmpresas() -> Element {
+    let t = textos(IDIOMA());
+    let mut busqueda = use_signal(String::new);
+    let empresas = use_signal(cargar_empresas_demo);
 
-    let q = query.read().to_lowercase();
-    let rows: Vec<Company> = companies
+    let consulta = busqueda.read().to_lowercase();
+    let filas: Vec<Empresa> = empresas
         .read()
         .iter()
-        .filter(|c| {
-            q.is_empty()
-                || c.name.to_lowercase().contains(&q)
-                || c.domain.to_lowercase().contains(&q)
-                || c.industry.to_lowercase().contains(&q)
+        .filter(|e| {
+            consulta.is_empty()
+                || e.nombre.to_lowercase().contains(&consulta)
+                || e.dominio.to_lowercase().contains(&consulta)
+                || e.sector.to_lowercase().contains(&consulta)
         })
         .cloned()
         .collect();
+    let total_empleados: i32 = filas.iter().map(|e| e.empleados).sum();
 
     rsx! {
-        Topbar {
-            title: "Companies".to_string(),
-            subtitle: format!("{} accounts · {} total employees", rows.len(), rows.iter().map(|c| c.employees).sum::<u32>()),
+        BarraSuperior {
+            titulo: t.empresas.to_string(),
+            subtitulo: format!("{} · 👥 {total_empleados}", filas.len()),
         }
         div { class: "toolbar",
             input {
                 class: "input",
-                placeholder: "Search companies…",
-                value: "{query}",
-                oninput: move |e| query.set(e.value()),
+                placeholder: "{t.buscar}…",
+                value: "{busqueda}",
+                oninput: move |e| busqueda.set(e.value()),
             }
-            button { class: "btn-ghost", "＋ Add view" }
-            button { class: "btn-ghost", "⇅ Columns" }
         }
         div { class: "grid2",
-            for c in rows.iter() {
-                div { class: "company-card", key: "{c.id}",
+            for e in filas.iter() {
+                div { class: "company-card", key: "{e.id}",
                     div { class: "cc-head",
-                        div { class: "cc-logo", "{c.name.chars().next().unwrap_or('C')}" }
+                        div { class: "cc-logo", "{e.nombre.chars().next().unwrap_or('E')}" }
                         div {
-                            div { class: "strong", "{c.name}" }
-                            div { class: "muted small", "{c.domain}" }
+                            div { class: "strong", "{e.nombre}" }
+                            div { class: "muted small", "{e.dominio}" }
                         }
-                        span { class: "pill", "{c.industry}" }
+                        span { class: "pill", "{e.sector}" }
                     }
                     div { class: "cc-meta",
-                        span { "👥 {c.employees}" }
-                        span { "📍 {c.city}" }
+                        span { "👥 {e.empleados}" }
+                        span { "📍 {e.ciudad}" }
                     }
                 }
             }
@@ -394,79 +437,78 @@ fn CompaniesPage() -> Element {
     }
 }
 
+/// Vista kanban de oportunidades: clic en ▶ para avanzar de etapa.
 #[component]
-fn OpportunitiesPage() -> Element {
-    let companies = use_signal(|| occb_core::seed_companies());
-    let people = use_signal(|| {
-        let cids: Vec<_> = companies.read().iter().map(|c| c.id).collect();
-        occb_core::seed_people(&cids)
+fn VistaOportunidades() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let empresas = use_signal(cargar_empresas_demo);
+    let personas = use_signal(|| {
+        let ids: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
+        cargar_personas_demo(&ids)
     });
-    let mut opps = use_signal(|| {
-        let cids: Vec<_> = companies.read().iter().map(|c| c.id).collect();
-        let pids: Vec<_> = people.read().iter().map(|p| p.id).collect();
-        if cids.is_empty() || pids.is_empty() {
+    let mut oportunidades = use_signal(|| {
+        let ids_empresas: Vec<_> = empresas.read().iter().map(|e| e.id).collect();
+        let ids_personas: Vec<_> = personas.read().iter().map(|p| p.id).collect();
+        if ids_empresas.is_empty() || ids_personas.is_empty() {
             return vec![];
         }
-        occb_core::seed_opportunities(&cids, &pids)
+        datos_semilla_oportunidades(&ids_empresas, &ids_personas)
     });
 
-    let total: i64 = opps.read().iter().map(|o| o.amount).sum();
-
-    let company_of = move |id: Option<uuid::Uuid>| {
-        companies
+    let total: i64 = oportunidades.read().iter().map(|o| o.importe).sum();
+    let nombre_empresa = move |id: Option<uuid::Uuid>| {
+        empresas
             .read()
             .iter()
-            .find(|c| Some(c.id) == id)
-            .map(|c| c.name.clone())
+            .find(|e| Some(e.id) == id)
+            .map(|e| e.nombre.clone())
             .unwrap_or_else(|| "—".into())
     };
 
     rsx! {
-        Topbar {
-            title: "Opportunities".to_string(),
-            subtitle: format!("Pipeline ${total} · drag stages like Twenty kanban (click ▶ to advance)"),
+        BarraSuperior {
+            titulo: t.oportunidades.to_string(),
+            subtitulo: format!(
+                "${total} · {}",
+                if idioma == Idioma::Es { "pulsa ▶ para avanzar de etapa" } else { "click ▶ to advance stage" }
+            ),
         }
         div { class: "kanban",
-            for stage in OpportunityStage::all() {
-                div { class: "col", key: "{stage:?}",
+            for etapa in EtapaOportunidad::todas() {
+                div { class: "col", key: "{etapa:?}",
                     div { class: "col-head",
-                        span { class: "stage stage-{stage:?}", "{stage.label()}" }
+                        span { class: "stage stage-{etapa:?}", "{etiqueta_etapa(*etapa, idioma)}" }
                         span { class: "count",
-                            "{opps.read().iter().filter(|o| &o.stage == stage).count()}"
+                            "{oportunidades.read().iter().filter(|o| &o.etapa == etapa).count()}"
                         }
                     }
                     div { class: "col-sum",
                         "${
-                            opps
+                            oportunidades
                                 .read()
                                 .iter()
-                                .filter(|o| &o.stage == stage)
-                                .map(|o| o.amount)
+                                .filter(|o| &o.etapa == etapa)
+                                .map(|o| o.importe)
                                 .sum::<i64>()
                         }"
                     }
-                    for opp in opps.read().iter().filter(|o| &o.stage == stage).cloned().collect::<Vec<_>>() {
-                        div { class: "opp-card", key: "{opp.id}",
-                            div { class: "opp-name", "{opp.name}" }
-                            div { class: "opp-sub", "{company_of(opp.company_id)}" }
+                    for op in oportunidades.read().iter().filter(|o| &o.etapa == etapa).cloned().collect::<Vec<_>>() {
+                        div { class: "opp-card", key: "{op.id}",
+                            div { class: "opp-name", "{op.nombre}" }
+                            div { class: "opp-sub", "{nombre_empresa(op.empresa_id)}" }
                             div { class: "opp-foot",
-                                span { class: "opp-amt", "${opp.amount}" }
-                                span { class: "opp-prob", "{stage.probability()}%" }
+                                span { class: "opp-amt", "${op.importe}" }
+                                span { class: "opp-prob", "{etapa.probabilidad()}%" }
                                 button {
                                     class: "btn-mini",
-                                    title: "Advance stage",
+                                    title: if idioma == Idioma::Es { "Avanzar etapa" } else { "Advance stage" },
                                     onclick: {
-                                        let id = opp.id;
+                                        let id = op.id;
                                         move |_| {
-                                            let mut list = opps.write();
-                                            if let Some(o) = list.iter_mut().find(|x| x.id == id) {
-                                                o.stage = match o.stage {
-                                                    OpportunityStage::New => OpportunityStage::Screening,
-                                                    OpportunityStage::Screening => OpportunityStage::Meeting,
-                                                    OpportunityStage::Meeting => OpportunityStage::Proposal,
-                                                    OpportunityStage::Proposal => OpportunityStage::Customer,
-                                                    OpportunityStage::Customer => OpportunityStage::Customer,
-                                                };
+                                            let mut lista = oportunidades.write();
+                                            if let Some(o) = lista.iter_mut().find(|x| x.id == id) {
+                                                o.etapa = o.etapa.siguiente();
                                             }
                                         }
                                     },
@@ -481,68 +523,101 @@ fn OpportunitiesPage() -> Element {
     }
 }
 
+/// Vista de ajustes del espacio de trabajo.
 #[component]
-fn SettingsPage() -> Element {
+fn VistaAjustes() -> Element {
+    let t = textos(IDIOMA());
     rsx! {
-        Topbar {
-            title: "Settings".to_string(),
-            subtitle: "Workspace · backend Axum + PostgreSQL (docker) · frontend Dioxus".to_string(),
+        BarraSuperior {
+            titulo: t.ajustes.to_string(),
+            subtitulo: "Axum + PostgreSQL 18 · Dioxus web".to_string(),
         }
         div { class: "panel form",
-            label { "Workspace name" }
-            input { class: "input", value: "OCCB CRM — twenty clone" }
-            label { "API base URL" }
+            label { if IDIOMA() == Idioma::Es { "Nombre del espacio" } else { "Workspace name" } }
+            input { class: "input", value: "OCCB CRM — clon de Twenty" }
+            label { "API" }
             input { class: "input", value: "http://localhost:3001/api" }
-            label { "Database" }
+            label { if IDIOMA() == Idioma::Es { "Base de datos" } else { "Database" } }
             input { class: "input", value: "postgres://occb:occb@localhost:5432/occb" }
             p { class: "muted small",
-                "MVP usa store en memoria con seed. El esquema SQL en /migrations espeja twenty-server (companies, people, opportunities). Activa la feature postgres del API para persistencia real."
+                if IDIOMA() == Idioma::Es {
+                    "El CRUD pasa solo por funciones SECURITY DEFINER con RLS. Ver carpeta /migrations."
+                } else {
+                    "CRUD goes only through SECURITY DEFINER functions with RLS. See /migrations."
+                }
+            }
+            div { class: "lang-row",
+                button {
+                    class: if IDIOMA() == Idioma::Es { "btn-mini active" } else { "btn-mini" },
+                    onclick: move |_| *IDIOMA.write() = Idioma::Es,
+                    "Español"
+                }
+                button {
+                    class: if IDIOMA() == Idioma::En { "btn-mini active" } else { "btn-mini" },
+                    onclick: move |_| *IDIOMA.write() = Idioma::En,
+                    "English"
+                }
             }
             div { class: "row",
-                button { class: "btn-primary", "Save" }
-                button { class: "btn-ghost", "Reset demo data" }
+                button { class: "btn-primary", "{t.guardar}" }
             }
         }
     }
 }
 
+/// Pantalla de acceso (demo sin autenticación real en Fase 1).
 #[component]
-fn Login() -> Element {
-    let mut email = use_signal(|| "admin@occb.local".to_string());
-    let mut _password = use_signal(|| "password".to_string());
+fn VistaAcceso() -> Element {
+    let t = textos(IDIOMA());
+    let mut correo = use_signal(|| "admin@occb.local".to_string());
     rsx! {
         div { class: "login-wrap",
             div { class: "login-card",
                 div { class: "logo big", "◧" }
-                h1 { "Welcome back" }
-                p { class: "muted", "Sign in to your OCCB workspace (Twenty clone in Rust + Dioxus)" }
-                label { "Email" }
+                h1 { "{t.acceso_titulo}" }
+                p { class: "muted", "{t.acceso_subtitulo}" }
+                div { class: "lang-row center",
+                    button {
+                        class: if IDIOMA() == Idioma::Es { "btn-mini active" } else { "btn-mini" },
+                        onclick: move |_| *IDIOMA.write() = Idioma::Es,
+                        "ES"
+                    }
+                    button {
+                        class: if IDIOMA() == Idioma::En { "btn-mini active" } else { "btn-mini" },
+                        onclick: move |_| *IDIOMA.write() = Idioma::En,
+                        "EN"
+                    }
+                }
+                label { "{t.correo}" }
                 input {
                     class: "input",
-                    value: "{email}",
-                    oninput: move |e| email.set(e.value()),
+                    value: "{correo}",
+                    oninput: move |e| correo.set(e.value()),
                 }
-                label { "Password" }
+                label { "{t.contrasena}" }
                 input { class: "input", r#type: "password", value: "password" }
-                Link { to: Route::Dashboard {}, class: "btn-primary block",
-                    "Continue →"
-                }
-                p { class: "muted small center",
-                    "Demo sin auth real · el backend expone /api/health en :3001"
-                }
+                Link { to: Ruta::Panel {}, class: "btn-primary block", "{t.continuar}" }
             }
         }
     }
 }
 
+/// Página 404 en el idioma activo.
 #[component]
-fn NotFound(segments: Vec<String>) -> Element {
+fn NoEncontrada(segmentos: Vec<String>) -> Element {
+    let idioma = IDIOMA();
     rsx! {
         div { class: "login-wrap",
             div { class: "login-card",
                 h1 { "404" }
-                p { class: "muted", "Ruta no encontrada: /{segments.join(\"/\")}" }
-                Link { to: Route::Dashboard {}, class: "btn-primary block", "Back to dashboard" }
+                p { class: "muted",
+                    if idioma == Idioma::Es {
+                        "Ruta no encontrada: /{segmentos.join(\"/\")}"
+                    } else {
+                        "Route not found: /{segmentos.join(\"/\")}"
+                    }
+                }
+                Link { to: Ruta::Panel {}, class: "btn-primary block", "←" }
             }
         }
     }
