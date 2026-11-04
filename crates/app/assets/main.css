@@ -135,6 +135,10 @@ a { color: inherit; text-decoration: none; }
 .panel.form { max-width: 620px; display: flex; flex-direction: column; gap: 8px; }
 .panel.form label { font-size: 12px; font-weight: 600; margin-top: 6px; }
 .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+.campo { display: flex; flex-direction: column; gap: 4px; flex: 1 1 150px; min-width: 0; }
+.campo > label { font-size: 11px; font-weight: 600; color: var(--muted); }
+.panel.form .campo .input { flex: 0 0 auto; width: 100%; min-width: 0; }
+.campo-btn { justify-content: flex-end; flex: 0 0 auto; }
 .panel.form .input { flex: 1 1 170px; min-width: 0; }
 .panel.form .btn-primary { white-space: nowrap; flex-shrink: 0; }
 .btn-primary { white-space: nowrap; }

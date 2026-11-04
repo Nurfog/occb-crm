@@ -829,11 +829,13 @@ fn VistaOportunidades() -> Element {
                             if editando() == Some(op.id) {
                                 input {
                                     class: "input",
+                                    placeholder: if idioma == Idioma::Es { "Nombre *" } else { "Name *" },
                                     value: "{nombre_ed}",
                                     oninput: move |e| nombre_ed.set(e.value()),
                                 }
                                 input {
                                     class: "input",
+                                    placeholder: "$",
                                     value: "{importe_ed}",
                                     oninput: move |e| importe_ed.set(e.value()),
                                 }
@@ -998,14 +1000,31 @@ fn DetalleEmpresa(id: Uuid) -> Element {
             div { class: "panel form",
                 label { if idioma == Idioma::Es { "Datos (se guardan en la API)" } else { "Details (saved to the API)" } }
                 div { class: "row",
-                    input { class: "input", value: "{nombre}", oninput: move |e| nombre.set(e.value()) }
-                    input { class: "input", value: "{dominio}", oninput: move |e| dominio.set(e.value()) }
-                    input { class: "input", value: "{sector}", oninput: move |e| sector.set(e.value()) }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Nombre *" } else { "Name *" } }
+                        input { class: "input", placeholder: "Acme Corp", value: "{nombre}", oninput: move |e| nombre.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Dominio" } else { "Domain" } }
+                        input { class: "input", placeholder: "acme.com", value: "{dominio}", oninput: move |e| dominio.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Sector" } else { "Industry" } }
+                        input { class: "input", placeholder: "Software", value: "{sector}", oninput: move |e| sector.set(e.value()) }
+                    }
                 }
                 div { class: "row",
-                    input { class: "input", value: "{empleados_txt}", oninput: move |e| empleados_txt.set(e.value()) }
-                    input { class: "input", value: "{ciudad}", oninput: move |e| ciudad.set(e.value()) }
-                    button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Empleados" } else { "Employees" } }
+                        input { class: "input", placeholder: "0", value: "{empleados_txt}", oninput: move |e| empleados_txt.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Ciudad" } else { "City" } }
+                        input { class: "input", placeholder: "Madrid", value: "{ciudad}", oninput: move |e| ciudad.set(e.value()) }
+                    }
+                    div { class: "campo campo-btn",
+                        button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                    }
                 }
                 if !aviso.read().is_empty() {
                     p { class: "muted small", "{aviso}" }
@@ -1127,26 +1146,49 @@ fn DetallePersona(id: Uuid) -> Element {
             div { class: "panel form",
                 label { if idioma == Idioma::Es { "Datos (se guardan en la API)" } else { "Details (saved to the API)" } }
                 div { class: "row",
-                    input { class: "input", value: "{nombre}", oninput: move |e| nombre.set(e.value()) }
-                    input { class: "input", value: "{apellido}", oninput: move |e| apellido.set(e.value()) }
-                    input { class: "input", value: "{correo}", oninput: move |e| correo.set(e.value()) }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Nombre *" } else { "First name *" } }
+                        input { class: "input", placeholder: "Ada", value: "{nombre}", oninput: move |e| nombre.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Apellidos *" } else { "Last name *" } }
+                        input { class: "input", placeholder: "Lovelace", value: "{apellido}", oninput: move |e| apellido.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { "{t.correo} *" }
+                        input { class: "input", placeholder: "ada@acme.com", value: "{correo}", oninput: move |e| correo.set(e.value()) }
+                    }
                 }
                 div { class: "row",
-                    input { class: "input", value: "{telefono}", oninput: move |e| telefono.set(e.value()) }
-                    input { class: "input", value: "{puesto}", oninput: move |e| puesto.set(e.value()) }
-                    input { class: "input", value: "{ciudad}", oninput: move |e| ciudad.set(e.value()) }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Teléfono" } else { "Phone" } }
+                        input { class: "input", placeholder: "+34 555 0101", value: "{telefono}", oninput: move |e| telefono.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Puesto" } else { "Role" } }
+                        input { class: "input", placeholder: "Directora técnica", value: "{puesto}", oninput: move |e| puesto.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Ciudad" } else { "City" } }
+                        input { class: "input", placeholder: "Madrid", value: "{ciudad}", oninput: move |e| ciudad.set(e.value()) }
+                    }
                 }
                 div { class: "row",
-                    select {
-                        class: "input",
-                        value: "{empresa_sel}",
-                        onchange: move |e| empresa_sel.set(e.value()),
-                        option { value: "", "—" }
-                        for e in empresas.read().iter() {
-                            option { value: "{e.id}", "{e.nombre}" }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Empresa" } else { "Company" } }
+                        select {
+                            class: "input",
+                            value: "{empresa_sel}",
+                            onchange: move |e| empresa_sel.set(e.value()),
+                            option { value: "", "—" }
+                            for e in empresas.read().iter() {
+                                option { value: "{e.id}", "{e.nombre}" }
+                            }
                         }
                     }
-                    button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                    div { class: "campo campo-btn",
+                        button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                    }
                 }
                 if !aviso.read().is_empty() {
                     p { class: "muted small", "{aviso}" }
