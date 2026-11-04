@@ -112,12 +112,14 @@ pub async fn obtener_colegio(rbd: &str) -> Result<Colegio, String> {
     obtener_json(&format!("/api/colegios/{rbd}")).await
 }
 
-/// Registra un colegio manualmente.
+/// Registra un colegio manualmente (lo usa el flujo de traslados, Fase E3).
+#[allow(dead_code)]
 pub async fn crear_colegio(datos: &CrearColegio) -> Result<Colegio, String> {
     enviar_json("POST", "/api/colegios", datos).await
 }
 
-/// Elimina un colegio manual del directorio.
+/// Elimina un colegio manual del directorio (lo usa el flujo de traslados, Fase E3).
+#[allow(dead_code)]
 pub async fn eliminar_colegio(rbd: &str) -> Result<(), String> {
     borrar(&format!("/api/colegios/{rbd}")).await
 }

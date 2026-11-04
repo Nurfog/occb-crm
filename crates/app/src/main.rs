@@ -10,7 +10,7 @@ mod cliente;
 use dioxus::prelude::*;
 use uuid::Uuid;
 use occb_core::{
-    Colegio, CrearColegio, CrearOportunidad, CrearPersona, EtapaOportunidad, Idioma, Oportunidad,
+    Colegio, CrearOportunidad, CrearPersona, EtapaOportunidad, Idioma, Oportunidad,
     Persona, calcular_resumen, datos_semilla_colegios, datos_semilla_oportunidades,
     datos_semilla_personas, textos,
 };
@@ -30,6 +30,12 @@ fn main() {
 fn Aplicacion() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: CSS }
+        document::Link { rel: "preconnect", href: "https://fonts.googleapis.com" }
+        document::Link { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "anonymous" }
+        document::Link {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+        }
         Router::<Ruta> {}
     }
 }
@@ -45,8 +51,6 @@ enum Ruta {
         VistaPersonas {},
         #[route("/personas/:id")]
         DetallePersona { id: Uuid },
-        #[route("/colegios")]
-        VistaColegios {},
         #[route("/colegios/:rbd")]
         DetalleColegio { rbd: String },
         #[route("/oportunidades")]
@@ -104,14 +108,14 @@ fn BarraLateral() -> Element {
             }
             div { class: "search",
                 span { class: "search-icon", "⌕" }
-                input { placeholder: "{t.buscar}" }
+                span { "{t.buscar}" }
+                span { style: "margin-left: auto; display: flex; gap: 2px;",
+                    kbd { "⌘" }
+                    kbd { "K" }
+                }
             }
             div { class: "side-section",
                 div { class: "side-title", "{t.favoritos}" }
-                Link { to: Ruta::VistaColegios {}, class: "side-item",
-                    span { "★" }
-                    span { "Directorio" }
-                }
                 Link { to: Ruta::VistaOportunidades {}, class: "side-item",
                     span { "★" }
                     span { "Q3" }
@@ -126,10 +130,6 @@ fn BarraLateral() -> Element {
                 Link { to: Ruta::VistaPersonas {}, class: "side-item",
                     span { class: "ico", "○" }
                     span { "{t.personas}" }
-                }
-                Link { to: Ruta::VistaColegios {}, class: "side-item",
-                    span { class: "ico", "□" }
-                    span { "{t.colegios}" }
                 }
                 Link { to: Ruta::VistaOportunidades {}, class: "side-item active",
                     span { class: "ico", "◇" }
@@ -398,7 +398,6 @@ fn Panel() -> Element {
         div { class: "panel",
             div { class: "panel-head",
                 span { class: "panel-title", "{t.recientes}" }
-                Link { to: Ruta::VistaColegios {}, class: "link", "{t.ver_todo}" }
             }
             table { class: "tbl",
                 thead {
@@ -432,6 +431,7 @@ fn VistaPersonas() -> Element {
     let personas = use_signal(Vec::<Persona>::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
+    let mut mostrar_form = use_signal(|| false);
     let mut nombre = use_signal(String::new);
     let mut apellido = use_signal(String::new);
     let mut correo = use_signal(String::new);
@@ -501,8 +501,9 @@ fn VistaPersonas() -> Element {
             }
             span { class: "pill", "{t.tabla}" }
         }
-        div { class: "panel form",
-            label { if idioma == Idioma::Es { "Nueva persona" } else { "New person" } }
+        if mostrar_form() {
+            div { class: "panel form",
+                label { if idioma == Idioma::Es { "Nueva persona" } else { "New person" } }
             div { class: "row",
                 input {
                     class: "input",
@@ -544,13 +545,15 @@ fn VistaPersonas() -> Element {
                 p { class: "muted small", "{aviso}" }
             }
         }
-        div { class: "panel",
+        }
+        div { class: "tbl-wrap",
             if !listo() {
-                p { class: "muted", "…" }
+                p { class: "muted", style: "padding: 12px;", "…" }
             } else {
                 table { class: "tbl",
                     thead {
                         tr {
+                            th { class: "check", "☐" }
                             th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
                             th { "{t.correo}" }
                             th { if idioma == Idioma::Es { "Puesto" } else { "Role" } }
@@ -561,6 +564,7 @@ fn VistaPersonas() -> Element {
                     tbody {
                         for p in filas.iter() {
                             tr { key: "{p.id}",
+                                td { class: "check", "☐" }
                                 td { class: "strong",
                                     span { class: "mini-avatar", "{p.iniciales()}" }
                                     Link { to: Ruta::DetallePersona { id: p.id }, class: "link",
@@ -590,174 +594,15 @@ fn VistaPersonas() -> Element {
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-/// Vista de colegios: directorio oficial con filtros por región/comuna y registro manual.
-#[component]
-fn VistaColegios() -> Element {
-    let idioma = IDIOMA();
-    let t = textos(idioma);
-    let mut busqueda = use_signal(String::new);
-    let region_f = use_signal(String::new);
-    let comuna_f = use_signal(String::new);
-    let mut colegios = use_signal(Vec::<Colegio>::new);
-    let mut aviso = use_signal(String::new);
-    let mut rbd = use_signal(String::new);
-    let mut nombre = use_signal(String::new);
-    let mut dependencia = use_signal(String::new);
-    let mut region_n = use_signal(String::new);
-    let mut comuna_n = use_signal(String::new);
-
-    // Relee el directorio cada vez que cambia un filtro.
-    use_effect(move || {
-        let region = region_codigo_de(&region_f);
-        let comuna = comuna_f.read().clone();
-        let texto = busqueda.read().clone();
-        spawn(async move {
-            match cliente::listar_colegios(region, &comuna, &texto).await {
-                Ok(lista) => colegios.set(lista),
-                Err(_) if colegios.read().is_empty() => colegios.set(cargar_colegios_demo()),
-                Err(_) => {}
-            }
-        });
-    });
-
-    let crear = move |_| {
-        let datos = CrearColegio {
-            rbd: rbd.read().clone(),
-            nombre: nombre.read().clone(),
-            region: region_n.read().parse().unwrap_or(0),
-            comuna: comuna_n.read().clone(),
-            dependencia: dependencia.read().clone(),
-            dv: String::new(),
-        };
-        spawn(async move {
-            match cliente::crear_colegio(&datos).await {
-                Ok(_) => {
-                    aviso.set(String::new());
-                    rbd.set(String::new());
-                    nombre.set(String::new());
-                    dependencia.set(String::new());
-                    region_n.set(String::new());
-                    comuna_n.set(String::new());
-                    let region = region_codigo_de(&region_f);
-                    let comuna = comuna_f.read().clone();
-                    let texto = busqueda.read().clone();
-                    if let Ok(lista) = cliente::listar_colegios(region, &comuna, &texto).await {
-                        colegios.set(lista);
-                    }
-                }
-                Err(mensaje) => aviso.set(mensaje),
-            }
-        });
-    };
-
-    let nombre_comuna = move |cut: &str| -> String {
-        occb_core::territorio::comuna_por_cut(cut)
-            .map(|c| c.nombre.to_string())
-            .unwrap_or_else(|| cut.to_string())
-    };
-
-    rsx! {
-        BarraSuperior {
-            titulo: t.colegios.to_string(),
-            subtitulo: format!(
-                "{} · {}",
-                colegios.read().len(),
-                if idioma == Idioma::Es {
-                    "directorio oficial filtrable por región y comuna"
-                } else {
-                    "official directory filterable by region and commune"
-                }
-            ),
-        }
-        div { class: "toolbar",
-            input {
-                class: "input",
-                placeholder: if idioma == Idioma::Es { "Buscar por nombre o RBD…" } else { "Search by name or RBD…" },
-                value: "{busqueda}",
-                oninput: move |e| busqueda.set(e.value()),
-            }
-            SelectorTerritorio {
-                region_sel: region_f,
-                comuna_sel: comuna_f,
-            }
-        }
-        div { class: "panel form",
-            label { if idioma == Idioma::Es { "Registrar colegio" } else { "Register school" } }
-            div { class: "row",
-                input {
-                    class: "input",
-                    placeholder: "RBD *",
-                    value: "{rbd}",
-                    oninput: move |e| rbd.set(e.value()),
-                }
-                input {
-                    class: "input",
-                    placeholder: if idioma == Idioma::Es { "Nombre *" } else { "Name *" },
-                    value: "{nombre}",
-                    oninput: move |e| nombre.set(e.value()),
-                }
-                input {
-                    class: "input",
-                    placeholder: if idioma == Idioma::Es { "Dependencia" } else { "Funding" },
-                    value: "{dependencia}",
-                    oninput: move |e| dependencia.set(e.value()),
-                }
-                SelectorTerritorio {
-                    region_sel: region_n,
-                    comuna_sel: comuna_n,
-                }
-                button { class: "btn-primary", onclick: crear, "{t.nueva}" }
-            }
-            if !aviso.read().is_empty() {
-                p { class: "muted small", "{aviso}" }
-            }
-        }
-        div { class: "grid2",
-            for c in colegios.read().iter() {
-                div { class: "company-card", key: "{c.rbd}",
-                    div { class: "cc-head",
-                        div { class: "cc-logo", "{c.nombre.chars().next().unwrap_or('C')}" }
-                        div {
-                            div { class: "strong",
-                                Link { to: Ruta::DetalleColegio { rbd: c.rbd.clone() }, class: "link",
-                                    "{c.nombre}"
+                    tfoot {
+                        tr {
+                            td { colspan: "6",
+                                button {
+                                    class: "ghost-new",
+                                    onclick: move |_| mostrar_form.set(true),
+                                    "+ Nuevo"
                                 }
                             }
-                            div { class: "muted small", "RBD {c.rbd}" }
-                        }
-                        span { class: "pill", "{c.dependencia}" }
-                    }
-                    div { class: "cc-meta",
-                        span { "📍 {nombre_comuna(&c.comuna)}" }
-                        span {
-                            "Región {c.region}"
-                        }
-                        button {
-                            class: "btn-mini",
-                            title: "✕",
-                            onclick: {
-                                let rbd = c.rbd.clone();
-                                move |_| {
-                                    let rbd_clon = rbd.clone();
-                                    spawn(async move {
-                                        if cliente::eliminar_colegio(&rbd_clon).await.is_ok() {
-                                            let region = region_codigo_de(&region_f);
-                                            let comuna = comuna_f.read().clone();
-                                            let texto = busqueda.read().clone();
-                                            if let Ok(lista) = cliente::listar_colegios(region, &comuna, &texto).await {
-                                                colegios.set(lista);
-                                            }
-                                        }
-                                    });
-                                }
-                            },
-                            "✕"
                         }
                     }
                 }
@@ -780,6 +625,8 @@ fn VistaOportunidades() -> Element {
     let mut editando = use_signal(|| None::<Uuid>);
     let mut nombre_ed = use_signal(String::new);
     let mut importe_ed = use_signal(String::new);
+    let mut mostrar_form = use_signal(|| false);
+    let mut vista_tabla = use_signal(|| false);
 
     use_effect(move || {
         recargar_oportunidades(oportunidades);
@@ -826,6 +673,19 @@ fn VistaOportunidades() -> Element {
                 if idioma == Idioma::Es { "pulsa ▶ para avanzar de etapa" } else { "click ▶ to advance stage" }
             ),
         }
+        div { class: "tabs",
+            button {
+                class: if vista_tabla() { "tab active" } else { "tab" },
+                onclick: move |_| vista_tabla.set(true),
+                "{t.tabla}"
+            }
+            button {
+                class: if !vista_tabla() { "tab active" } else { "tab" },
+                onclick: move |_| vista_tabla.set(false),
+                "{t.kanban}"
+            }
+        }
+        if mostrar_form() {
         div { class: "panel form",
             label { if idioma == Idioma::Es { "Nueva oportunidad" } else { "New opportunity" } }
             div { class: "row",
@@ -856,6 +716,44 @@ fn VistaOportunidades() -> Element {
                 p { class: "muted small", "{aviso}" }
             }
         }
+        }
+        if vista_tabla() {
+            div { class: "tbl-wrap",
+                table { class: "tbl",
+                    thead {
+                        tr {
+                            th { class: "check", "☐" }
+                            th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
+                            th { if idioma == Idioma::Es { "Importe" } else { "Amount" } }
+                            th { if idioma == Idioma::Es { "Etapa" } else { "Stage" } }
+                            th { "RBD" }
+                        }
+                    }
+                    tbody {
+                        for o in oportunidades.read().iter() {
+                            tr { key: "{o.id}",
+                                td { class: "check", "☐" }
+                                td { class: "strong", "{o.nombre}" }
+                                td { "${o.importe}" }
+                                td { span { class: "stage stage-{o.etapa:?}", "{etiqueta_etapa(o.etapa, idioma)}" } }
+                                td { class: "muted", "{o.colegio_rbd.clone().unwrap_or_default()}" }
+                            }
+                        }
+                    }
+                    tfoot {
+                        tr {
+                            td { colspan: "5",
+                                button {
+                                    class: "ghost-new",
+                                    onclick: move |_| mostrar_form.set(true),
+                                    "+ Nuevo"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
         div { class: "kanban",
             for etapa in EtapaOportunidad::todas() {
                 div { class: "col", key: "{etapa:?}",
@@ -966,6 +864,7 @@ fn VistaOportunidades() -> Element {
                 }
             }
         }
+        }
     }
 }
 
@@ -1014,11 +913,10 @@ fn DetalleColegio(rbd: String) -> Element {
         .map(|c| c.nombre.to_string())
         .unwrap_or_default();
     rsx! {
-        BarraSuperior {
-            titulo: if titulo.is_empty() { "…".to_string() } else { titulo },
-            subtitulo: (if idioma == Idioma::Es { "Ficha de colegio" } else { "School record" }).to_string(),
-        }
-        Link { to: Ruta::VistaColegios {}, class: "link", "← {t.colegios}" }
+        div { class: "record-panel",
+        Link { to: Ruta::Panel {}, class: "record-close", "✕ {t.panel}" }
+        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
+        p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de colegio" } else { "School record" }).to_string()} }
         if !aviso.read().is_empty() && !listo() {
             div { class: "panel",
                 p { class: "muted", "{aviso}" }
@@ -1047,6 +945,7 @@ fn DetalleColegio(rbd: String) -> Element {
                     }
                 }
             }
+        }
         }
     }
 }
@@ -1112,11 +1011,10 @@ fn DetallePersona(id: Uuid) -> Element {
 
     let titulo = persona.read().as_ref().map(|p| p.nombre_completo()).unwrap_or_default();
     rsx! {
-        BarraSuperior {
-            titulo: if titulo.is_empty() { "…".to_string() } else { titulo },
-            subtitulo: (if idioma == Idioma::Es { "Ficha de persona" } else { "Person record" }).to_string(),
-        }
-        Link { to: Ruta::VistaPersonas {}, class: "link", "← {t.personas}" }
+        div { class: "record-panel",
+        Link { to: Ruta::VistaPersonas {}, class: "record-close", "✕ {t.personas}" }
+        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
+        p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de persona" } else { "Person record" }).to_string()} }
         if !aviso.read().is_empty() && !listo() {
             div { class: "panel",
                 p { class: "muted", "{aviso}" }
@@ -1161,6 +1059,7 @@ fn DetallePersona(id: Uuid) -> Element {
                     p { class: "muted small", "{aviso}" }
                 }
             }
+        }
         }
     }
 }

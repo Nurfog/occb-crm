@@ -62,4 +62,5 @@ cargo clippy --workspace -- -D warnings
 cd crates/app && dx build --web
 curl http://127.0.0.1:3001/api/panel
 curl http://127.0.0.1:8080/ -o /dev/null -w "%{http_code}\n"
+node e2e/prueba.mjs   # E2E en Chrome headless (frontal + API arriba)
 ```

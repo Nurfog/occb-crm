@@ -101,6 +101,15 @@ personas es nuestro.
 - ⬜ UI: desde la ficha del alumno, buscador de colegios destino por región/comuna.
 - ⬜ E2E: traslado persiste colegio nuevo + historial visible.
 
+### ✅ Fase 1.7 — Parecido visual
+- [*] Tokens oficiales (fondos, bordes, grises, radios, acento) + Inter.
+- [*] Barra lateral fiel (224px, secciones, kbd ⌘K, estados activos).
+- [*] Tablas densas con checkbox, fila fantasma + Nuevo y formularios plegados.
+- [*] Tabs Tabla/Kanban reales en Admisión.
+- [*] Fichas como panel lateral derecho (500px) con cierre.
+- [*] E2E versionada en `e2e/prueba.mjs` (se ejecuta con `node e2e/prueba.mjs`).
+- ✅ E2E 13/13 en verde tras el rediseño + capturas de verificación.
+
 ### ⬜ Fase 2 — Tareas + Notas
 Objetivo: los dos objetos de trabajo diario, relacionados con todo lo demás.
 
