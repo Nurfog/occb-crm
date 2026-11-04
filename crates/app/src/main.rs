@@ -58,12 +58,12 @@ enum Ruta {
 fn etiqueta_etapa(etapa: EtapaOportunidad, idioma: Idioma) -> &'static str {
     match (etapa, idioma) {
         (EtapaOportunidad::Nueva, Idioma::Es) => "Nueva",
-        (EtapaOportunidad::Cribado, Idioma::Es) => "Cribado",
+        (EtapaOportunidad::Contacto, Idioma::Es) => "Contacto",
         (EtapaOportunidad::Reunion, Idioma::Es) => "Reunión",
         (EtapaOportunidad::Propuesta, Idioma::Es) => "Propuesta",
         (EtapaOportunidad::Cliente, Idioma::Es) => "Cliente",
         (EtapaOportunidad::Nueva, Idioma::En) => "New",
-        (EtapaOportunidad::Cribado, Idioma::En) => "Screening",
+        (EtapaOportunidad::Contacto, Idioma::En) => "Contact",
         (EtapaOportunidad::Reunion, Idioma::En) => "Meeting",
         (EtapaOportunidad::Propuesta, Idioma::En) => "Proposal",
         (EtapaOportunidad::Cliente, Idioma::En) => "Customer",

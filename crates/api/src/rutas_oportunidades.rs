@@ -63,7 +63,7 @@ pub async fn crear(
     let etapa_enum = occb_core::EtapaOportunidad::desde_texto(&etapa.to_lowercase())
         .ok_or_else(|| {
             ErrorApi::Validacion(
-                "Etapa no válida. Use: nueva, cribado, reunion, propuesta o cliente.".into(),
+                "Etapa no válida. Use: nueva, contacto, reunion, propuesta o cliente.".into(),
             )
         })?;
     let entrada = occb_core::validar_oportunidad(occb_core::CrearOportunidad {

@@ -115,7 +115,7 @@ pub async fn crear_oportunidad(datos: &CrearOportunidad) -> Result<Oportunidad, 
 }
 
 /// Mueve una oportunidad de etapa vía `mover_etapa_oportunidad()`.
-/// `etapa` es el texto que guarda PG: nueva, cribado, reunion, propuesta o cliente.
+/// `etapa` es el texto que guarda PG: nueva, contacto, reunion, propuesta o cliente.
 pub async fn mover_etapa(id: Uuid, etapa: &str) -> Result<Oportunidad, String> {
     enviar_json(
         "PATCH",

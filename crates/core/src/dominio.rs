@@ -52,7 +52,7 @@ impl Persona {
 #[serde(rename_all = "snake_case")]
 pub enum EtapaOportunidad {
     Nueva,
-    Cribado,
+    Contacto,
     Reunion,
     Propuesta,
     Cliente,
@@ -62,14 +62,14 @@ impl EtapaOportunidad {
     /// Todas las etapas en orden del embudo.
     pub fn todas() -> &'static [Self] {
         use EtapaOportunidad::*;
-        &[Nueva, Cribado, Reunion, Propuesta, Cliente]
+        &[Nueva, Contacto, Reunion, Propuesta, Cliente]
     }
 
     /// Convierte el texto que guarda PostgreSQL a la etapa.
     pub fn desde_texto(valor: &str) -> Option<Self> {
         match valor {
             "nueva" => Some(Self::Nueva),
-            "cribado" => Some(Self::Cribado),
+            "contacto" => Some(Self::Contacto),
             "reunion" => Some(Self::Reunion),
             "propuesta" => Some(Self::Propuesta),
             "cliente" => Some(Self::Cliente),
@@ -81,7 +81,7 @@ impl EtapaOportunidad {
     pub fn como_texto(&self) -> &'static str {
         match self {
             Self::Nueva => "nueva",
-            Self::Cribado => "cribado",
+            Self::Contacto => "contacto",
             Self::Reunion => "reunion",
             Self::Propuesta => "propuesta",
             Self::Cliente => "cliente",
@@ -92,7 +92,7 @@ impl EtapaOportunidad {
     pub fn probabilidad(&self) -> u8 {
         match self {
             Self::Nueva => 10,
-            Self::Cribado => 25,
+            Self::Contacto => 25,
             Self::Reunion => 50,
             Self::Propuesta => 75,
             Self::Cliente => 100,
@@ -102,8 +102,8 @@ impl EtapaOportunidad {
     /// Avanza una etapa (el kanban usa este orden).
     pub fn siguiente(&self) -> Self {
         match self {
-            Self::Nueva => Self::Cribado,
-            Self::Cribado => Self::Reunion,
+            Self::Nueva => Self::Contacto,
+            Self::Contacto => Self::Reunion,
             Self::Reunion => Self::Propuesta,
             Self::Propuesta => Self::Cliente,
             Self::Cliente => Self::Cliente,

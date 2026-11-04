@@ -74,7 +74,7 @@ pub fn datos_semilla_oportunidades(
     use EtapaOportunidad::*;
     vec![
         crear("Acme — Plan empresarial", 120_000, Nueva, 0),
-        crear("Globex — Despliegue de pagos", 85_000, Cribado, 1),
+        crear("Globex — Despliegue de pagos", 85_000, Contacto, 1),
         crear("Initech — Ampliación de licencias", 24_000, Reunion, 2),
         crear("Hooli — Migración a la nube", 310_000, Propuesta, 4),
         crear("Umbrella — Suite de investigación", 150_000, Reunion, 3),
