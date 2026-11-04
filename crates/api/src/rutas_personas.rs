@@ -31,8 +31,9 @@ pub struct CuerpoPersona {
     pub correo: String,
     pub telefono: Option<String>,
     pub puesto: Option<String>,
-    pub empresa_id: Option<Uuid>,
     pub ciudad: Option<String>,
+    pub region_codigo: Option<i16>,
+    pub comuna_codigo: Option<String>,
 }
 
 /// GET /api/personas
@@ -71,24 +72,26 @@ pub async fn crear(
         .validate()
         .map_err(|e| ErrorApi::Validacion(e.to_string()))?;
     let entrada = occb_core::validar_persona(occb_core::CrearPersona {
-        nombre: cuerpo.nombre,
-        apellido: cuerpo.apellido,
-        correo: cuerpo.correo,
-        telefono: cuerpo.telefono.unwrap_or_default(),
-        puesto: cuerpo.puesto.unwrap_or_default(),
-        empresa_id: cuerpo.empresa_id,
-        ciudad: cuerpo.ciudad.unwrap_or_default(),
+        nombre: cuerpo.nombre.clone(),
+        apellido: cuerpo.apellido.clone(),
+        correo: cuerpo.correo.clone(),
+        telefono: cuerpo.telefono.clone().unwrap_or_default(),
+        puesto: cuerpo.puesto.clone().unwrap_or_default(),
+        ciudad: cuerpo.ciudad.clone().unwrap_or_default(),
+        region_codigo: cuerpo.region_codigo,
+        comuna_codigo: cuerpo.comuna_codigo.clone(),
     })?;
     let fila = sqlx::query(
-        "select * from crear_persona($1, $2, $3, $4, $5, $6, $7)",
+        "select * from crear_persona($1, $2, $3, $4, $5, $6, $7, $8)",
     )
     .bind(&entrada.nombre)
     .bind(&entrada.apellido)
     .bind(&entrada.correo)
     .bind(&entrada.telefono)
     .bind(&entrada.puesto)
-    .bind(entrada.empresa_id)
     .bind(&entrada.ciudad)
+    .bind(entrada.region_codigo)
+    .bind(&entrada.comuna_codigo)
     .fetch_one(&pool)
     .await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_persona(&fila))))
@@ -117,16 +120,17 @@ pub async fn actualizar(
         .validate()
         .map_err(|e| ErrorApi::Validacion(e.to_string()))?;
     let entrada = occb_core::validar_persona(occb_core::CrearPersona {
-        nombre: cuerpo.nombre,
-        apellido: cuerpo.apellido,
-        correo: cuerpo.correo,
-        telefono: cuerpo.telefono.unwrap_or_default(),
-        puesto: cuerpo.puesto.unwrap_or_default(),
-        empresa_id: cuerpo.empresa_id,
-        ciudad: cuerpo.ciudad.unwrap_or_default(),
+        nombre: cuerpo.nombre.clone(),
+        apellido: cuerpo.apellido.clone(),
+        correo: cuerpo.correo.clone(),
+        telefono: cuerpo.telefono.clone().unwrap_or_default(),
+        puesto: cuerpo.puesto.clone().unwrap_or_default(),
+        ciudad: cuerpo.ciudad.clone().unwrap_or_default(),
+        region_codigo: cuerpo.region_codigo,
+        comuna_codigo: cuerpo.comuna_codigo.clone(),
     })?;
     let fila = sqlx::query(
-        "select * from actualizar_persona($1, $2, $3, $4, $5, $6, $7, $8)",
+        "select * from actualizar_persona($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(id)
     .bind(&entrada.nombre)
@@ -134,8 +138,9 @@ pub async fn actualizar(
     .bind(&entrada.correo)
     .bind(&entrada.telefono)
     .bind(&entrada.puesto)
-    .bind(entrada.empresa_id)
     .bind(&entrada.ciudad)
+    .bind(entrada.region_codigo)
+    .bind(&entrada.comuna_codigo)
     .fetch_optional(&pool)
     .await?
     .ok_or_else(|| ErrorApi::NoEncontrado("Persona no encontrada.".into()))?;

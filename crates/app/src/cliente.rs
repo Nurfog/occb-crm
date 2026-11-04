@@ -2,7 +2,7 @@
 //! Todas las operaciones devuelven `Result<_, String>` con mensajes en español.
 //! La API es la única que habla con PostgreSQL (vía funciones seguras).
 
-use occb_core::{CrearEmpresa, CrearOportunidad, CrearPersona, Empresa, Oportunidad, Persona};
+use occb_core::{Colegio, CrearColegio, CrearOportunidad, CrearPersona, Oportunidad, Persona, ResumenPanel};
 use uuid::Uuid;
 
 /// URL base de la API, inyectada en compilación (`API_BASE_URL`).
@@ -83,29 +83,43 @@ async fn borrar(ruta: &str) -> Result<(), String> {
     }
 }
 
-/// Lista de empresas desde `listar_empresas()`.
-pub async fn listar_empresas() -> Result<Vec<Empresa>, String> {
-    obtener_json("/api/empresas?limite=100").await
+/// Resumen del panel calculado en PostgreSQL.
+pub async fn obtener_panel() -> Result<ResumenPanel, String> {
+    obtener_json("/api/panel").await
 }
 
-/// Una empresa por id (`obtener_empresa()`).
-pub async fn obtener_empresa(id: Uuid) -> Result<Empresa, String> {
-    obtener_json(&format!("/api/empresas/{id}")).await
+/// Lista colegios del directorio con filtros (región, comuna, texto).
+pub async fn listar_colegios(
+    region: Option<i16>,
+    comuna: &str,
+    busqueda: &str,
+) -> Result<Vec<Colegio>, String> {
+    let mut ruta = String::from("/api/colegios?limite=100");
+    if let Some(r) = region {
+        ruta.push_str(&format!("&region={r}"));
+    }
+    if !comuna.trim().is_empty() {
+        ruta.push_str(&format!("&comuna={}", comuna.trim()));
+    }
+    if !busqueda.trim().is_empty() {
+        ruta.push_str(&format!("&busqueda={}", busqueda.trim()));
+    }
+    obtener_json(&ruta).await
 }
 
-/// Crea una empresa vía `crear_empresa()` (valida en API y en PG).
-pub async fn crear_empresa(datos: &CrearEmpresa) -> Result<Empresa, String> {
-    enviar_json("POST", "/api/empresas", datos).await
+/// Un colegio por RBD.
+pub async fn obtener_colegio(rbd: &str) -> Result<Colegio, String> {
+    obtener_json(&format!("/api/colegios/{rbd}")).await
 }
 
-/// Elimina una empresa vía `eliminar_empresa()`.
-pub async fn eliminar_empresa(id: Uuid) -> Result<(), String> {
-    borrar(&format!("/api/empresas/{id}")).await
+/// Registra un colegio manualmente.
+pub async fn crear_colegio(datos: &CrearColegio) -> Result<Colegio, String> {
+    enviar_json("POST", "/api/colegios", datos).await
 }
 
-/// Actualiza una empresa vía `actualizar_empresa()`.
-pub async fn actualizar_empresa(id: Uuid, datos: &CrearEmpresa) -> Result<Empresa, String> {
-    enviar_json("PATCH", &format!("/api/empresas/{id}"), datos).await
+/// Elimina un colegio manual del directorio.
+pub async fn eliminar_colegio(rbd: &str) -> Result<(), String> {
+    borrar(&format!("/api/colegios/{rbd}")).await
 }
 
 /// Lista de personas desde `listar_personas()`.

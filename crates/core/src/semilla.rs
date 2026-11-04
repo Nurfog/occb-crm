@@ -1,84 +1,86 @@
 //! Datos de demostración en español con relaciones coherentes.
 //! Se usan en el frontal (modo sin conexión) y como referencia de `sembrar_datos_demo()` en SQL.
 
-use super::dominio::{Empresa, EtapaOportunidad, Oportunidad, Persona};
+use super::dominio::{Colegio, EtapaOportunidad, Oportunidad, Persona};
 use chrono::Utc;
 use uuid::Uuid;
 
-/// Seis empresas de ejemplo ordenadas por nombre.
-pub fn datos_semilla_empresas() -> Vec<Empresa> {
-    let ahora = Utc::now();
-    let crear = |nombre: &str, dominio: &str, sector: &str, empleados: i32, ciudad: &str| Empresa {
-        id: Uuid::new_v4(),
+/// Cuatro colegios de ejemplo (el directorio oficial vive en PG con 12.038).
+pub fn datos_semilla_colegios() -> Vec<Colegio> {
+    let crear = |rbd: &str, nombre: &str, dependencia: &str, region: i16, comuna: &str| Colegio {
+        rbd: rbd.into(),
+        dv: String::new(),
         nombre: nombre.into(),
-        dominio: dominio.into(),
-        sector: sector.into(),
-        empleados,
-        ciudad: ciudad.into(),
-        creado_en: ahora,
+        dependencia: dependencia.into(),
+        region,
+        comuna: comuna.into(),
+        latitud: None,
+        longitud: None,
+        estado: "Vigente".into(),
     };
     let mut lista = vec![
-        crear("Acme Corp", "acme.com", "Software", 240, "Madrid"),
-        crear("Globex", "globex.io", "Finanzas", 85, "Barcelona"),
-        crear("Initech", "initech.dev", "Herramientas", 42, "Valencia"),
-        crear("Umbrella", "umbrella.salud", "Salud", 510, "Bilbao"),
-        crear("Hooli", "hooli.com", "Nube", 1200, "Sevilla"),
-        crear("Stark Industries", "stark.ind", "Industria", 3000, "Zaragoza"),
+        crear("10001", "Liceo Bicentenario Demo", "Municipal", 13, "13101"),
+        crear("10002", "Colegio San Demo", "Particular Subvencionado", 5, "05101"),
+        crear("10003", "Escuela Rural Demo", "Municipal", 8, "08101"),
+        crear("10004", "Liceo Técnico Demo", "Particular Pagado", 13, "13123"),
     ];
     lista.sort_by(|a, b| a.nombre.cmp(&b.nombre));
     lista
 }
 
-/// Cinco personas de ejemplo; la relación con empresas se asigna fuera.
+/// Cinco personas de ejemplo con territorio chileno.
 pub fn datos_semilla_personas() -> Vec<Persona> {
     let ahora = Utc::now();
-    let crear = |nombre: &str, apellido: &str, correo: &str, puesto: &str, ciudad: &str| Persona {
+    let crear = |nombre: &str,
+                 apellido: &str,
+                 correo: &str,
+                 puesto: &str,
+                 region: i16,
+                 comuna: &str| Persona {
         id: Uuid::new_v4(),
         nombre: nombre.into(),
         apellido: apellido.into(),
         correo: correo.into(),
-        telefono: "+34 555 0100".into(),
+        telefono: "+56 9 5555 0100".into(),
         puesto: puesto.into(),
-        empresa_id: None,
-        ciudad: ciudad.into(),
+        ciudad: crate::territorio::comuna_por_cut(comuna)
+            .map(|c| c.nombre.to_string())
+            .unwrap_or_default(),
+        region_codigo: Some(region),
+        comuna_codigo: Some(comuna.into()),
         creado_en: ahora,
     };
     vec![
-        crear("Ada", "Lovelace", "ada@acme.com", "Directora técnica", "Madrid"),
-        crear("Alan", "Turing", "alan@globex.io", "Responsable de datos", "Barcelona"),
-        crear("Grace", "Hopper", "grace@initech.dev", "VP Ingeniería", "Valencia"),
-        crear("Linus", "Torvalds", "linus@hooli.com", "Ingeniero sénior", "Sevilla"),
-        crear("Marie", "Curie", "marie@umbrella.salud", "Jefa de investigación", "Bilbao"),
+        crear("Ada", "Lovelace", "ada@test.cl", "Apoderada", 13, "13101"),
+        crear("Alan", "Turing", "alan@test.cl", "Apoderado", 5, "05101"),
+        crear("Grace", "Hopper", "grace@test.cl", "Apoderada", 8, "08101"),
+        crear("Linus", "Torvalds", "linus@test.cl", "Apoderado", 13, "13123"),
+        crear("Marie", "Curie", "marie@test.cl", "Apoderada", 8, "08102"),
     ]
 }
 
-/// Seis oportunidades repartidas por el embudo.
-pub fn datos_semilla_oportunidades(
-    ids_empresas: &[Uuid],
-    ids_personas: &[Uuid],
-) -> Vec<Oportunidad> {
+/// Seis postulaciones repartidas por el embudo de admisión.
+pub fn datos_semilla_oportunidades(ids_personas: &[Uuid]) -> Vec<Oportunidad> {
     let ahora = Utc::now();
-    let empresa = |i: usize| ids_empresas.get(i % ids_empresas.len()).copied();
     let contacto = |i: usize| ids_personas.get(i % ids_personas.len()).copied();
-    let crear =
-        |nombre: &str, importe: i64, etapa: EtapaOportunidad, i: usize| Oportunidad {
-            id: Uuid::new_v4(),
-            nombre: nombre.into(),
-            importe,
-            etapa,
-            empresa_id: empresa(i),
-            contacto_id: contacto(i),
-            fecha_cierre: None,
-            creado_en: ahora,
-        };
+    let crear = |nombre: &str, importe: i64, etapa: EtapaOportunidad, i: usize| Oportunidad {
+        id: Uuid::new_v4(),
+        nombre: nombre.into(),
+        importe,
+        etapa,
+        colegio_rbd: None,
+        contacto_id: contacto(i),
+        fecha_cierre: None,
+        creado_en: ahora,
+    };
     use EtapaOportunidad::*;
     vec![
-        crear("Acme — Plan empresarial", 120_000, Nueva, 0),
-        crear("Globex — Despliegue de pagos", 85_000, Contacto, 1),
-        crear("Initech — Ampliación de licencias", 24_000, Reunion, 2),
-        crear("Hooli — Migración a la nube", 310_000, Propuesta, 4),
-        crear("Umbrella — Suite de investigación", 150_000, Reunion, 3),
-        crear("Stark — IoT para fábricas", 480_000, Cliente, 5),
+        crear("Postulación — Informática 2026", 120_000, Contacto, 0),
+        crear("Postulación — Ingeniería 2026", 85_000, Postulante, 1),
+        crear("Postulación — Medicina 2026", 24_000, Evaluado, 2),
+        crear("Postulación — Derecho 2026", 150_000, Evaluado, 3),
+        crear("Postulación — Arquitectura 2026", 310_000, Aceptado, 4),
+        crear("Matrícula — Industrial 2025", 480_000, Matriculado, 0),
     ]
 }
 
@@ -89,16 +91,12 @@ mod pruebas {
 
     #[test]
     fn calcula_resumen_demo() {
-        let empresas = datos_semilla_empresas();
-        let ids_empresas: Vec<Uuid> = empresas.iter().map(|e| e.id).collect();
-        let mut personas = datos_semilla_personas();
-        for (i, p) in personas.iter_mut().enumerate() {
-            p.empresa_id = ids_empresas.get(i % ids_empresas.len()).copied();
-        }
+        let colegios = datos_semilla_colegios();
+        let personas = datos_semilla_personas();
         let ids_personas: Vec<Uuid> = personas.iter().map(|p| p.id).collect();
-        let oportunidades = datos_semilla_oportunidades(&ids_empresas, &ids_personas);
-        let resumen = calcular_resumen(&empresas, &personas, &oportunidades);
-        assert_eq!(resumen.total_empresas, 6);
+        let oportunidades = datos_semilla_oportunidades(&ids_personas);
+        let resumen = calcular_resumen(&colegios, &personas, &oportunidades);
+        assert_eq!(resumen.total_colegios, 4);
         assert_eq!(resumen.total_oportunidades, 6);
         assert!(resumen.valor_tuberia > 0);
         assert_eq!(resumen.valor_ganado, 480_000);

@@ -10,12 +10,14 @@
 pub mod dominio;
 pub mod i18n;
 pub mod semilla;
+pub mod territorio;
 pub mod validacion;
 
 pub use dominio::{
-    CrearEmpresa, CrearOportunidad, CrearPersona, Empresa, EtapaOportunidad, Oportunidad, Persona,
+    Colegio, CrearColegio, CrearOportunidad, CrearPersona, EtapaOportunidad, Oportunidad, Persona,
     ResumenPanel, calcular_resumen,
 };
-pub use semilla::{datos_semilla_empresas, datos_semilla_oportunidades, datos_semilla_personas};
+pub use territorio::{Comuna, Region, comuna_por_cut, comunas_de_region, region};
+pub use semilla::{datos_semilla_colegios, datos_semilla_oportunidades, datos_semilla_personas};
 pub use i18n::{Idioma, Textos, textos};
-pub use validacion::{ErrorDominio, correo_valido, validar_empresa, validar_oportunidad, validar_persona};
+pub use validacion::{ErrorDominio, correo_valido, validar_colegio, validar_oportunidad, validar_persona};

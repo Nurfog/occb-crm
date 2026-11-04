@@ -1,4 +1,4 @@
-//! Tipos de dominio en español: empresas, personas, oportunidades y panel.
+//! Tipos de dominio en español: colegios, personas, admisión y panel.
 //!
 //! Los nombres de campos usan español (`nombre`, `correo`, `importe`, `etapa`)
 //! para que la base de datos, la API y el frontal compartan vocabulario.
@@ -7,16 +7,29 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Empresa cliente.
+/// Colegio del directorio oficial (clave RBD).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Empresa {
-    pub id: Uuid,
+pub struct Colegio {
+    pub rbd: String,
+    pub dv: String,
     pub nombre: String,
-    pub dominio: String,
-    pub sector: String,
-    pub empleados: i32,
-    pub ciudad: String,
-    pub creado_en: DateTime<Utc>,
+    pub dependencia: String,
+    pub region: i16,
+    pub comuna: String,
+    pub latitud: Option<f64>,
+    pub longitud: Option<f64>,
+    pub estado: String,
+}
+
+/// Datos para registrar un colegio manualmente.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CrearColegio {
+    pub rbd: String,
+    pub nombre: String,
+    pub region: i16,
+    pub comuna: String,
+    pub dependencia: String,
+    pub dv: String,
 }
 
 /// Persona de contacto.
@@ -28,8 +41,11 @@ pub struct Persona {
     pub correo: String,
     pub telefono: String,
     pub puesto: String,
-    pub empresa_id: Option<Uuid>,
     pub ciudad: String,
+    /// Código de región chilena (1–16), anulable.
+    pub region_codigo: Option<i16>,
+    /// CUT de comuna (5 dígitos), anulable.
+    pub comuna_codigo: Option<String>,
     pub creado_en: DateTime<Utc>,
 }
 
@@ -47,32 +63,32 @@ impl Persona {
     }
 }
 
-/// Etapa del embudo comercial (kanban de oportunidades).
+/// Etapa del embudo de admisión (kanban).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum EtapaOportunidad {
-    Nueva,
     Contacto,
-    Reunion,
-    Propuesta,
-    Cliente,
+    Postulante,
+    Evaluado,
+    Aceptado,
+    Matriculado,
 }
 
 impl EtapaOportunidad {
     /// Todas las etapas en orden del embudo.
     pub fn todas() -> &'static [Self] {
         use EtapaOportunidad::*;
-        &[Nueva, Contacto, Reunion, Propuesta, Cliente]
+        &[Contacto, Postulante, Evaluado, Aceptado, Matriculado]
     }
 
     /// Convierte el texto que guarda PostgreSQL a la etapa.
     pub fn desde_texto(valor: &str) -> Option<Self> {
         match valor {
-            "nueva" => Some(Self::Nueva),
             "contacto" => Some(Self::Contacto),
-            "reunion" => Some(Self::Reunion),
-            "propuesta" => Some(Self::Propuesta),
-            "cliente" => Some(Self::Cliente),
+            "postulante" => Some(Self::Postulante),
+            "evaluado" => Some(Self::Evaluado),
+            "aceptado" => Some(Self::Aceptado),
+            "matriculado" => Some(Self::Matriculado),
             _ => None,
         }
     }
@@ -80,45 +96,45 @@ impl EtapaOportunidad {
     /// Texto que se persiste en PostgreSQL.
     pub fn como_texto(&self) -> &'static str {
         match self {
-            Self::Nueva => "nueva",
             Self::Contacto => "contacto",
-            Self::Reunion => "reunion",
-            Self::Propuesta => "propuesta",
-            Self::Cliente => "cliente",
+            Self::Postulante => "postulante",
+            Self::Evaluado => "evaluado",
+            Self::Aceptado => "aceptado",
+            Self::Matriculado => "matriculado",
         }
     }
 
-    /// Probabilidad estimada de cierre por etapa.
+    /// Probabilidad estimada de matrícula por etapa.
     pub fn probabilidad(&self) -> u8 {
         match self {
-            Self::Nueva => 10,
-            Self::Contacto => 25,
-            Self::Reunion => 50,
-            Self::Propuesta => 75,
-            Self::Cliente => 100,
+            Self::Contacto => 10,
+            Self::Postulante => 30,
+            Self::Evaluado => 55,
+            Self::Aceptado => 80,
+            Self::Matriculado => 100,
         }
     }
 
     /// Avanza una etapa (el kanban usa este orden).
     pub fn siguiente(&self) -> Self {
         match self {
-            Self::Nueva => Self::Contacto,
-            Self::Contacto => Self::Reunion,
-            Self::Reunion => Self::Propuesta,
-            Self::Propuesta => Self::Cliente,
-            Self::Cliente => Self::Cliente,
+            Self::Contacto => Self::Postulante,
+            Self::Postulante => Self::Evaluado,
+            Self::Evaluado => Self::Aceptado,
+            Self::Aceptado => Self::Matriculado,
+            Self::Matriculado => Self::Matriculado,
         }
     }
 }
 
-/// Oportunidad comercial.
+/// Oportunidad de admisión (postulación).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Oportunidad {
     pub id: Uuid,
     pub nombre: String,
     pub importe: i64,
     pub etapa: EtapaOportunidad,
-    pub empresa_id: Option<Uuid>,
+    pub colegio_rbd: Option<String>,
     pub contacto_id: Option<Uuid>,
     pub fecha_cierre: Option<DateTime<Utc>>,
     pub creado_en: DateTime<Utc>,
@@ -127,22 +143,12 @@ pub struct Oportunidad {
 /// Resumen numérico del panel principal.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResumenPanel {
-    pub total_empresas: i64,
+    pub total_colegios: i64,
     pub total_personas: i64,
     pub total_oportunidades: i64,
     pub valor_tuberia: i64,
     pub valor_ganado: i64,
     pub tasa_exito: f32,
-}
-
-/// Datos para crear una empresa (entrada de API y formularios).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CrearEmpresa {
-    pub nombre: String,
-    pub dominio: String,
-    pub sector: String,
-    pub empleados: i32,
-    pub ciudad: String,
 }
 
 /// Datos para crear una persona.
@@ -153,8 +159,9 @@ pub struct CrearPersona {
     pub correo: String,
     pub telefono: String,
     pub puesto: String,
-    pub empresa_id: Option<Uuid>,
     pub ciudad: String,
+    pub region_codigo: Option<i16>,
+    pub comuna_codigo: Option<String>,
 }
 
 /// Datos para crear una oportunidad.
@@ -163,33 +170,33 @@ pub struct CrearOportunidad {
     pub nombre: String,
     pub importe: i64,
     pub etapa: EtapaOportunidad,
-    pub empresa_id: Option<Uuid>,
+    pub colegio_rbd: Option<String>,
 }
 
 /// Calcula el resumen del panel a partir de listas en memoria.
 /// La API en producción lo calcula en PostgreSQL con `panel_resumen()`.
 pub fn calcular_resumen(
-    empresas: &[Empresa],
+    colegios: &[Colegio],
     personas: &[Persona],
     oportunidades: &[Oportunidad],
 ) -> ResumenPanel {
     let valor_tuberia: i64 = oportunidades
         .iter()
-        .filter(|o| o.etapa != EtapaOportunidad::Cliente)
+        .filter(|o| o.etapa != EtapaOportunidad::Matriculado)
         .map(|o| o.importe)
         .sum();
     let valor_ganado: i64 = oportunidades
         .iter()
-        .filter(|o| o.etapa == EtapaOportunidad::Cliente)
+        .filter(|o| o.etapa == EtapaOportunidad::Matriculado)
         .map(|o| o.importe)
         .sum();
     let total = oportunidades.len().max(1) as f32;
     let ganadas = oportunidades
         .iter()
-        .filter(|o| o.etapa == EtapaOportunidad::Cliente)
+        .filter(|o| o.etapa == EtapaOportunidad::Matriculado)
         .count() as f32;
     ResumenPanel {
-        total_empresas: empresas.len() as i64,
+        total_colegios: colegios.len() as i64,
         total_personas: personas.len() as i64,
         total_oportunidades: oportunidades.len() as i64,
         valor_tuberia,

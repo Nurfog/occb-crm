@@ -10,9 +10,10 @@
 mod bd;
 mod configuracion;
 mod errores;
-mod rutas_empresas;
+mod rutas_colegios;
 mod rutas_oportunidades;
 mod rutas_personas;
+mod rutas_territorio;
 
 use std::{net::SocketAddr, time::Duration};
 
@@ -47,14 +48,12 @@ async fn main() {
         .route("/api/salud", get(salud))
         // Rutas en español (se mantienen alias en inglés para compatibilidad).
         .route(
-            "/api/empresas",
-            get(rutas_empresas::listar).post(rutas_empresas::crear),
+            "/api/colegios",
+            get(rutas_colegios::listar).post(rutas_colegios::crear),
         )
         .route(
-            "/api/empresas/{id}",
-            get(rutas_empresas::obtener)
-                .patch(rutas_empresas::actualizar)
-                .delete(rutas_empresas::eliminar),
+            "/api/colegios/{rbd}",
+            get(rutas_colegios::obtener).delete(rutas_colegios::eliminar),
         )
         .route(
             "/api/personas",
@@ -80,9 +79,11 @@ async fn main() {
                 .delete(rutas_oportunidades::eliminar),
         )
         .route("/api/panel", get(rutas_oportunidades::panel))
-        // Alias en inglés (compatibilidad con el MVP anterior).
+        .route("/api/regiones", get(rutas_territorio::listar_regiones))
+        .route("/api/comunas", get(rutas_territorio::listar_comunas))
+        // Alias en inglés.
         .route("/api/health", get(salud))
-        .route("/api/companies", get(rutas_empresas::listar))
+        .route("/api/schools", get(rutas_colegios::listar))
         .route("/api/people", get(rutas_personas::listar))
         .route("/api/opportunities", get(rutas_oportunidades::listar))
         .route("/api/dashboard", get(rutas_oportunidades::panel))

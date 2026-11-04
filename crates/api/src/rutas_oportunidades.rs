@@ -28,7 +28,7 @@ pub struct CuerpoOportunidad {
     pub nombre: String,
     pub importe: Option<i64>,
     pub etapa: Option<String>,
-    pub empresa_id: Option<Uuid>,
+    pub colegio_rbd: Option<String>,
 }
 
 /// Cuerpo para mover de etapa.
@@ -63,14 +63,14 @@ pub async fn crear(
     let etapa_enum = occb_core::EtapaOportunidad::desde_texto(&etapa.to_lowercase())
         .ok_or_else(|| {
             ErrorApi::Validacion(
-                "Etapa no válida. Use: nueva, contacto, reunion, propuesta o cliente.".into(),
+                "Etapa no válida. Use: contacto, postulante, evaluado, aceptado o matriculado.".into(),
             )
         })?;
     let entrada = occb_core::validar_oportunidad(occb_core::CrearOportunidad {
         nombre: cuerpo.nombre,
         importe: cuerpo.importe.unwrap_or(0),
         etapa: etapa_enum,
-        empresa_id: cuerpo.empresa_id,
+        colegio_rbd: cuerpo.colegio_rbd.clone(),
     })?;
     let fila = sqlx::query(
         "select * from crear_oportunidad($1, $2, $3, $4)",
@@ -78,7 +78,7 @@ pub async fn crear(
     .bind(&entrada.nombre)
     .bind(entrada.importe)
     .bind(entrada.etapa.como_texto())
-    .bind(entrada.empresa_id)
+    .bind(entrada.colegio_rbd.clone())
     .fetch_one(&pool)
     .await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_oportunidad(&fila))))
@@ -125,14 +125,14 @@ pub async fn actualizar(
     let etapa_enum = occb_core::EtapaOportunidad::desde_texto(&etapa.to_lowercase())
         .ok_or_else(|| {
             ErrorApi::Validacion(
-                "Etapa no válida. Use: nueva, contacto, reunion, propuesta o cliente.".into(),
+                "Etapa no válida. Use: contacto, postulante, evaluado, aceptado o matriculado.".into(),
             )
         })?;
     let entrada = occb_core::validar_oportunidad(occb_core::CrearOportunidad {
         nombre: cuerpo.nombre,
         importe: cuerpo.importe.unwrap_or(0),
         etapa: etapa_enum,
-        empresa_id: cuerpo.empresa_id,
+        colegio_rbd: cuerpo.colegio_rbd.clone(),
     })?;
     let fila = sqlx::query(
         "select * from actualizar_oportunidad($1, $2, $3, $4, $5)",
@@ -141,7 +141,7 @@ pub async fn actualizar(
     .bind(&entrada.nombre)
     .bind(entrada.importe)
     .bind(entrada.etapa.como_texto())
-    .bind(entrada.empresa_id)
+    .bind(entrada.colegio_rbd.clone())
     .fetch_optional(&pool)
     .await?
     .ok_or_else(|| ErrorApi::NoEncontrado("Oportunidad no encontrada.".into()))?;
@@ -153,13 +153,13 @@ pub async fn panel(
     State(pool): State<PgPool>,
 ) -> Result<Json<occb_core::ResumenPanel>, ErrorApi> {
     let fila = sqlx::query(
-        "select total_empresas, total_personas, total_oportunidades, valor_tuberia, valor_ganado, tasa_exito::float8 as tasa_exito from panel_resumen()",
+        "select total_colegios, total_personas, total_oportunidades, valor_tuberia, valor_ganado, tasa_exito::float8 as tasa_exito from panel_resumen()",
     )
     .fetch_one(&pool)
     .await?;
     use sqlx::Row;
     Ok(Json(occb_core::ResumenPanel {
-        total_empresas: fila.get::<i64, _>("total_empresas"),
+        total_colegios: fila.get::<i64, _>("total_colegios"),
         total_personas: fila.get::<i64, _>("total_personas"),
         total_oportunidades: fila.get::<i64, _>("total_oportunidades"),
         valor_tuberia: fila.get::<i64, _>("valor_tuberia"),

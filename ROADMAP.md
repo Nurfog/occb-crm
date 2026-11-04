@@ -59,10 +59,52 @@ Idioma por defecto español con i18n ES/EN en todo lo visible.
 
 ## Siguiente (por orden)
 
+### [*] Fase 1.6 — Territorio chileno (Región → Comuna)
+- ✅ Dataset oficial (16 regiones + 346 comunas CUT) validado y generado a código.
+- ✅ `core/territorio` con tests (regiones, comunas por región, validación cruzada).
+- ✅ Migración 009: tablas `regiones`/`comunas` + seed + columnas en
+  empresas/personas + CRUD actualizado + `listar_regiones`/`listar_comunas_region`.
+- ✅ Endpoints `GET /api/regiones` y `GET /api/comunas?region=`.
+- ✅ Selector Región→Comuna reutilizable en altas y fichas (filtra comunas,
+  autocompleta ciudad, valida coherencia).
+- ✅ E2E: cascada filtra + guardado persiste códigos (pruebas 12–13).
+
+### [*] Fase E1 — Colegios y Admisión (track escolar)
+Objetivo: el CRM habla de colegios, no de empresas; el embudo es admisión.
+Se ignoran las tablas `crm_sales_*` del sistema escolar externo: el vínculo con
+personas es nuestro.
+
+- [*] Directorio oficial (12.038 vigentes, RBD como clave) validado: comunas
+  calzan 100% con las 346 y regiones con las 16.
+- [*] Migración 010: tabla `colegios` + seed + `listar_colegios` (filtros por
+  región/comuna/texto, ideal para traslados) + `obtener/crear/eliminar_colegio`.
+- [*] Retiro total de Empresas (tabla, funciones, API, UI, dominio).
+- [*] Oportunidades → Admisión: etapas contacto/postulante/evaluado/aceptado/
+  matriculado + columna `colegio_rbd`; personas sin `empresa_id`.
+- [*] UI: Colegios en el menú (directorio filtrable + registro + ficha con
+  postulaciones), kanban de admisión, panel cuenta colegios.
+- [] E2E 13/13 adaptada (colegios CRUD por UI, kanban de admisión, fichas).
+
+### ⬜ Fase E2 — Alumnos y Apoderados
+- ⬜ Tablas `alumnos` (RUT único con dígito verificador, nombres, curso/nivel,
+  colegio RBD, estado: postulante/matriculado/trasladado/retirado) y `apoderados`
+  (RUT único, nombres, contacto, territorio) + `alumno_apoderado` (vínculo,
+  retiro autorizado, notificaciones).
+- ⬜ Validación RUT módulo 11 en núcleo + funciones PG.
+- ⬜ CRUD completo + fichas (alumno con apoderados y colegios; apoderado con alumnos).
+- ⬜ UI reemplaza Personas por Alumnos + Apoderados en el menú.
+- ⬜ E2E: alta con RUT válido/inválido, vínculo apoderado, fichas cruzadas.
+
+### ⬜ Fase E3 — Traslados
+- ⬜ Tabla `traslados` (alumno, origen RBD, destino RBD, fecha, motivo) +
+  `trasladar_alumno()` (valida destino ≠ origen, actualiza colegio, registra historial).
+- ⬜ UI: desde la ficha del alumno, buscador de colegios destino por región/comuna.
+- ⬜ E2E: traslado persiste colegio nuevo + historial visible.
+
 ### ⬜ Fase 2 — Tareas + Notas
 Objetivo: los dos objetos de trabajo diario, relacionados con todo lo demás.
 
-- ⬜ Base de datos (migración 009):
+- ⬜ Base de datos (migración 010):
   - ⬜ Tabla `tareas`: `id`, `titulo` (1–200, obligatorio), `detalle`, `estado`
     (`pendiente|en_curso|hecha`, por defecto `pendiente`), `prioridad`
     (`baja|media|alta`, por defecto `media`), `vencimiento` (anulable),
@@ -89,13 +131,13 @@ Objetivo: los dos objetos de trabajo diario, relacionados con todo lo demás.
   - ⬜ Contador de pendientes en el menú.
 - ⬜ E2E (Chrome): alta de tarea por UI persiste; avance de estado persiste;
   alta y edición de nota persisten; aparecen en la ficha relacionada.
-- ⬜ Hecho cuando: E2E 15/15, clippy limpio, migración 009 aplicada en fresco
+- ⬜ Hecho cuando: E2E 15/15, clippy limpio, migración 010 aplicada en fresco
   (`down -v` + `up` + arranque API sin errores).
 
 ### ⬜ Fase 3 — Acceso real + miembros
 Objetivo: multiusuario de verdad; base para permisos por usuario.
 
-- ⬜ Base de datos (migración 010):
+- ⬜ Base de datos (migración 011):
   - ⬜ Tabla `usuarios`: `id`, `nombre`, `correo` único (formato válido),
     `clave_hash` (argon2, solo lo escribe la función), `rol`
     (`admin|miembro`, por defecto `miembro`), `creado_en`. RLS.
@@ -127,7 +169,7 @@ Objetivo: multiusuario de verdad; base para permisos por usuario.
 ### ⬜ Fase 4 — Calendario + Correos
 Objetivo: agenda y bandeja vinculadas a los registros.
 
-- ⬜ Base de datos (migración 011):
+- ⬜ Base de datos (migración 012):
   - ⬜ Tabla `eventos`: `id`, `titulo` obligatorio, `inicio`/`fin` (fin ≥ inicio),
     `lugar`, `descripcion`, `persona_id`, `empresa_id`, `oportunidad_id`
     (anulables), `creado_en`. Índice por rango de fechas. RLS.
@@ -154,7 +196,7 @@ Objetivo: agenda y bandeja vinculadas a los registros.
 ### ⬜ Fase 5 — Búsqueda global + Favoritos + Vistas + Timeline
 Objetivo: moverse por el espacio como en un CRM grande.
 
-- ⬜ Base de datos (migración 012):
+- ⬜ Base de datos (migración 013):
   - ⬜ Búsqueda: columnas `tsvector` en español (`pg_catalog.spanish`) para
     empresas/personas/oportunidades/notas/tareas + función `buscar_espacio(texto)`
     que devuelve `(tipo, id, titulo, detalle)` rankeada, límite 20.
@@ -182,7 +224,7 @@ Objetivo: moverse por el espacio como en un CRM grande.
 ### ⬜ Fase 6 — Automatizaciones
 Objetivo: reglas sencillas sin programar.
 
-- ⬜ Base de datos (migración 013):
+- ⬜ Base de datos (migración 014):
   - ⬜ Tabla `automatizaciones`: `id`, `nombre` obligatorio, `activa` (defecto true),
     `disparador` (`al_crear|al_actualizar` + objeto), `condiciones jsonb`
     (lista de `{campo, operador, valor}` con operadores `igual|contiene|mayor_que`),
@@ -207,7 +249,7 @@ Objetivo: reglas sencillas sin programar.
 ### ⬜ Fase 7 — Agentes IA + chat
 Objetivo: pedirle cosas al CRM conversando.
 
-- ⬜ Base de datos (migración 014):
+- ⬜ Base de datos (migración 015):
   - ⬜ Tabla `conversaciones`: `id`, `usuario_id`, `titulo`, `creado_en`.
   - ⬜ Tabla `mensajes`: `id`, `conversacion_id` (`on delete cascade`), `rol`
     (`usuario|agente`), `contenido`, `creado_en`.
@@ -230,7 +272,7 @@ Objetivo: pedirle cosas al CRM conversando.
 ### ⬜ Fase 8 — Plataforma y producción
 Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 
-- ⬜ Integraciones (migración 015):
+- ⬜ Integraciones (migración 016):
   - ⬜ Tabla `claves_api`: `id`, `usuario_id`, `nombre`, `clave_hash` (sha256, se
     muestra una sola vez al crear), `alcances text[]`, `revocada`,
     `creado_en`. Auth por cabecera `X-Clave-API` con mismos permisos que el dueño.
@@ -262,6 +304,10 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Empresas | ✅ Funcional (CRUD + ficha) | 1 + 1.5 |
 | Oportunidades | ✅ Funcional (CRUD + kanban + inline) | 1 + 1.5 |
 | Fichas y relacionados | ✅ Funcional | 1.5 |
+| Regiones y comunas | ✅ Funcional | 1.6 |
+| Colegios y Admisión | [*] En curso | E1 |
+| Alumnos y Apoderados | ⬜ Pendiente | E2 |
+| Traslados | ⬜ Pendiente | E3 |
 | Tareas | [] Pendiente | 2 |
 | Notas | [] Pendiente | 2 |
 | Usuarios y acceso | 🚧 Mock (real en 3) | 3 |
