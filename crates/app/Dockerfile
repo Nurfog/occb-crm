@@ -20,11 +20,13 @@ WORKDIR /codigo
 # Primero solo manifiestos para aprovechar la caché de dependencias.
 COPY Cargo.toml Cargo.lock ./
 COPY crates/core/Cargo.toml ./crates/core/Cargo.toml
+COPY crates/api/Cargo.toml ./crates/api/Cargo.toml
 COPY crates/app/Cargo.toml ./crates/app/Cargo.toml
 COPY crates/app/Dioxus.toml ./crates/app/Dioxus.toml
 
 # Copia el código del frontal y sus assets.
 COPY crates/core ./crates/core
+COPY crates/api ./crates/api
 COPY crates/app ./crates/app
 
 WORKDIR /codigo/crates/app
