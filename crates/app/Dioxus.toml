@@ -3,7 +3,7 @@ name = "occb-app"
 default_platform = "web"
 
 [web.app]
-title = "OCCB CRM — Twenty clone in Rust + Dioxus"
+title = "OCCB CRM"
 
 [web.watcher]
 reload_html = true

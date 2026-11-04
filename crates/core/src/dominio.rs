@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Empresa cliente (equivale a `Company` en Twenty).
+/// Empresa cliente.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Empresa {
     pub id: Uuid,
@@ -19,7 +19,7 @@ pub struct Empresa {
     pub creado_en: DateTime<Utc>,
 }
 
-/// Persona de contacto (equivale a `Person` en Twenty).
+/// Persona de contacto.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Persona {
     pub id: Uuid,

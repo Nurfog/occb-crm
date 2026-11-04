@@ -75,7 +75,7 @@ pub fn textos(idioma: Idioma) -> Textos {
     match idioma {
         Idioma::Es => Textos {
             nombre_app: "OCCB CRM",
-            eslogan: "clon de Twenty · Rust",
+            eslogan: "CRM · Rust",
             buscar: "Buscar ⌘K",
             favoritos: "Favoritos",
             espacio_trabajo: "Espacio de trabajo",
@@ -103,7 +103,7 @@ pub fn textos(idioma: Idioma) -> Textos {
             guardar: "Guardar",
             continuar: "Continuar →",
             acceso_titulo: "Bienvenido de nuevo",
-            acceso_subtitulo: "Accede a tu espacio OCCB (clon de Twenty en Rust + Dioxus)",
+            acceso_subtitulo: "Accede a tu espacio de trabajo OCCB",
             correo: "Correo",
             contrasena: "Contraseña",
             salud_tuberia: "Salud de la tubería",
@@ -112,7 +112,7 @@ pub fn textos(idioma: Idioma) -> Textos {
         },
         Idioma::En => Textos {
             nombre_app: "OCCB CRM",
-            eslogan: "Twenty clone · Rust",
+            eslogan: "Rust CRM",
             buscar: "Search ⌘K",
             favoritos: "Favorites",
             espacio_trabajo: "Workspace",
@@ -140,7 +140,7 @@ pub fn textos(idioma: Idioma) -> Textos {
             guardar: "Save",
             continuar: "Continue →",
             acceso_titulo: "Welcome back",
-            acceso_subtitulo: "Sign in to your OCCB workspace (Twenty clone in Rust + Dioxus)",
+            acceso_subtitulo: "Sign in to your OCCB workspace",
             correo: "Email",
             contrasena: "Password",
             salud_tuberia: "Pipeline health",

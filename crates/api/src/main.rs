@@ -1,4 +1,4 @@
-//! API OCCB: clon de Twenty en Rust (Axum + PostgreSQL 18 con funciones seguras).
+//! API OCCB (Axum + PostgreSQL 18 con funciones seguras).
 //!
 //! Buenas prácticas aplicadas:
 //! - Módulos por responsabilidad (`configuracion`, `errores`, `bd`, `rutas_*`).
@@ -33,7 +33,7 @@ async fn main() {
     let configuracion = Configuracion::desde_entorno();
     tracing::info!(
         puerto = configuracion.puerto,
-        "Iniciando API OCCB (clon de Twenty en Rust)"
+        "Iniciando API OCCB"
     );
 
     let pool = bd::crear_pool(&configuracion.url_bd)
@@ -105,7 +105,7 @@ async fn salud() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "estado": "correcto",
         "servicio": "occb-api",
-        "clon_de": "twenty",
+        "producto": "occb-crm",
         "idioma": "es",
         "bd": "postgres:18 con funciones seguras + RLS"
     }))

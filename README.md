@@ -1,9 +1,8 @@
-# OCCB CRM — clon de Twenty en Rust 2024 + Dioxus
+# OCCB CRM
 
-Migración de [twentyhq/twenty](https://github.com/twentyhq/twenty) (React + NestJS + PostgreSQL)
-a **Rust edition 2024 + Dioxus 0.7 + Axum + PostgreSQL 18**.
+CRM en **Rust edition 2024**: frontal **Dioxus 0.7**, API **Axum** y **PostgreSQL 18**.
 
-Idioma por defecto: **español**, con conmutador **ES/EN** (i18n) en el frontal.
+Idioma por defecto: **español**, con conmutador **ES/EN** en el frontal.
 
 ## Estructura
 
@@ -17,16 +16,8 @@ occb-crm/
     core/                 # dominio en español: dominio, validacion, i18n, semilla
     api/                  # backend Axum :3001 (solo llama a funciones SQL)
     app/                  # frontal Dioxus web (Dockerfile + nginx.conf)
-  migrations/             # 001 esquema → 006 funciones SECURITY DEFINER + RLS + siembra
+  migrations/             # esquema, funciones seguras + RLS y datos de ejemplo
 ```
-
-### Mapa Twenty → Rust
-
-| Twenty original | OCCB Rust |
-|---|---|
-| `twenty-front` (React) | `crates/app` (Dioxus 0.7 + Router + señales + i18n ES/EN) |
-| `twenty-server` (NestJS) | `crates/api` (Axum; CRUD solo vía funciones PG) |
-| PostgreSQL + Redis | `docker-compose.yml` (postgres:18 + redis:8 con healthchecks) |
 
 ## Requisitos
 
@@ -37,11 +28,11 @@ rustup target add wasm32-unknown-unknown
 cp .env.example .env   # solo la primera vez
 ```
 
-## Arranque rápido (todo en contenedores salvo la API)
+## Arranque rápido
 
 ```bash
-docker compose up -d bd redis        # Postgres 18 + Redis
-cargo run -p occb-api                # API :3001 (migra y siembra solo)
+docker compose up -d bd redis        # PostgreSQL 18 + Redis
+cargo run -p occb-api                # API :3001 (aplica migraciones y siembra)
 docker compose up -d frontal         # frontal :8080 (build WASM + nginx)
 ```
 
@@ -57,7 +48,7 @@ docker compose up -d frontal         # frontal :8080 (build WASM + nginx)
 - `GET /api/panel` — resumen calculado en la base de datos
 
 Seguridad: la API jamás toca tablas con SQL directo; solo ejecuta funciones
-`SECURITY DEFINER` con validación (`migrations/002–005`) y RLS activado.
+`SECURITY DEFINER` con validación (`migrations/`) y RLS activado.
 Errores unificados en español: `{ "codigo": "...", "mensaje": "..." }`.
 
 ## Verificación
@@ -69,9 +60,3 @@ cd crates/app && dx build --web
 curl http://127.0.0.1:3001/api/panel
 curl http://127.0.0.1:8080/ -o /dev/null -w "%{http_code}\n"
 ```
-
-## Fase 1 hecha · siguiente
-
-Hecho: núcleo CRM en español + i18n, PG 18 en Docker, CRUD por funciones + RLS,
-frontal en contenedor. Siguiente: conectar el frontal a la API en vivo,
-autenticación, y API también en contenedor.

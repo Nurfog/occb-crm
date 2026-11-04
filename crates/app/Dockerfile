@@ -1,4 +1,4 @@
-# Frontal OCCB (clon de Twenty en Dioxus web) — imagen multi-etapa.
+# Frontal OCCB (Dioxus web) — imagen multi-etapa.
 # Etapa 1: compila el WASM con Dioxus CLI. Etapa 2: sirve los estáticos con nginx.
 
 # ---------- Etapa 1: compilación ----------

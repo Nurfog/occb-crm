@@ -1,4 +1,4 @@
-//! Frontal Dioxus estilo Twenty, todo en español con i18n ES/EN.
+//! Frontal OCCB en Dioxus, todo en español con i18n ES/EN.
 //!
 //! Buenas prácticas: textos centralizados en `occb-core::i18n`, componentes
 //! pequeños por responsabilidad y estado local con señales.
@@ -9,7 +9,7 @@ use occb_core::{
     datos_semilla_empresas, datos_semilla_oportunidades, datos_semilla_personas, textos,
 };
 
-/// Hoja de estilos del clon visual de Twenty.
+/// Hoja de estilos del frontal.
 const CSS: Asset = asset!("/assets/main.css");
 
 /// Idioma global de la interfaz (español por defecto, conmutable a inglés).
@@ -28,7 +28,7 @@ fn Aplicacion() -> Element {
     }
 }
 
-/// Rutas del clon (nombres en español).
+/// Rutas de la aplicación (nombres en español).
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
 enum Ruta {
@@ -65,7 +65,7 @@ fn etiqueta_etapa(etapa: EtapaOportunidad, idioma: Idioma) -> &'static str {
     }
 }
 
-/// Disposición con barra lateral (clon de Twenty).
+/// Disposición con barra lateral.
 #[component]
 fn DisposicionApp() -> Element {
     rsx! {
@@ -534,7 +534,7 @@ fn VistaAjustes() -> Element {
         }
         div { class: "panel form",
             label { if IDIOMA() == Idioma::Es { "Nombre del espacio" } else { "Workspace name" } }
-            input { class: "input", value: "OCCB CRM — clon de Twenty" }
+            input { class: "input", value: "OCCB CRM" }
             label { "API" }
             input { class: "input", value: "http://localhost:3001/api" }
             label { if IDIOMA() == Idioma::Es { "Base de datos" } else { "Database" } }

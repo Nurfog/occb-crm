@@ -1,4 +1,4 @@
-//! Núcleo del dominio OCCB (clon de Twenty).
+//! Núcleo del dominio OCCB.
 //! Todo en español por defecto, con internacionalización ES/EN para la interfaz.
 //!
 //! Buenas prácticas aplicadas:
