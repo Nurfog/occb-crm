@@ -144,7 +144,7 @@ await esperarCondicion(`[...document.querySelectorAll('.opp-card button')].some(
 const antes = await evaluar(`
   (() => {
     const nombre = ${JSON.stringify(NOMBRE_OPP)};
-    const tarjeta = [...document.querySelectorAll('.opp-card')].find(c => c.querySelector('.opp-name').textContent === nombre);
+    const tarjeta = [...document.querySelectorAll('.opp-card')].find(c => (c.querySelector('.opp-name')?.textContent || '').includes(nombre));
     const columna = tarjeta.closest('.col');
     const boton = [...tarjeta.querySelectorAll('button')].find(b => b.textContent.includes('▶'));
     boton.click();
@@ -155,12 +155,16 @@ const antes = await evaluar(`
   })()
 `);
 console.log('  kanban antes:', JSON.stringify(antes));
-await dormir(2500);
 const idxAntes = ORDEN_ES.indexOf(antes.etapa);
 const esperadoEs = ORDEN_ES[Math.min(idxAntes + 1, ORDEN_ES.length - 1)];
+await esperarCondicion(`(() => {
+  const tarjeta = [...document.querySelectorAll('.opp-card')].find(c => (c.querySelector('.opp-name')?.textContent || '').includes(${JSON.stringify(antes.nombre)}));
+  if (!tarjeta) return false;
+  return tarjeta.closest('.col').querySelector('.stage').textContent.trim() === ${JSON.stringify(esperadoEs)};
+})()`);
 const despues = await evaluar(`
   (() => {
-    const tarjeta = [...document.querySelectorAll('.opp-card')].find(c => c.querySelector('.opp-name').textContent === ${JSON.stringify(antes.nombre)});
+    const tarjeta = [...document.querySelectorAll('.opp-card')].find(c => (c.querySelector('.opp-name')?.textContent || '').includes(${JSON.stringify(antes.nombre)}));
     if (!tarjeta) return null;
     return tarjeta.closest('.col').querySelector('.stage').textContent.trim();
   })()

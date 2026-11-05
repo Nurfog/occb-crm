@@ -109,6 +109,9 @@ personas es nuestro.
 - [*] Fichas como panel lateral derecho (500px) con cierre.
 - [*] E2E versionada en `e2e/prueba.mjs` (se ejecuta con `node e2e/prueba.mjs`).
 - ✅ E2E 13/13 en verde tras el rediseño + capturas de verificación.
+- ✅ Fichas reactivas al pinchar varios registros (efecto suscrito al id de ruta).
+- ✅ Fidelidad al original montado localmente: chips, footer de stats, kanban rico
+  ($/responsable/fecha/colegio/contacto), tabs Tabla/Kanban, "+ Nuevo" por columna.
 
 ### ⬜ Fase 2 — Tareas + Notas
 Objetivo: los dos objetos de trabajo diario, relacionados con todo lo demás.
