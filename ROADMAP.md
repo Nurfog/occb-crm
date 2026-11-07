@@ -113,37 +113,37 @@ personas es nuestro.
 - ✅ Fidelidad al original montado localmente: chips, footer de stats, kanban rico
   ($/responsable/fecha/colegio/contacto), tabs Tabla/Kanban, "+ Nuevo" por columna.
 
-### ⬜ Fase 2 — Tareas + Notas
+### ✅ Fase 2 — Tareas + Notas
 Objetivo: los dos objetos de trabajo diario, relacionados con todo lo demás.
 
-- ⬜ Base de datos (migración 013):
-  - ⬜ Tabla `tareas`: `id`, `titulo` (1–200, obligatorio), `detalle`, `estado`
+- ✅ Base de datos (migración 013):
+  - ✅ Tabla `tareas`: `id`, `titulo` (1–200, obligatorio), `detalle`, `estado`
     (`pendiente|en_curso|hecha`, por defecto `pendiente`), `prioridad`
     (`baja|media|alta`, por defecto `media`), `vencimiento` (anulable),
     `persona_id`, `empresa_id`, `oportunidad_id` (anulables, `on delete set null`),
     `creado_en`. Índices por estado, vencimiento y cada referencia. RLS.
-  - ⬜ Tabla `notas`: `id`, `titulo`, `cuerpo` (obligatorio no vacío),
+  - ✅ Tabla `notas`: `id`, `titulo`, `cuerpo` (obligatorio no vacío),
     `persona_id`, `empresa_id`, `oportunidad_id` (anulables), `creado_en`.
     Índice GIN trigram (`pg_trgm`) para búsqueda por texto. RLS.
-  - ⬜ Funciones por objeto: `listar_*` (búsqueda + filtros por estado/empresa +
+  - ✅ Funciones por objeto: `listar_*` (búsqueda + filtros por estado/empresa +
     paginación), `obtener_*`, `crear_*` (validan título y referencias),
     `actualizar_*`, `eliminar_*`, más `marcar_tarea(id, estado)`. Todas
     `SECURITY DEFINER` con mensajes en español y `GRANT EXECUTE`.
-- ⬜ API:
-  - ⬜ `GET/POST /api/tareas`, `GET/PATCH/DELETE /api/tareas/{id}`,
+- ✅ API:
+  - ✅ `GET/POST /api/tareas`, `GET/PATCH/DELETE /api/tareas/{id}`,
     `PATCH /api/tareas/{id}/estado`.
-  - ⬜ `GET/POST /api/notas`, `GET/PATCH/DELETE /api/notas/{id}`.
-  - ⬜ Validación Rust espejo de la SQL (título obligatorio, estado/prioridad válidos).
-- ⬜ Frontal:
-  - ⬜ Entradas de menú Tareas y Notas (quitan el atenuado), rutas `/tareas`, `/notas`.
-  - ⬜ Vista Tareas: lista con filtro por estado, ▶ para avanzar estado,
+  - ✅ `GET/POST /api/notas`, `GET/PATCH/DELETE /api/notas/{id}`.
+  - ✅ Validación Rust espejo de la SQL (título obligatorio, estado/prioridad válidos).
+- ✅ Frontal:
+  - ✅ Entradas de menú Tareas y Notas (quitan el atenuado), rutas `/tareas`, `/notas`.
+  - ✅ Vista Tareas: lista con filtro por estado, ▶ para avanzar estado,
     alta con vencimiento y prioridad, edición inline, baja.
-  - ⬜ Vista Notas: lista con búsqueda de texto, editor de alta/edición, baja.
-  - ⬜ Fichas de empresa/persona/oportunidad muestran sus tareas y notas con enlaces.
-  - ⬜ Contador de pendientes en el menú.
-- ⬜ E2E (Chrome): alta de tarea por UI persiste; avance de estado persiste;
+  - ✅ Vista Notas: lista con búsqueda de texto, editor de alta/edición, baja.
+  - ✅ Fichas de alumno muestran sus tareas y notas con enlaces.
+  - ✅ Contador de pendientes en el menú.
+- ✅ E2E (Chrome): alta de tarea por UI persiste; avance de estado persiste;
   alta y edición de nota persisten; aparecen en la ficha relacionada.
-- ⬜ Hecho cuando: E2E 15/15, clippy limpio, migración 013 aplicada en fresco
+- ✅ Hecho cuando: E2E 25/25, clippy limpio, migración 013 aplicada en fresco
   (`down -v` + `up` + arranque API sin errores).
 
 ### ⬜ Fase 3 — Acceso real + miembros
@@ -169,7 +169,7 @@ Objetivo: multiusuario de verdad; base para permisos por usuario.
   - ⬜ `GET /api/miembros`, `PATCH /api/miembros/{id}/rol` (solo admin).
   - ⬜ RLS por usuario: políticas con `current_setting('app.usuario_id')` fijado por
     conexión desde el middleware; las funciones lo respetan.
-- ⬜ Frontal:
+- ✅ Frontal:
   - ⬜ Pantallas `/acceso` (login real) y `/registro` (con casilla de privacidad),
     sesión solo en memoria (señal global, nunca almacenamiento local),
     renovación silenciosa, cierre en el menú, nombre del usuario en la barra.
@@ -190,12 +190,12 @@ Objetivo: agenda y bandeja vinculadas a los registros.
     `creado_en`. RLS.
   - ⬜ Funciones CRUD completas + `listar_eventos_mes(año, mes)` +
     `marcar_correo_leido`. Todo `SECURITY DEFINER` en español.
-- ⬜ API:
+- ✅ API:
   - ⬜ `GET/POST /api/eventos`, `GET/PATCH/DELETE /api/eventos/{id}`,
     `GET /api/eventos/mes?año=&mes=`.
   - ⬜ `GET/POST /api/correos`, `GET /api/correos/{id}`,
     `PATCH /api/correos/{id}/leido`.
-- ⬜ Frontal:
+- ✅ Frontal:
   - ⬜ Ruta `/calendario`: rejilla mensual navegable, día seleccionado con sus
     eventos, alta/edición/baja de eventos, puntos en días con eventos.
   - ⬜ Ruta `/correos`: lista con no-leídos destacados, lector, marcar leído,
@@ -220,11 +220,11 @@ Objetivo: moverse por el espacio como en un CRM grande.
   - ⬜ Tabla `actividad`: `id`, `tipo`, `referencia_id`, `accion`, `detalle jsonb`,
     `usuario_id`, `creado_en`. Triggers que registran altas/cambios/bajas de los
     objetos núcleo. Función `timeline(tipo, id, limite)`.
-- ⬜ API:
+- ✅ API:
   - ⬜ `GET /api/buscar?q=`, `GET /api/favoritos`, `POST /api/favoritos/alternar`.
   - ⬜ `GET/POST /api/vistas?objeto=`, `PATCH/DELETE /api/vistas/{id}`.
   - ⬜ `GET /api/actividad?tipo=&id=` para el timeline de cada ficha.
-- ⬜ Frontal:
+- ✅ Frontal:
   - ⬜ Buscador ⌘K en la barra lateral (atajo real, resultados agrupados, Enter abre).
   - ⬜ Estrellas ★ funcionales en listas y fichas; sección Favoritos viva.
   - ⬜ Selector de vista por objeto (tabla/kanban donde aplique) con guardar vista.
@@ -245,12 +245,12 @@ Objetivo: reglas sencillas sin programar.
   - ⬜ Tabla `ejecuciones`: `id`, `automatizacion_id`, `ok`, `detalle`,
     `creado_en`. Función `registrar_ejecucion`.
   - ⬜ CRUD + `listar_automatizaciones` + `alternar_automatizacion`.
-- ⬜ API:
+- ✅ API:
   - ⬜ `GET/POST /api/automatizaciones`, `GET/PATCH/DELETE /api/automatizaciones/{id}`,
     `PATCH /api/automatizaciones/{id}/activa`, `GET /api/automatizaciones/{id}/ejecuciones`.
   - ⬜ Motor: tras cada crear/actualizar de oportunidades (y luego resto), evalúa
     reglas activas del objeto y ejecuta acciones con las mismas funciones seguras.
-- ⬜ Frontal:
+- ✅ Frontal:
   - ⬜ Ruta `/automatizaciones`: lista con interruptor, editor (disparador +
     condiciones + acciones con formularios guiados), historial por regla.
 - ⬜ E2E: regla «al crear oportunidad con importe > 100000 → crear tarea» genera la
@@ -273,7 +273,7 @@ Objetivo: pedirle cosas al CRM conversando.
   - ⬜ Herramientas del agente (solo vía funciones seguras existentes): buscar,
     listar y crear registros, resumen del panel. Cada llamada queda citada en la
     respuesta.
-- ⬜ Frontal:
+- ✅ Frontal:
   - ⬜ Panel de chat lateral persistente (ruta `/agentes` + acceso rápido),
     historial por conversación, indicador de escritura, citas a registros con enlace.
 - ⬜ E2E (con proveedor simulado en local): preguntar el total de la tubería
@@ -320,8 +320,8 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Colegios y Admisión | ✅ Funcional | E1 |
 | Alumnos y Apoderados | ✅ Funcional | E2 |
 | Traslados | ✅ Funcional | E3 |
-| Tareas | [] Pendiente | 2 |
-| Notas | [] Pendiente | 2 |
+| Tareas | ✅ Funcional | 2 |
+| Notas | ✅ Funcional | 2 |
 | Usuarios y acceso | 🚧 Mock (real en 3) | 3 |
 | Miembros y roles | [] Pendiente | 3 |
 | Calendario | [] Pendiente | 4 |
