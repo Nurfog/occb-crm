@@ -10,6 +10,8 @@
 mod bd;
 mod configuracion;
 mod errores;
+mod rutas_alumnos;
+mod rutas_apoderados;
 mod rutas_colegios;
 mod rutas_oportunidades;
 mod rutas_personas;
@@ -79,6 +81,38 @@ async fn main() {
                 .delete(rutas_oportunidades::eliminar),
         )
         .route("/api/panel", get(rutas_oportunidades::panel))
+        .route(
+            "/api/alumnos",
+            get(rutas_alumnos::listar).post(rutas_alumnos::crear),
+        )
+        .route(
+            "/api/alumnos/{id}",
+            get(rutas_alumnos::obtener)
+                .patch(rutas_alumnos::actualizar)
+                .delete(rutas_alumnos::eliminar),
+        )
+        .route(
+            "/api/alumnos/{id}/apoderados",
+            get(rutas_alumnos::apoderados_de).post(rutas_alumnos::vincular),
+        )
+        .route(
+            "/api/alumnos/{alumno_id}/apoderados/{apoderado_id}",
+            axum::routing::delete(rutas_alumnos::desvincular),
+        )
+        .route(
+            "/api/apoderados",
+            get(rutas_apoderados::listar).post(rutas_apoderados::crear),
+        )
+        .route(
+            "/api/apoderados/{id}",
+            get(rutas_apoderados::obtener)
+                .patch(rutas_apoderados::actualizar)
+                .delete(rutas_apoderados::eliminar),
+        )
+        .route(
+            "/api/apoderados/{id}/alumnos",
+            get(rutas_apoderados::alumnos_de),
+        )
         .route("/api/regiones", get(rutas_territorio::listar_regiones))
         .route("/api/comunas", get(rutas_territorio::listar_comunas))
         // Alias en inglés.

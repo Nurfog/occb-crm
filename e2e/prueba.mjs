@@ -260,6 +260,72 @@ const mala = await (
 afirma(mala.codigo === 'datos_invalidos', 'comuna ajena a la región se rechaza');
 await fetch(`${API}/api/personas/${filaT[0].id}`, { method: 'DELETE' });
 
+// --- 10. Alta de alumno con RUT válido por UI ---
+await ir('/alumnos');
+await esperarCondicion(`!!document.querySelector('.ghost-new')`);
+// Limpieza de corridas interrumpidas.
+try {
+  const previo = await (await fetch(`${API}/api/alumnos?busqueda=19654321-K`)).json();
+  for (const r of previo) await fetch(`${API}/api/alumnos/${r.id}`, { method: 'DELETE' });
+} catch {}
+await evaluar(`document.querySelector('.ghost-new').click()`);
+await dormir(800);
+await evaluar(`
+  (() => {
+    const inputs = document.querySelectorAll('.panel.form input');
+    const set = (el, v) => { el.focus(); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    set(inputs[0], '19654321-K');
+    set(inputs[1], 'E2E Alumno');
+    set(inputs[2], ${JSON.stringify(SELLO)});
+    set(inputs[3], '8° Básico A');
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Crear')).click()`);
+await dormir(2500);
+const filaA = await (await fetch(`${API}/api/alumnos?busqueda=${encodeURIComponent(`E2E Alumno ${SELLO}`)}`)).json();
+afirma(filaA.length === 1 && filaA[0].rut === '19654321-K', 'alumno con RUT válido persiste en PG');
+
+// --- 11. RUT inválido se rechaza ---
+const rutMalo = await (
+  await fetch(`${API}/api/alumnos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rut: '19654321-9', nombres: 'X', apellidos: 'Y' }),
+  })
+).json();
+afirma(rutMalo.codigo === 'datos_invalidos', 'RUT con DV malo se rechaza');
+
+// --- 12. Apoderado + vínculo en ficha de alumno ---
+const RUT_APO = '20123456-5';
+const apo = await (await fetch(`${API}/api/apoderados`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: RUT_APO, nombres: 'Vínc', apellidos: `E2E ${SELLO}` }),
+})).json();
+afirma(!!apo.id, 'apoderado con RUT válido se crea');
+await ir(`/alumnos/${filaA[0].id}`);
+await esperarCondicion(`document.querySelectorAll('.panel select').length >= 1`);
+await evaluar(`
+  (() => {
+    const sels = document.querySelectorAll('.panel select');
+    const sel = sels[sels.length - 1];
+    sel.value = ${JSON.stringify(apo.id)};
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    const inputs = document.querySelectorAll('.panel input');
+    const vinc = inputs[inputs.length - 1];
+    vinc.focus(); vinc.value = 'Padre';
+    vinc.dispatchEvent(new Event('input', { bubbles: true }));
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.panel button')].find(b => b.textContent.includes('Vincular')).click()`);
+await dormir(2500);
+const vinc = await (await fetch(`${API}/api/alumnos/${filaA[0].id}/apoderados`)).json();
+afirma(vinc.length === 1 && vinc[0].vinculo === 'Padre', 'vínculo apoderado persiste en PG');
+t = await texto();
+afirma(t.includes('Padre'), 'vínculo visible en ficha de alumno');
+await fetch(`${API}/api/alumnos/${filaA[0].id}`, { method: 'DELETE' });
+await fetch(`${API}/api/apoderados/${apo.id}`, { method: 'DELETE' });
+
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();
 try {

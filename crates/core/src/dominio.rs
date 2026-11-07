@@ -32,6 +32,110 @@ pub struct CrearColegio {
     pub dv: String,
 }
 
+/// Estado de un alumno en el sistema escolar.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum EstadoAlumno {
+    Postulante,
+    Matriculado,
+    Trasladado,
+    Retirado,
+}
+
+impl EstadoAlumno {
+    /// Todos los estados en orden.
+    pub fn todas() -> &'static [Self] {
+        use EstadoAlumno::*;
+        &[Postulante, Matriculado, Trasladado, Retirado]
+    }
+
+    /// Convierte el texto de PG al estado.
+    pub fn desde_texto(valor: &str) -> Option<Self> {
+        match valor {
+            "postulante" => Some(Self::Postulante),
+            "matriculado" => Some(Self::Matriculado),
+            "trasladado" => Some(Self::Trasladado),
+            "retirado" => Some(Self::Retirado),
+            _ => None,
+        }
+    }
+
+    /// Texto que se persiste en PostgreSQL.
+    pub fn como_texto(&self) -> &'static str {
+        match self {
+            Self::Postulante => "postulante",
+            Self::Matriculado => "matriculado",
+            Self::Trasladado => "trasladado",
+            Self::Retirado => "retirado",
+        }
+    }
+}
+
+/// Alumno del colegio (RUT único con dígito verificador).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Alumno {
+    pub id: Uuid,
+    pub rut: String,
+    pub nombres: String,
+    pub apellidos: String,
+    pub fecha_nacimiento: Option<chrono::NaiveDate>,
+    pub curso: String,
+    pub colegio_rbd: Option<String>,
+    pub estado: EstadoAlumno,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Datos para matricular un alumno.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CrearAlumno {
+    pub rut: String,
+    pub nombres: String,
+    pub apellidos: String,
+    pub fecha_nacimiento: Option<chrono::NaiveDate>,
+    pub curso: String,
+    pub colegio_rbd: Option<String>,
+    pub estado: EstadoAlumno,
+}
+
+/// Apoderado (madre, padre, tutor u otro) con RUT único.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Apoderado {
+    pub id: Uuid,
+    pub rut: String,
+    pub nombres: String,
+    pub apellidos: String,
+    pub telefono: String,
+    pub correo: String,
+    pub direccion: String,
+    pub region_codigo: Option<i16>,
+    pub comuna_codigo: Option<String>,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Datos para registrar un apoderado.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CrearApoderado {
+    pub rut: String,
+    pub nombres: String,
+    pub apellidos: String,
+    pub telefono: String,
+    pub correo: String,
+    pub direccion: String,
+    pub region_codigo: Option<i16>,
+    pub comuna_codigo: Option<String>,
+}
+
+/// Vínculo entre un alumno y su apoderado.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VinculoApoderado {
+    pub id: Uuid,
+    pub alumno_id: Uuid,
+    pub apoderado_id: Uuid,
+    pub vinculo: String,
+    pub retiro_autorizado: bool,
+    pub notificaciones: bool,
+}
+
 /// Persona de contacto.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Persona {

@@ -18,6 +18,9 @@ pub async fn migrar_y_sembrar(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query("select sembrar_datos_demo()")
         .execute(pool)
         .await?;
+    sqlx::query("select sembrar_escolar_demo()")
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -64,6 +67,39 @@ pub fn fila_a_oportunidad(fila: &sqlx::postgres::PgRow) -> occb_core::Oportunida
         colegio_rbd: fila.get::<Option<String>, _>("colegio_rbd"),
         contacto_id: fila.get::<Option<uuid::Uuid>, _>("contacto_id"),
         fecha_cierre: fila.get::<Option<chrono::DateTime<chrono::Utc>>, _>("fecha_cierre"),
+        creado_en: fila.get("creado_en"),
+    }
+}
+
+/// Fila de alumno; estado y fecha se convierten a tipos Rust.
+pub fn fila_a_alumno(fila: &sqlx::postgres::PgRow) -> occb_core::Alumno {
+    let estado_texto: String = fila.get("estado");
+    occb_core::Alumno {
+        id: fila.get("id"),
+        rut: fila.get("rut"),
+        nombres: fila.get("nombres"),
+        apellidos: fila.get("apellidos"),
+        fecha_nacimiento: fila.get::<Option<chrono::NaiveDate>, _>("fecha_nacimiento"),
+        curso: fila.get::<String, _>("curso"),
+        colegio_rbd: fila.get::<Option<String>, _>("colegio_rbd"),
+        estado: occb_core::EstadoAlumno::desde_texto(&estado_texto)
+            .unwrap_or(occb_core::EstadoAlumno::Postulante),
+        creado_en: fila.get("creado_en"),
+    }
+}
+
+/// Fila de apoderado leída desde una función.
+pub fn fila_a_apoderado(fila: &sqlx::postgres::PgRow) -> occb_core::Apoderado {
+    occb_core::Apoderado {
+        id: fila.get("id"),
+        rut: fila.get("rut"),
+        nombres: fila.get("nombres"),
+        apellidos: fila.get("apellidos"),
+        telefono: fila.get::<String, _>("telefono"),
+        correo: fila.get::<String, _>("correo"),
+        direccion: fila.get::<String, _>("direccion"),
+        region_codigo: fila.get::<Option<i16>, _>("region_codigo"),
+        comuna_codigo: fila.get::<Option<String>, _>("comuna_codigo"),
         creado_en: fila.get("creado_en"),
     }
 }

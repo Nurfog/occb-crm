@@ -10,8 +10,10 @@ mod cliente;
 use dioxus::prelude::*;
 use uuid::Uuid;
 use occb_core::{
-    Colegio, CrearOportunidad, CrearPersona, EtapaOportunidad, Idioma, Oportunidad,
-    Persona, calcular_resumen, datos_semilla_colegios, datos_semilla_oportunidades,
+    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearOportunidad,
+    CrearPersona, EstadoAlumno, EtapaOportunidad, Idioma, Oportunidad,
+    Persona, calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
+    datos_semilla_colegios, datos_semilla_oportunidades,
     datos_semilla_personas, textos,
 };
 
@@ -49,6 +51,14 @@ enum Ruta {
     #[layout(DisposicionApp)]
         #[route("/")]
         Panel {},
+        #[route("/alumnos")]
+        VistaAlumnos {},
+        #[route("/alumnos/:id")]
+        DetalleAlumno { id: Uuid },
+        #[route("/apoderados")]
+        VistaApoderados {},
+        #[route("/apoderados/:id")]
+        DetalleApoderado { id: Uuid },
         #[route("/personas")]
         VistaPersonas {},
         #[route("/personas/:id")]
@@ -152,9 +162,13 @@ fn BarraLateral() -> Element {
                     span { "{t.panel}" }
                     span { class: "count", "⌘" }
                 }
-                Link { to: Ruta::VistaPersonas {}, class: "side-item",
-                    span { class: "ico ico-personas", "○" }
-                    span { "{t.personas}" }
+                Link { to: Ruta::VistaAlumnos {}, class: "side-item",
+                    span { class: "ico ico-personas", "🎒" }
+                    span { "{t.alumnos}" }
+                }
+                Link { to: Ruta::VistaApoderados {}, class: "side-item",
+                    span { class: "ico ico-personas", "🧑‍🤝‍🧑" }
+                    span { "{t.apoderados}" }
                 }
                 Link { to: Ruta::VistaOportunidades {}, class: "side-item active",
                     span { class: "ico ico-admision", "◇" }
@@ -1194,7 +1208,794 @@ fn DetallePersona(id: Uuid) -> Element {
     }
 }
 
-/// Vista de ajustes del espacio de trabajo.
+/// Etiqueta de estado de alumno según idioma.
+fn etiqueta_estado(estado: EstadoAlumno, idioma: Idioma) -> &'static str {
+    match (estado, idioma) {
+        (EstadoAlumno::Postulante, Idioma::Es) => "Postulante",
+        (EstadoAlumno::Matriculado, Idioma::Es) => "Matriculado",
+        (EstadoAlumno::Trasladado, Idioma::Es) => "Trasladado",
+        (EstadoAlumno::Retirado, Idioma::Es) => "Retirado",
+        (EstadoAlumno::Postulante, Idioma::En) => "Applicant",
+        (EstadoAlumno::Matriculado, Idioma::En) => "Enrolled",
+        (EstadoAlumno::Trasladado, Idioma::En) => "Transferred",
+        (EstadoAlumno::Retirado, Idioma::En) => "Withdrawn",
+    }
+}
+
+/// Iniciales para avatares.
+fn iniciales_de(nombres: &str, apellidos: &str) -> String {
+    format!(
+        "{}{}",
+        nombres.chars().next().unwrap_or('?'),
+        apellidos.chars().next().unwrap_or('?')
+    )
+}
+
+/// Vista de alumnos: tabla viva con búsqueda, filtro de estado, alta y baja.
+#[component]
+fn VistaAlumnos() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut busqueda = use_signal(String::new);
+    let mut estado_f = use_signal(String::new);
+    let mut alumnos = use_signal(Vec::<Alumno>::new);
+    let mut listo = use_signal(|| false);
+    let mut aviso = use_signal(String::new);
+    let mut mostrar_form = use_signal(|| false);
+    let mut rut = use_signal(String::new);
+    let mut nombres = use_signal(String::new);
+    let mut apellidos = use_signal(String::new);
+    let mut curso = use_signal(String::new);
+
+    use_effect(move || {
+        let b = busqueda.read().clone();
+        let e = estado_f.read().clone();
+        spawn(async move {
+            match cliente::listar_alumnos(&b, &e).await {
+                Ok(lista) => {
+                    alumnos.set(lista);
+                    listo.set(true);
+                }
+                Err(_) if alumnos.read().is_empty() => {
+                    alumnos.set(datos_semilla_alumnos());
+                    listo.set(true);
+                }
+                Err(_) => {}
+            }
+        });
+    });
+
+    let total = alumnos.read().len();
+
+    let crear = move |_| {
+        let datos = CrearAlumno {
+            rut: rut.read().clone(),
+            nombres: nombres.read().clone(),
+            apellidos: apellidos.read().clone(),
+            fecha_nacimiento: None,
+            curso: curso.read().clone(),
+            colegio_rbd: None,
+            estado: EstadoAlumno::Postulante,
+        };
+        spawn(async move {
+            match cliente::crear_alumno(&datos).await {
+                Ok(_) => {
+                    aviso.set(String::new());
+                    rut.set(String::new());
+                    nombres.set(String::new());
+                    apellidos.set(String::new());
+                    curso.set(String::new());
+                    mostrar_form.set(false);
+                    if let Ok(lista) = cliente::listar_alumnos("", "").await {
+                        alumnos.set(lista);
+                    }
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.alumnos.to_string(),
+            subtitulo: format!("{total} · {}", t.tabla),
+        }
+        div { class: "toolbar",
+            input {
+                class: "input",
+                placeholder: "{t.buscar}…",
+                value: "{busqueda}",
+                oninput: move |e| busqueda.set(e.value()),
+            }
+            select {
+                class: "input",
+                value: "{estado_f}",
+                onchange: move |e| estado_f.set(e.value()),
+                option { value: "", if idioma == Idioma::Es { "Todos" } else { "All" } }
+                for e in EstadoAlumno::todas() {
+                    option { value: "{e.como_texto()}", "{etiqueta_estado(*e, idioma)}" }
+                }
+            }
+            span { class: "pill", "{t.tabla}" }
+        }
+        if mostrar_form() {
+        div { class: "panel form",
+            label { if idioma == Idioma::Es { "Matricular alumno" } else { "Enroll student" } }
+            div { class: "row",
+                div { class: "campo",
+                    label { "RUT *" }
+                    input { class: "input", placeholder: "12345678-5", value: "{rut}", oninput: move |e| rut.set(e.value()) }
+                }
+                div { class: "campo",
+                    label { if idioma == Idioma::Es { "Nombres *" } else { "First names *" } }
+                    input { class: "input", placeholder: "Martín", value: "{nombres}", oninput: move |e| nombres.set(e.value()) }
+                }
+                div { class: "campo",
+                    label { if idioma == Idioma::Es { "Apellidos *" } else { "Last names *" } }
+                    input { class: "input", placeholder: "González", value: "{apellidos}", oninput: move |e| apellidos.set(e.value()) }
+                }
+                div { class: "campo",
+                    label { if idioma == Idioma::Es { "Curso" } else { "Grade" } }
+                    input { class: "input", placeholder: "8° Básico A", value: "{curso}", oninput: move |e| curso.set(e.value()) }
+                }
+                div { class: "campo campo-btn",
+                    button { class: "btn-primary", onclick: crear, "{t.nueva}" }
+                }
+            }
+            if !aviso.read().is_empty() {
+                p { class: "muted small", "{aviso}" }
+            }
+        }
+        }
+        div { class: "tbl-wrap",
+            if !listo() {
+                p { class: "muted", style: "padding: 12px;", "…" }
+            } else {
+                table { class: "tbl",
+                    thead {
+                        tr {
+                            th { class: "check", "☐" }
+                            th { "RUT" }
+                            th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
+                            th { if idioma == Idioma::Es { "Curso" } else { "Grade" } }
+                            th { if idioma == Idioma::Es { "Estado" } else { "Status" } }
+                            th { "" }
+                        }
+                    }
+                    tbody {
+                        for a in alumnos.read().iter() {
+                            tr { key: "{a.id}",
+                                td { class: "check", "☐" }
+                                td { class: "muted", "{a.rut}" }
+                                td {
+                                    span { class: "chip",
+                                        span { class: "mini-avatar", "{iniciales_de(&a.nombres, &a.apellidos)}" }
+                                        Link { to: Ruta::DetalleAlumno { id: a.id }, class: "link",
+                                            "{a.nombres} {a.apellidos}"
+                                        }
+                                    }
+                                }
+                                td { "{a.curso}" }
+                                td { span { class: "pill", "{etiqueta_estado(a.estado, idioma)}" } }
+                                td {
+                                    button {
+                                        class: "btn-mini",
+                                        title: "✕",
+                                        onclick: {
+                                            let id = a.id;
+                                            move |_| {
+                                                spawn(async move {
+                                                    if cliente::eliminar_alumno(id).await.is_ok()
+                                                        && let Ok(lista) =
+                                                            cliente::listar_alumnos("", "").await
+                                                    {
+                                                        alumnos.set(lista);
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        "✕"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    tfoot {
+                        tr {
+                            td { colspan: "6",
+                                button {
+                                    class: "ghost-new",
+                                    onclick: move |_| mostrar_form.set(true),
+                                    "+ Agregar nuevo"
+                                }
+                            }
+                        }
+                        tr { class: "tbl-foot",
+                            td { colspan: "3", "Calcular ▾" }
+                            td { colspan: "3", "Contar todo ", b { "{total}" } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Ficha de alumno: datos editables + apoderados vinculados + colegio.
+#[component]
+fn DetalleAlumno(id: Uuid) -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut alumno = use_signal(|| None::<Alumno>);
+    let mut vinculados = use_signal(Vec::<cliente::ApoderadoVinculado>::new);
+    let mut todos_apoderados = use_signal(Vec::<Apoderado>::new);
+    let mut aviso = use_signal(String::new);
+    let mut listo = use_signal(|| false);
+    let mut editando = use_signal(|| false);
+    let mut rut = use_signal(String::new);
+    let mut nombres = use_signal(String::new);
+    let mut apellidos = use_signal(String::new);
+    let mut curso = use_signal(String::new);
+    let mut estado_sel = use_signal(String::new);
+    let mut vinc_apoderado = use_signal(String::new);
+    let mut vinc_texto = use_signal(String::new);
+
+    // Sigue al id de la ruta: si cambia, recarga.
+    let mut id_actual = use_signal(|| id);
+    if id_actual() != id {
+        id_actual.set(id);
+    }
+
+    let recargar_vinculos = move |pid: Uuid| {
+        spawn(async move {
+            if let Ok(lista) = cliente::apoderados_de_alumno(pid).await {
+                vinculados.set(lista);
+            }
+        });
+    };
+
+    use_effect(move || {
+        let pid = id_actual();
+        spawn(async move {
+            match cliente::obtener_alumno(pid).await {
+                Ok(a) => {
+                    rut.set(a.rut.clone());
+                    nombres.set(a.nombres.clone());
+                    apellidos.set(a.apellidos.clone());
+                    curso.set(a.curso.clone());
+                    estado_sel.set(a.estado.como_texto().to_string());
+                    alumno.set(Some(a));
+                    recargar_vinculos(pid);
+                    listo.set(true);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+        spawn(async move {
+            if let Ok(lista) = cliente::listar_apoderados("").await {
+                todos_apoderados.set(lista);
+            }
+        });
+    });
+
+    let guardar = move |_| {
+        let pid = id_actual();
+        let estado = EstadoAlumno::desde_texto(&estado_sel.read().to_lowercase())
+            .unwrap_or(EstadoAlumno::Postulante);
+        let datos = CrearAlumno {
+            rut: rut.read().clone(),
+            nombres: nombres.read().clone(),
+            apellidos: apellidos.read().clone(),
+            fecha_nacimiento: None,
+            curso: curso.read().clone(),
+            colegio_rbd: alumno.read().as_ref().and_then(|a| a.colegio_rbd.clone()),
+            estado,
+        };
+        spawn(async move {
+            match cliente::actualizar_alumno(pid, &datos).await {
+                Ok(a) => {
+                    aviso.set(String::new());
+                    alumno.set(Some(a));
+                    editando.set(false);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let vincular = move |_| {
+        let pid = id_actual();
+        let aid = Uuid::parse_str(&vinc_apoderado.read()).ok();
+        let texto = vinc_texto.read().clone();
+        spawn(async move {
+            match aid {
+                Some(aid) => match cliente::vincular_apoderado(pid, aid, &texto).await {
+                    Ok(_) => {
+                        aviso.set(String::new());
+                        vinc_apoderado.set(String::new());
+                        vinc_texto.set(String::new());
+                        recargar_vinculos(pid);
+                    }
+                    Err(mensaje) => aviso.set(mensaje),
+                },
+                None => aviso.set(
+                    if idioma == Idioma::Es { "Elija un apoderado.".to_string() } else { "Pick a guardian.".to_string() },
+                ),
+            }
+        });
+    };
+
+    let titulo = alumno
+        .read()
+        .as_ref()
+        .map(|a| format!("{} {}", a.nombres, a.apellidos))
+        .unwrap_or_default();
+    rsx! {
+        VistaAlumnos {}
+        div { class: "record-panel",
+        Link { to: Ruta::VistaAlumnos {}, class: "record-close", "✕ {t.alumnos}" }
+        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
+        p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de alumno" } else { "Student record" }).to_string()} }
+        if !aviso.read().is_empty() && !listo() {
+            div { class: "panel",
+                p { class: "muted", "{aviso}" }
+            }
+        } else {
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title", if idioma == Idioma::Es { "General" } else { "General" } }
+                    button { class: "btn-mini", onclick: move |_| editando.set(!editando()), "✎" }
+                }
+                if let Some(a) = alumno.read().as_ref() {
+                    div { class: "mini-row", span { class: "muted", "RUT" } span { class: "mini-name", "{a.rut}" } }
+                    div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "Curso" } else { "Grade" } } span { class: "mini-name", "{a.curso}" } }
+                    div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "Estado" } else { "Status" } } span { class: "pill", "{etiqueta_estado(a.estado, idioma)}" } }
+                    if let Some(rbd) = a.colegio_rbd.clone() {
+                        div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "Colegio" } else { "School" } } span { class: "mini-name", "{rbd}" } }
+                    }
+                }
+            }
+            if editando() {
+            div { class: "panel form",
+                label { if idioma == Idioma::Es { "Editar (se guarda en la API)" } else { "Edit (saved to the API)" } }
+                div { class: "row",
+                    div { class: "campo",
+                        label { "RUT *" }
+                        input { class: "input", placeholder: "12345678-5", value: "{rut}", oninput: move |e| rut.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Nombres *" } else { "First names *" } }
+                        input { class: "input", value: "{nombres}", oninput: move |e| nombres.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Apellidos *" } else { "Last names *" } }
+                        input { class: "input", value: "{apellidos}", oninput: move |e| apellidos.set(e.value()) }
+                    }
+                }
+                div { class: "row",
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Curso" } else { "Grade" } }
+                        input { class: "input", value: "{curso}", oninput: move |e| curso.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Estado" } else { "Status" } }
+                        select {
+                            class: "input",
+                            value: "{estado_sel}",
+                            onchange: move |e| estado_sel.set(e.value()),
+                            for e in EstadoAlumno::todas() {
+                                option { value: "{e.como_texto()}", "{etiqueta_estado(*e, idioma)}" }
+                            }
+                        }
+                    }
+                    div { class: "campo campo-btn",
+                        button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                    }
+                }
+                if !aviso.read().is_empty() {
+                    p { class: "muted small", "{aviso}" }
+                }
+            }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{vinculados.read().len()} · {t.apoderados}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for v in vinculados.read().iter() {
+                    div { class: "mini-row", key: "{v.id}",
+                        span { class: "mini-name",
+                            Link { to: Ruta::DetalleApoderado { id: v.id }, class: "link",
+                                "{v.nombre_completo()}"
+                            }
+                        }
+                        span { class: "mini-amt", "{v.vinculo} · {v.rut}" }
+                        button {
+                            class: "btn-mini",
+                            title: "✕",
+                            onclick: {
+                                let aid = v.id;
+                                let pid = id_actual();
+                                move |_| {
+                                    spawn(async move {
+                                        if cliente::desvincular_apoderado(pid, aid).await.is_ok() {
+                                            recargar_vinculos(pid);
+                                        }
+                                    });
+                                }
+                            },
+                            "✕"
+                        }
+                    }
+                }
+                div { class: "row",
+                    select {
+                        class: "input",
+                        value: "{vinc_apoderado}",
+                        onchange: move |e| vinc_apoderado.set(e.value()),
+                        option { value: "", "—" }
+                        for a in todos_apoderados.read().iter() {
+                            option { value: "{a.id}", "{a.nombres} {a.apellidos} · {a.rut}" }
+                        }
+                    }
+                    input {
+                        class: "input",
+                        placeholder: if idioma == Idioma::Es { "Vínculo (Madre/Padre…)" } else { "Relation" },
+                        value: "{vinc_texto}",
+                        oninput: move |e| vinc_texto.set(e.value()),
+                    }
+                    button { class: "btn-primary", onclick: vincular, if idioma == Idioma::Es { "Vincular" } else { "Link" } }
+                }
+            }
+        }
+        }
+    }
+}
+/// Vista de apoderados: tabla viva con búsqueda, alta y baja.
+#[component]
+fn VistaApoderados() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut busqueda = use_signal(String::new);
+    let mut apoderados = use_signal(Vec::<Apoderado>::new);
+    let mut listo = use_signal(|| false);
+    let mut aviso = use_signal(String::new);
+    let mut mostrar_form = use_signal(|| false);
+    let mut rut = use_signal(String::new);
+    let mut nombres = use_signal(String::new);
+    let mut apellidos = use_signal(String::new);
+    let mut telefono = use_signal(String::new);
+    let mut region_sel = use_signal(String::new);
+    let mut comuna_sel = use_signal(String::new);
+
+    use_effect(move || {
+        let b = busqueda.read().clone();
+        spawn(async move {
+            match cliente::listar_apoderados(&b).await {
+                Ok(lista) => {
+                    apoderados.set(lista);
+                    listo.set(true);
+                }
+                Err(_) if apoderados.read().is_empty() => {
+                    apoderados.set(datos_semilla_apoderados());
+                    listo.set(true);
+                }
+                Err(_) => {}
+            }
+        });
+    });
+
+    let total = apoderados.read().len();
+
+    let crear = move |_| {
+        let datos = CrearApoderado {
+            rut: rut.read().clone(),
+            nombres: nombres.read().clone(),
+            apellidos: apellidos.read().clone(),
+            telefono: telefono.read().clone(),
+            correo: String::new(),
+            direccion: String::new(),
+            region_codigo: region_codigo_de(&region_sel),
+            comuna_codigo: comuna_codigo_de(&comuna_sel),
+        };
+        spawn(async move {
+            match cliente::crear_apoderado(&datos).await {
+                Ok(_) => {
+                    aviso.set(String::new());
+                    rut.set(String::new());
+                    nombres.set(String::new());
+                    apellidos.set(String::new());
+                    telefono.set(String::new());
+                    region_sel.set(String::new());
+                    comuna_sel.set(String::new());
+                    mostrar_form.set(false);
+                    if let Ok(lista) = cliente::listar_apoderados("").await {
+                        apoderados.set(lista);
+                    }
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.apoderados.to_string(),
+            subtitulo: format!("{total} · {}", t.tabla),
+        }
+        div { class: "toolbar",
+            input {
+                class: "input",
+                placeholder: "{t.buscar}…",
+                value: "{busqueda}",
+                oninput: move |e| busqueda.set(e.value()),
+            }
+            span { class: "pill", "{t.tabla}" }
+        }
+        if mostrar_form() {
+        div { class: "panel form",
+            label { if idioma == Idioma::Es { "Nuevo apoderado" } else { "New guardian" } }
+            div { class: "row",
+                div { class: "campo",
+                    label { "RUT *" }
+                    input { class: "input", placeholder: "12345678-5", value: "{rut}", oninput: move |e| rut.set(e.value()) }
+                }
+                div { class: "campo",
+                    label { if idioma == Idioma::Es { "Nombres *" } else { "First names *" } }
+                    input { class: "input", value: "{nombres}", oninput: move |e| nombres.set(e.value()) }
+                }
+                div { class: "campo",
+                    label { if idioma == Idioma::Es { "Apellidos *" } else { "Last names *" } }
+                    input { class: "input", value: "{apellidos}", oninput: move |e| apellidos.set(e.value()) }
+                }
+                div { class: "campo",
+                    label { if idioma == Idioma::Es { "Teléfono" } else { "Phone" } }
+                    input { class: "input", value: "{telefono}", oninput: move |e| telefono.set(e.value()) }
+                }
+                SelectorTerritorio {
+                    region_sel: region_sel,
+                    comuna_sel: comuna_sel,
+                }
+                div { class: "campo campo-btn",
+                    button { class: "btn-primary", onclick: crear, "{t.nueva}" }
+                }
+            }
+            if !aviso.read().is_empty() {
+                p { class: "muted small", "{aviso}" }
+            }
+        }
+        }
+        div { class: "tbl-wrap",
+            if !listo() {
+                p { class: "muted", style: "padding: 12px;", "…" }
+            } else {
+                table { class: "tbl",
+                    thead {
+                        tr {
+                            th { class: "check", "☐" }
+                            th { "RUT" }
+                            th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
+                            th { if idioma == Idioma::Es { "Teléfono" } else { "Phone" } }
+                            th { "" }
+                        }
+                    }
+                    tbody {
+                        for a in apoderados.read().iter() {
+                            tr { key: "{a.id}",
+                                td { class: "check", "☐" }
+                                td { class: "muted", "{a.rut}" }
+                                td {
+                                    span { class: "chip",
+                                        span { class: "mini-avatar", "{iniciales_de(&a.nombres, &a.apellidos)}" }
+                                        Link { to: Ruta::DetalleApoderado { id: a.id }, class: "link",
+                                            "{a.nombres} {a.apellidos}"
+                                        }
+                                    }
+                                }
+                                td { "{a.telefono}" }
+                                td {
+                                    button {
+                                        class: "btn-mini",
+                                        title: "✕",
+                                        onclick: {
+                                            let id = a.id;
+                                            move |_| {
+                                                spawn(async move {
+                                                    if cliente::eliminar_apoderado(id).await.is_ok()
+                                                        && let Ok(lista) =
+                                                            cliente::listar_apoderados("").await
+                                                    {
+                                                        apoderados.set(lista);
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        "✕"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    tfoot {
+                        tr {
+                            td { colspan: "5",
+                                button {
+                                    class: "ghost-new",
+                                    onclick: move |_| mostrar_form.set(true),
+                                    "+ Agregar nuevo"
+                                }
+                            }
+                        }
+                        tr { class: "tbl-foot",
+                            td { colspan: "2", "Calcular ▾" }
+                            td { colspan: "3", "Contar todo ", b { "{total}" } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Ficha de apoderado: datos editables + alumnos vinculados.
+#[component]
+fn DetalleApoderado(id: Uuid) -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut apoderado = use_signal(|| None::<Apoderado>);
+    let mut vinculados = use_signal(Vec::<cliente::AlumnoVinculado>::new);
+    let mut aviso = use_signal(String::new);
+    let mut listo = use_signal(|| false);
+    let mut editando = use_signal(|| false);
+    let mut rut = use_signal(String::new);
+    let mut nombres = use_signal(String::new);
+    let mut apellidos = use_signal(String::new);
+    let mut telefono = use_signal(String::new);
+    let mut region_sel = use_signal(String::new);
+    let mut comuna_sel = use_signal(String::new);
+
+    // Sigue al id de la ruta: si cambia, recarga.
+    let mut id_actual = use_signal(|| id);
+    if id_actual() != id {
+        id_actual.set(id);
+    }
+
+    let recargar_vinculos = move |pid: Uuid| {
+        spawn(async move {
+            if let Ok(lista) = cliente::alumnos_de_apoderado(pid).await {
+                vinculados.set(lista);
+            }
+        });
+    };
+
+    use_effect(move || {
+        let pid = id_actual();
+        spawn(async move {
+            match cliente::obtener_apoderado(pid).await {
+                Ok(a) => {
+                    rut.set(a.rut.clone());
+                    nombres.set(a.nombres.clone());
+                    apellidos.set(a.apellidos.clone());
+                    telefono.set(a.telefono.clone());
+                    region_sel.set(a.region_codigo.map(|r| r.to_string()).unwrap_or_default());
+                    comuna_sel.set(a.comuna_codigo.clone().unwrap_or_default());
+                    apoderado.set(Some(a));
+                    recargar_vinculos(pid);
+                    listo.set(true);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    });
+
+    let guardar = move |_| {
+        let pid = id_actual();
+        let datos = CrearApoderado {
+            rut: rut.read().clone(),
+            nombres: nombres.read().clone(),
+            apellidos: apellidos.read().clone(),
+            telefono: telefono.read().clone(),
+            correo: String::new(),
+            direccion: String::new(),
+            region_codigo: region_codigo_de(&region_sel),
+            comuna_codigo: comuna_codigo_de(&comuna_sel),
+        };
+        spawn(async move {
+            match cliente::actualizar_apoderado(pid, &datos).await {
+                Ok(a) => {
+                    aviso.set(String::new());
+                    apoderado.set(Some(a));
+                    editando.set(false);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let titulo = apoderado
+        .read()
+        .as_ref()
+        .map(|a| format!("{} {}", a.nombres, a.apellidos))
+        .unwrap_or_default();
+    rsx! {
+        VistaApoderados {}
+        div { class: "record-panel",
+        Link { to: Ruta::VistaApoderados {}, class: "record-close", "✕ {t.apoderados}" }
+        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
+        p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de apoderado" } else { "Guardian record" }).to_string()} }
+        if !aviso.read().is_empty() && !listo() {
+            div { class: "panel",
+                p { class: "muted", "{aviso}" }
+            }
+        } else {
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title", if idioma == Idioma::Es { "General" } else { "General" } }
+                    button { class: "btn-mini", onclick: move |_| editando.set(!editando()), "✎" }
+                }
+                if let Some(a) = apoderado.read().as_ref() {
+                    div { class: "mini-row", span { class: "muted", "RUT" } span { class: "mini-name", "{a.rut}" } }
+                    div { class: "mini-row", span { class: "muted", "📞" } span { class: "mini-name", "{a.telefono}" } }
+                }
+            }
+            if editando() {
+            div { class: "panel form",
+                label { if idioma == Idioma::Es { "Editar (se guarda en la API)" } else { "Edit (saved to the API)" } }
+                div { class: "row",
+                    div { class: "campo",
+                        label { "RUT *" }
+                        input { class: "input", value: "{rut}", oninput: move |e| rut.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Nombres *" } else { "First names *" } }
+                        input { class: "input", value: "{nombres}", oninput: move |e| nombres.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Apellidos *" } else { "Last names *" } }
+                        input { class: "input", value: "{apellidos}", oninput: move |e| apellidos.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Teléfono" } else { "Phone" } }
+                        input { class: "input", value: "{telefono}", oninput: move |e| telefono.set(e.value()) }
+                    }
+                    SelectorTerritorio {
+                        region_sel: region_sel,
+                        comuna_sel: comuna_sel,
+                    }
+                    div { class: "campo campo-btn",
+                        button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                    }
+                }
+                if !aviso.read().is_empty() {
+                    p { class: "muted small", "{aviso}" }
+                }
+            }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{vinculados.read().len()} · {t.alumnos}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for v in vinculados.read().iter() {
+                    div { class: "mini-row", key: "{v.id}",
+                        span { class: "mini-name",
+                            Link { to: Ruta::DetalleAlumno { id: v.id }, class: "link",
+                                "{v.nombre_completo()}"
+                            }
+                        }
+                        span { class: "mini-amt", "{v.rut} · {v.curso} · {v.vinculo}" }
+                    }
+                }
+            }
+        }
+        }
+    }
+}
+
 #[component]
 fn VistaAjustes() -> Element {
     let t = textos(IDIOMA());

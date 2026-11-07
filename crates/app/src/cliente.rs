@@ -2,7 +2,10 @@
 //! Todas las operaciones devuelven `Result<_, String>` con mensajes en español.
 //! La API es la única que habla con PostgreSQL (vía funciones seguras).
 
-use occb_core::{Colegio, CrearColegio, CrearOportunidad, CrearPersona, Oportunidad, Persona, ResumenPanel};
+use occb_core::{
+    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearColegio, CrearOportunidad,
+    CrearPersona, Oportunidad, Persona, ResumenPanel,
+};
 use uuid::Uuid;
 
 /// URL base de la API, inyectada en compilación (`API_BASE_URL`).
@@ -122,6 +125,139 @@ pub async fn crear_colegio(datos: &CrearColegio) -> Result<Colegio, String> {
 #[allow(dead_code)]
 pub async fn eliminar_colegio(rbd: &str) -> Result<(), String> {
     borrar(&format!("/api/colegios/{rbd}")).await
+}
+
+/// Lista alumnos con filtros.
+pub async fn listar_alumnos(busqueda: &str, estado: &str) -> Result<Vec<Alumno>, String> {
+    let mut ruta = String::from("/api/alumnos?limite=100");
+    if !busqueda.trim().is_empty() {
+        ruta.push_str(&format!("&busqueda={}", busqueda.trim()));
+    }
+    if !estado.trim().is_empty() {
+        ruta.push_str(&format!("&estado={}", estado.trim()));
+    }
+    obtener_json(&ruta).await
+}
+
+/// Un alumno por id.
+pub async fn obtener_alumno(id: Uuid) -> Result<Alumno, String> {
+    obtener_json(&format!("/api/alumnos/{id}")).await
+}
+
+/// Matricula un alumno (valida RUT en API y PG).
+pub async fn crear_alumno(datos: &CrearAlumno) -> Result<Alumno, String> {
+    enviar_json("POST", "/api/alumnos", datos).await
+}
+
+/// Actualiza un alumno.
+pub async fn actualizar_alumno(id: Uuid, datos: &CrearAlumno) -> Result<Alumno, String> {
+    enviar_json("PATCH", &format!("/api/alumnos/{id}"), datos).await
+}
+
+/// Elimina un alumno (desvincula en cascada).
+pub async fn eliminar_alumno(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/alumnos/{id}")).await
+}
+
+/// Apoderado vinculado con su vínculo y permisos (algunos campos se muestran
+/// en detalles futuros).
+#[allow(dead_code)]
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ApoderadoVinculado {
+    pub id: Uuid,
+    pub rut: String,
+    pub nombres: String,
+    pub apellidos: String,
+    pub telefono: String,
+    pub correo: String,
+    pub vinculo: String,
+    pub retiro_autorizado: bool,
+    pub notificaciones: bool,
+}
+
+impl ApoderadoVinculado {
+    pub fn nombre_completo(&self) -> String {
+        format!("{} {}", self.nombres, self.apellidos)
+    }
+}
+
+/// Apoderados vinculados a un alumno.
+pub async fn apoderados_de_alumno(id: Uuid) -> Result<Vec<ApoderadoVinculado>, String> {
+    obtener_json(&format!("/api/alumnos/{id}/apoderados")).await
+}
+
+/// Vincula un apoderado existente a un alumno.
+pub async fn vincular_apoderado(
+    alumno_id: Uuid,
+    apoderado_id: Uuid,
+    vinculo: &str,
+) -> Result<(), String> {
+    let _: serde_json::Value = enviar_json(
+        "POST",
+        &format!("/api/alumnos/{alumno_id}/apoderados"),
+        &serde_json::json!({ "apoderado_id": apoderado_id, "vinculo": vinculo }),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Desvincula un apoderado de un alumno.
+pub async fn desvincular_apoderado(alumno_id: Uuid, apoderado_id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/alumnos/{alumno_id}/apoderados/{apoderado_id}")).await
+}
+
+/// Lista apoderados.
+pub async fn listar_apoderados(busqueda: &str) -> Result<Vec<Apoderado>, String> {
+    let ruta = if busqueda.trim().is_empty() {
+        "/api/apoderados?limite=100".to_string()
+    } else {
+        format!("/api/apoderados?busqueda={}&limite=100", busqueda.trim())
+    };
+    obtener_json(&ruta).await
+}
+
+/// Un apoderado por id.
+pub async fn obtener_apoderado(id: Uuid) -> Result<Apoderado, String> {
+    obtener_json(&format!("/api/apoderados/{id}")).await
+}
+
+/// Registra un apoderado (valida RUT en API y PG).
+pub async fn crear_apoderado(datos: &CrearApoderado) -> Result<Apoderado, String> {
+    enviar_json("POST", "/api/apoderados", datos).await
+}
+
+/// Actualiza un apoderado.
+pub async fn actualizar_apoderado(id: Uuid, datos: &CrearApoderado) -> Result<Apoderado, String> {
+    enviar_json("PATCH", &format!("/api/apoderados/{id}"), datos).await
+}
+
+/// Elimina un apoderado (desvincula en cascada).
+pub async fn eliminar_apoderado(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/apoderados/{id}")).await
+}
+
+/// Alumno vinculado con su vínculo (algunos campos se muestran en detalles futuros).
+#[allow(dead_code)]
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct AlumnoVinculado {
+    pub id: Uuid,
+    pub rut: String,
+    pub nombres: String,
+    pub apellidos: String,
+    pub curso: String,
+    pub estado: String,
+    pub vinculo: String,
+}
+
+impl AlumnoVinculado {
+    pub fn nombre_completo(&self) -> String {
+        format!("{} {}", self.nombres, self.apellidos)
+    }
+}
+
+/// Alumnos vinculados a un apoderado.
+pub async fn alumnos_de_apoderado(id: Uuid) -> Result<Vec<AlumnoVinculado>, String> {
+    obtener_json(&format!("/api/apoderados/{id}/alumnos")).await
 }
 
 /// Lista de personas desde `listar_personas()`.

@@ -1,7 +1,7 @@
 //! Datos de demostración en español con relaciones coherentes.
 //! Se usan en el frontal (modo sin conexión) y como referencia de `sembrar_datos_demo()` en SQL.
 
-use super::dominio::{Colegio, EtapaOportunidad, Oportunidad, Persona};
+use super::dominio::{Alumno, Apoderado, Colegio, EstadoAlumno, EtapaOportunidad, Oportunidad, Persona};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -59,7 +59,48 @@ pub fn datos_semilla_personas() -> Vec<Persona> {
     ]
 }
 
-/// Seis postulaciones repartidas por el embudo de admisión.
+/// Tres alumnos y tres apoderados de ejemplo con RUT válidos.
+pub fn datos_semilla_alumnos() -> Vec<Alumno> {
+    let ahora = Utc::now();
+    let crear = |rut: &str, nombres: &str, apellidos: &str, curso: &str| Alumno {
+        id: Uuid::new_v4(),
+        rut: rut.into(),
+        nombres: nombres.into(),
+        apellidos: apellidos.into(),
+        fecha_nacimiento: None,
+        curso: curso.into(),
+        colegio_rbd: None,
+        estado: EstadoAlumno::Postulante,
+        creado_en: ahora,
+    };
+    vec![
+        crear("12345678-5", "Martín", "González", "8° Básico A"),
+        crear("11111111-1", "Sofía", "Fernández", "7° Básico B"),
+        crear("6123456-K", "Diego", "Muñoz", "1° Medio A"),
+    ]
+}
+
+/// Tres apoderados de ejemplo con RUT válidos.
+pub fn datos_semilla_apoderados() -> Vec<Apoderado> {
+    let ahora = Utc::now();
+    let crear = |rut: &str, nombres: &str, apellidos: &str, region: i16, comuna: &str| Apoderado {
+        id: Uuid::new_v4(),
+        rut: rut.into(),
+        nombres: nombres.into(),
+        apellidos: apellidos.into(),
+        telefono: "+56 9 5555 0100".into(),
+        correo: "".into(),
+        direccion: "".into(),
+        region_codigo: Some(region),
+        comuna_codigo: Some(comuna.into()),
+        creado_en: ahora,
+    };
+    vec![
+        crear("1-9", "Carmen", "González", 13, "13101"),
+        crear("12345678-5", "Pedro", "Fernández", 5, "05101"),
+        crear("11111111-1", "Ana", "Muñoz", 8, "08101"),
+    ]
+}
 pub fn datos_semilla_oportunidades(ids_personas: &[Uuid]) -> Vec<Oportunidad> {
     let ahora = Utc::now();
     let contacto = |i: usize| ids_personas.get(i % ids_personas.len()).copied();

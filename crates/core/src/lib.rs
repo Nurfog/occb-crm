@@ -14,10 +14,17 @@ pub mod territorio;
 pub mod validacion;
 
 pub use dominio::{
-    Colegio, CrearColegio, CrearOportunidad, CrearPersona, EtapaOportunidad, Oportunidad, Persona,
-    ResumenPanel, calcular_resumen,
+    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearColegio, CrearOportunidad,
+    CrearPersona, EstadoAlumno, EtapaOportunidad, Oportunidad, Persona, ResumenPanel, VinculoApoderado,
+    calcular_resumen,
 };
 pub use territorio::{Comuna, Region, comuna_por_cut, comunas_de_region, region};
-pub use semilla::{datos_semilla_colegios, datos_semilla_oportunidades, datos_semilla_personas};
+pub use semilla::{
+    datos_semilla_alumnos, datos_semilla_apoderados, datos_semilla_colegios,
+    datos_semilla_oportunidades, datos_semilla_personas,
+};
 pub use i18n::{Idioma, Textos, textos};
-pub use validacion::{ErrorDominio, correo_valido, validar_colegio, validar_oportunidad, validar_persona};
+pub use validacion::{
+    ErrorDominio, correo_valido, normalizar_rut, validar_alumno, validar_apoderado, validar_colegio,
+    validar_oportunidad, validar_persona, validar_rut,
+};

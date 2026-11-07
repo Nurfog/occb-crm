@@ -85,15 +85,15 @@ personas es nuestro.
   postulaciones), kanban de admisión, panel cuenta colegios.
 - ✅ E2E 15/15 en verde (colegios CRUD por UI, kanban de admisión, fichas, territorio).
 
-### ⬜ Fase E2 — Alumnos y Apoderados
-- ⬜ Tablas `alumnos` (RUT único con dígito verificador, nombres, curso/nivel,
+### ✅ Fase E2 — Alumnos y Apoderados
+- ✅ Tablas `alumnos` (RUT único con dígito verificador, nombres, curso/nivel,
   colegio RBD, estado: postulante/matriculado/trasladado/retirado) y `apoderados`
   (RUT único, nombres, contacto, territorio) + `alumno_apoderado` (vínculo,
   retiro autorizado, notificaciones).
-- ⬜ Validación RUT módulo 11 en núcleo + funciones PG.
-- ⬜ CRUD completo + fichas (alumno con apoderados y colegios; apoderado con alumnos).
-- ⬜ UI reemplaza Personas por Alumnos + Apoderados en el menú.
-- ⬜ E2E: alta con RUT válido/inválido, vínculo apoderado, fichas cruzadas.
+- ✅ Validación RUT módulo 11 en núcleo + funciones PG.
+- ✅ CRUD completo + fichas (alumno con apoderados y colegios; apoderado con alumnos).
+- ✅ UI reemplaza Personas por Alumnos + Apoderados en el menú.
+- ✅ E2E: alta con RUT válido/inválido, vínculo apoderado, fichas cruzadas.
 
 ### ⬜ Fase E3 — Traslados
 - ⬜ Tabla `traslados` (alumno, origen RBD, destino RBD, fecha, motivo) +
@@ -318,7 +318,7 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Fichas y relacionados | ✅ Funcional | 1.5 |
 | Regiones y comunas | ✅ Funcional | 1.6 |
 | Colegios y Admisión | ✅ Funcional | E1 |
-| Alumnos y Apoderados | ⬜ Pendiente | E2 |
+| Alumnos y Apoderados | ✅ Funcional | E2 |
 | Traslados | ⬜ Pendiente | E3 |
 | Tareas | [] Pendiente | 2 |
 | Notas | [] Pendiente | 2 |
