@@ -1,7 +1,10 @@
 //! Datos de demostración en español con relaciones coherentes.
 //! Se usan en el frontal (modo sin conexión) y como referencia de `sembrar_datos_demo()` en SQL.
 
-use super::dominio::{Alumno, Apoderado, Colegio, EstadoAlumno, EtapaOportunidad, Oportunidad, Persona};
+use super::dominio::{
+    Alumno, Apoderado, Colegio, EstadoAlumno, EstadoTarea, EtapaOportunidad, Nota, Oportunidad,
+    Persona, Tarea,
+};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -123,6 +126,40 @@ pub fn datos_semilla_oportunidades(ids_personas: &[Uuid]) -> Vec<Oportunidad> {
         crear("Postulación — Arquitectura 2026", 310_000, Aceptado, 4),
         crear("Matrícula — Industrial 2025", 480_000, Matriculado, 0),
     ]
+}
+
+/// Dos tareas y una nota de ejemplo para modo sin conexión.
+pub fn datos_semilla_tareas() -> Vec<Tarea> {
+    let ahora = Utc::now();
+    let crear = |titulo: &str, estado: EstadoTarea| Tarea {
+        id: Uuid::new_v4(),
+        titulo: titulo.into(),
+        detalle: String::new(),
+        estado,
+        prioridad: "media".into(),
+        vencimiento: None,
+        alumno_id: None,
+        apoderado_id: None,
+        oportunidad_id: None,
+        creado_en: ahora,
+    };
+    vec![
+        crear("Llamar apoderado", EstadoTarea::Pendiente),
+        crear("Preparar entrevista", EstadoTarea::EnCurso),
+    ]
+}
+
+/// Una nota de ejemplo para modo sin conexión.
+pub fn datos_semilla_notas() -> Vec<Nota> {
+    vec![Nota {
+        id: Uuid::new_v4(),
+        titulo: "Entrevista".into(),
+        cuerpo: "Comprometido con el proceso.".into(),
+        alumno_id: None,
+        apoderado_id: None,
+        oportunidad_id: None,
+        creado_en: Utc::now(),
+    }]
 }
 
 #[cfg(test)]

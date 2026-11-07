@@ -13,8 +13,10 @@ mod errores;
 mod rutas_alumnos;
 mod rutas_apoderados;
 mod rutas_colegios;
+mod rutas_notas;
 mod rutas_oportunidades;
 mod rutas_personas;
+mod rutas_tareas;
 mod rutas_territorio;
 
 use std::{net::SocketAddr, time::Duration};
@@ -116,6 +118,30 @@ async fn main() {
         .route(
             "/api/apoderados/{id}/alumnos",
             get(rutas_apoderados::alumnos_de),
+        )
+        .route(
+            "/api/tareas",
+            get(rutas_tareas::listar).post(rutas_tareas::crear),
+        )
+        .route(
+            "/api/tareas/{id}",
+            get(rutas_tareas::obtener)
+                .patch(rutas_tareas::actualizar)
+                .delete(rutas_tareas::eliminar),
+        )
+        .route(
+            "/api/tareas/{id}/estado",
+            axum::routing::patch(rutas_tareas::marcar),
+        )
+        .route(
+            "/api/notas",
+            get(rutas_notas::listar).post(rutas_notas::crear),
+        )
+        .route(
+            "/api/notas/{id}",
+            get(rutas_notas::obtener)
+                .patch(rutas_notas::actualizar)
+                .delete(rutas_notas::eliminar),
         )
         .route("/api/regiones", get(rutas_territorio::listar_regiones))
         .route("/api/comunas", get(rutas_territorio::listar_comunas))

@@ -1,7 +1,7 @@
 //! Validación pura del dominio con mensajes en español.
 //! Se usa tanto en la API (antes de llamar a PostgreSQL) como en el frontal.
 
-use super::dominio::{CrearAlumno, CrearApoderado, CrearColegio, CrearOportunidad, CrearPersona};
+use super::dominio::{CrearAlumno, CrearApoderado, CrearColegio, CrearNota, CrearOportunidad, CrearPersona, CrearTarea};
 use thiserror::Error;
 
 /// Error de dominio con mensaje listo para mostrar al usuario.
@@ -177,6 +177,28 @@ pub fn validar_apoderado(mut entrada: CrearApoderado) -> Result<CrearApoderado, 
     Ok(entrada)
 }
 
+/// Valida una tarea completa.
+pub fn validar_tarea(mut entrada: CrearTarea) -> Result<CrearTarea, ErrorDominio> {
+    entrada.titulo = exigir_texto(&entrada.titulo, "título", 200)?;
+    entrada.detalle = limpio(&entrada.detalle);
+    match entrada.prioridad.to_lowercase().as_str() {
+        "baja" | "media" | "alta" => {}
+        _ => {
+            return Err(ErrorDominio::Validacion(
+                "La prioridad debe ser baja, media o alta.".into(),
+            ));
+        }
+    }
+    Ok(entrada)
+}
+
+/// Valida una nota completa.
+pub fn validar_nota(mut entrada: CrearNota) -> Result<CrearNota, ErrorDominio> {
+    entrada.titulo = limpio(&entrada.titulo);
+    entrada.cuerpo = exigir_texto(&entrada.cuerpo, "contenido", 5000)?;
+    Ok(entrada)
+}
+
 /// Valida una oportunidad completa.
 pub fn validar_oportunidad(mut entrada: CrearOportunidad) -> Result<CrearOportunidad, ErrorDominio> {
     entrada.nombre = exigir_texto(&entrada.nombre, "nombre", 200)?;
@@ -246,6 +268,40 @@ mod pruebas {
     #[test]
     fn acepta_datos_correctos() {
         assert!(validar_colegio(colegio_ejemplo()).is_ok());
+    }
+
+    #[test]
+    fn valida_tarea_y_nota() {
+        let tarea = CrearTarea {
+            titulo: "Llamar apoderado".into(),
+            detalle: "".into(),
+            estado: crate::dominio::EstadoTarea::Pendiente,
+            prioridad: "alta".into(),
+            vencimiento: None,
+            alumno_id: None,
+            apoderado_id: None,
+            oportunidad_id: None,
+        };
+        assert!(validar_tarea(tarea).is_ok());
+        let mala = CrearTarea {
+            titulo: "".into(),
+            detalle: "".into(),
+            estado: crate::dominio::EstadoTarea::Pendiente,
+            prioridad: "urgente".into(),
+            vencimiento: None,
+            alumno_id: None,
+            apoderado_id: None,
+            oportunidad_id: None,
+        };
+        assert!(validar_tarea(mala).is_err());
+        let nota = CrearNota {
+            titulo: "Entrevista".into(),
+            cuerpo: "Comprometido con el proceso.".into(),
+            alumno_id: None,
+            apoderado_id: None,
+            oportunidad_id: None,
+        };
+        assert!(validar_nota(nota).is_ok());
     }
 
     #[test]

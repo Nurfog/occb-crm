@@ -115,3 +115,34 @@ pub fn fila_a_traslado(fila: &sqlx::postgres::PgRow) -> occb_core::Traslado {
         motivo: fila.get::<String, _>("motivo"),
     }
 }
+
+/// Fila de tarea; estado y fecha se convierten a tipos Rust.
+pub fn fila_a_tarea(fila: &sqlx::postgres::PgRow) -> occb_core::Tarea {
+    let estado_texto: String = fila.get("estado");
+    occb_core::Tarea {
+        id: fila.get("id"),
+        titulo: fila.get("titulo"),
+        detalle: fila.get::<String, _>("detalle"),
+        estado: occb_core::EstadoTarea::desde_texto(&estado_texto)
+            .unwrap_or(occb_core::EstadoTarea::Pendiente),
+        prioridad: fila.get::<String, _>("prioridad"),
+        vencimiento: fila.get::<Option<chrono::NaiveDate>, _>("vencimiento"),
+        alumno_id: fila.get::<Option<uuid::Uuid>, _>("alumno_id"),
+        apoderado_id: fila.get::<Option<uuid::Uuid>, _>("apoderado_id"),
+        oportunidad_id: fila.get::<Option<uuid::Uuid>, _>("oportunidad_id"),
+        creado_en: fila.get("creado_en"),
+    }
+}
+
+/// Fila de nota leída desde una función.
+pub fn fila_a_nota(fila: &sqlx::postgres::PgRow) -> occb_core::Nota {
+    occb_core::Nota {
+        id: fila.get("id"),
+        titulo: fila.get::<String, _>("titulo"),
+        cuerpo: fila.get("cuerpo"),
+        alumno_id: fila.get::<Option<uuid::Uuid>, _>("alumno_id"),
+        apoderado_id: fila.get::<Option<uuid::Uuid>, _>("apoderado_id"),
+        oportunidad_id: fila.get::<Option<uuid::Uuid>, _>("oportunidad_id"),
+        creado_en: fila.get("creado_en"),
+    }
+}

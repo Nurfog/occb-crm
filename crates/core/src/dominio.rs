@@ -147,6 +147,101 @@ pub struct Traslado {
     pub motivo: String,
 }
 
+/// Estado de una tarea.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum EstadoTarea {
+    Pendiente,
+    EnCurso,
+    Hecha,
+}
+
+impl EstadoTarea {
+    /// Todas en orden del tablero.
+    pub fn todas() -> &'static [Self] {
+        use EstadoTarea::*;
+        &[Pendiente, EnCurso, Hecha]
+    }
+
+    /// Convierte el texto de PG al estado.
+    pub fn desde_texto(valor: &str) -> Option<Self> {
+        match valor {
+            "pendiente" => Some(Self::Pendiente),
+            "en_curso" => Some(Self::EnCurso),
+            "hecha" => Some(Self::Hecha),
+            _ => None,
+        }
+    }
+
+    /// Texto que se persiste en PostgreSQL.
+    pub fn como_texto(&self) -> &'static str {
+        match self {
+            Self::Pendiente => "pendiente",
+            Self::EnCurso => "en_curso",
+            Self::Hecha => "hecha",
+        }
+    }
+
+    /// Avanza al siguiente estado (el tablero usa este orden).
+    pub fn siguiente(&self) -> Self {
+        match self {
+            Self::Pendiente => Self::EnCurso,
+            Self::EnCurso => Self::Hecha,
+            Self::Hecha => Self::Hecha,
+        }
+    }
+}
+
+/// Tarea vinculada al quehacer escolar.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Tarea {
+    pub id: Uuid,
+    pub titulo: String,
+    pub detalle: String,
+    pub estado: EstadoTarea,
+    pub prioridad: String,
+    pub vencimiento: Option<chrono::NaiveDate>,
+    pub alumno_id: Option<Uuid>,
+    pub apoderado_id: Option<Uuid>,
+    pub oportunidad_id: Option<Uuid>,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Datos para crear una tarea.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CrearTarea {
+    pub titulo: String,
+    pub detalle: String,
+    pub estado: EstadoTarea,
+    pub prioridad: String,
+    pub vencimiento: Option<chrono::NaiveDate>,
+    pub alumno_id: Option<Uuid>,
+    pub apoderado_id: Option<Uuid>,
+    pub oportunidad_id: Option<Uuid>,
+}
+
+/// Nota libre vinculada a registros.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Nota {
+    pub id: Uuid,
+    pub titulo: String,
+    pub cuerpo: String,
+    pub alumno_id: Option<Uuid>,
+    pub apoderado_id: Option<Uuid>,
+    pub oportunidad_id: Option<Uuid>,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Datos para crear una nota.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CrearNota {
+    pub titulo: String,
+    pub cuerpo: String,
+    pub alumno_id: Option<Uuid>,
+    pub apoderado_id: Option<Uuid>,
+    pub oportunidad_id: Option<Uuid>,
+}
+
 /// Persona de contacto.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Persona {

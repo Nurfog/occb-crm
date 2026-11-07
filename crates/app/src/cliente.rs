@@ -3,8 +3,8 @@
 //! La API es la única que habla con PostgreSQL (vía funciones seguras).
 
 use occb_core::{
-    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearColegio, CrearOportunidad,
-    CrearPersona, Oportunidad, Persona, ResumenPanel, Traslado,
+    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearColegio, CrearNota, CrearOportunidad,
+    CrearPersona, CrearTarea, Nota, Oportunidad, Persona, ResumenPanel, Tarea, Traslado,
 };
 use uuid::Uuid;
 
@@ -315,7 +315,7 @@ pub async fn actualizar_oportunidad(id: Uuid, datos: &CrearOportunidad) -> Resul
 }
 
 /// Mueve una oportunidad de etapa vía `mover_etapa_oportunidad()`.
-/// `etapa` es el texto que guarda PG: nueva, contacto, reunion, propuesta o cliente.
+/// `etapa` es el texto que guarda PG: contacto, postulante, evaluado, aceptado o matriculado.
 pub async fn mover_etapa(id: Uuid, etapa: &str) -> Result<Oportunidad, String> {
     enviar_json(
         "PATCH",
@@ -323,4 +323,73 @@ pub async fn mover_etapa(id: Uuid, etapa: &str) -> Result<Oportunidad, String> {
         &serde_json::json!({ "etapa": etapa }),
     )
     .await
+}
+
+/// Lista tareas con búsqueda y estado opcionales.
+pub async fn listar_tareas(busqueda: &str, estado: &str) -> Result<Vec<Tarea>, String> {
+    let mut ruta = String::from("/api/tareas?limite=100");
+    if !busqueda.trim().is_empty() {
+        ruta.push_str(&format!("&busqueda={}", busqueda.trim()));
+    }
+    if !estado.trim().is_empty() {
+        ruta.push_str(&format!("&estado={}", estado.trim()));
+    }
+    obtener_json(&ruta).await
+}
+
+/// Crea una tarea vía `crear_tarea()`.
+pub async fn crear_tarea(datos: &CrearTarea) -> Result<Tarea, String> {
+    enviar_json("POST", "/api/tareas", datos).await
+}
+
+/// Avanza una tarea de estado vía `marcar_tarea()`.
+pub async fn marcar_tarea(id: Uuid, estado: &str) -> Result<Tarea, String> {
+    enviar_json(
+        "PATCH",
+        &format!("/api/tareas/{id}/estado"),
+        &serde_json::json!({ "estado": estado }),
+    )
+    .await
+}
+
+/// Elimina una tarea.
+pub async fn eliminar_tarea(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/tareas/{id}")).await
+}
+
+/// Tareas vinculadas a un alumno (para su ficha).
+pub async fn tareas_de_alumno(alumno_id: Uuid) -> Result<Vec<Tarea>, String> {
+    let todas = listar_tareas("", "").await?;
+    Ok(todas.into_iter().filter(|t| t.alumno_id == Some(alumno_id)).collect())
+}
+
+/// Lista notas con búsqueda opcional.
+pub async fn listar_notas(busqueda: &str) -> Result<Vec<Nota>, String> {
+    let ruta = if busqueda.trim().is_empty() {
+        "/api/notas?limite=100".to_string()
+    } else {
+        format!("/api/notas?busqueda={}&limite=100", busqueda.trim())
+    };
+    obtener_json(&ruta).await
+}
+
+/// Crea una nota vía `crear_nota()`.
+pub async fn crear_nota(datos: &CrearNota) -> Result<Nota, String> {
+    enviar_json("POST", "/api/notas", datos).await
+}
+
+/// Actualiza una nota.
+pub async fn actualizar_nota(id: Uuid, datos: &CrearNota) -> Result<Nota, String> {
+    enviar_json("PATCH", &format!("/api/notas/{id}"), datos).await
+}
+
+/// Elimina una nota.
+pub async fn eliminar_nota(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/notas/{id}")).await
+}
+
+/// Notas vinculadas a un alumno (para su ficha).
+pub async fn notas_de_alumno(alumno_id: Uuid) -> Result<Vec<Nota>, String> {
+    let todas = listar_notas("").await?;
+    Ok(todas.into_iter().filter(|n| n.alumno_id == Some(alumno_id)).collect())
 }

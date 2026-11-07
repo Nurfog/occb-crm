@@ -116,7 +116,7 @@ personas es nuestro.
 ### ⬜ Fase 2 — Tareas + Notas
 Objetivo: los dos objetos de trabajo diario, relacionados con todo lo demás.
 
-- ⬜ Base de datos (migración 010):
+- ⬜ Base de datos (migración 013):
   - ⬜ Tabla `tareas`: `id`, `titulo` (1–200, obligatorio), `detalle`, `estado`
     (`pendiente|en_curso|hecha`, por defecto `pendiente`), `prioridad`
     (`baja|media|alta`, por defecto `media`), `vencimiento` (anulable),
@@ -143,13 +143,13 @@ Objetivo: los dos objetos de trabajo diario, relacionados con todo lo demás.
   - ⬜ Contador de pendientes en el menú.
 - ⬜ E2E (Chrome): alta de tarea por UI persiste; avance de estado persiste;
   alta y edición de nota persisten; aparecen en la ficha relacionada.
-- ⬜ Hecho cuando: E2E 15/15, clippy limpio, migración 010 aplicada en fresco
+- ⬜ Hecho cuando: E2E 15/15, clippy limpio, migración 013 aplicada en fresco
   (`down -v` + `up` + arranque API sin errores).
 
 ### ⬜ Fase 3 — Acceso real + miembros
 Objetivo: multiusuario de verdad; base para permisos por usuario.
 
-- ⬜ Base de datos (migración 011):
+- ⬜ Base de datos (migración 014):
   - ⬜ Tabla `usuarios`: `id`, `nombre`, `correo` único (formato válido),
     `clave_hash` (argon2, solo lo escribe la función), `rol`
     (`admin|miembro`, por defecto `miembro`), `creado_en`. RLS.
@@ -181,7 +181,7 @@ Objetivo: multiusuario de verdad; base para permisos por usuario.
 ### ⬜ Fase 4 — Calendario + Correos
 Objetivo: agenda y bandeja vinculadas a los registros.
 
-- ⬜ Base de datos (migración 012):
+- ⬜ Base de datos (migración 015):
   - ⬜ Tabla `eventos`: `id`, `titulo` obligatorio, `inicio`/`fin` (fin ≥ inicio),
     `lugar`, `descripcion`, `persona_id`, `empresa_id`, `oportunidad_id`
     (anulables), `creado_en`. Índice por rango de fechas. RLS.
@@ -208,7 +208,7 @@ Objetivo: agenda y bandeja vinculadas a los registros.
 ### ⬜ Fase 5 — Búsqueda global + Favoritos + Vistas + Timeline
 Objetivo: moverse por el espacio como en un CRM grande.
 
-- ⬜ Base de datos (migración 013):
+- ⬜ Base de datos (migración 016):
   - ⬜ Búsqueda: columnas `tsvector` en español (`pg_catalog.spanish`) para
     empresas/personas/oportunidades/notas/tareas + función `buscar_espacio(texto)`
     que devuelve `(tipo, id, titulo, detalle)` rankeada, límite 20.
@@ -236,7 +236,7 @@ Objetivo: moverse por el espacio como en un CRM grande.
 ### ⬜ Fase 6 — Automatizaciones
 Objetivo: reglas sencillas sin programar.
 
-- ⬜ Base de datos (migración 014):
+- ⬜ Base de datos (migración 017):
   - ⬜ Tabla `automatizaciones`: `id`, `nombre` obligatorio, `activa` (defecto true),
     `disparador` (`al_crear|al_actualizar` + objeto), `condiciones jsonb`
     (lista de `{campo, operador, valor}` con operadores `igual|contiene|mayor_que`),
@@ -261,7 +261,7 @@ Objetivo: reglas sencillas sin programar.
 ### ⬜ Fase 7 — Agentes IA + chat
 Objetivo: pedirle cosas al CRM conversando.
 
-- ⬜ Base de datos (migración 015):
+- ⬜ Base de datos (migración 018):
   - ⬜ Tabla `conversaciones`: `id`, `usuario_id`, `titulo`, `creado_en`.
   - ⬜ Tabla `mensajes`: `id`, `conversacion_id` (`on delete cascade`), `rol`
     (`usuario|agente`), `contenido`, `creado_en`.
@@ -284,7 +284,7 @@ Objetivo: pedirle cosas al CRM conversando.
 ### ⬜ Fase 8 — Plataforma y producción
 Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 
-- ⬜ Integraciones (migración 016):
+- ⬜ Integraciones (migración 019):
   - ⬜ Tabla `claves_api`: `id`, `usuario_id`, `nombre`, `clave_hash` (sha256, se
     muestra una sola vez al crear), `alcances text[]`, `revocada`,
     `creado_en`. Auth por cabecera `X-Clave-API` con mismos permisos que el dueño.

@@ -10,11 +10,11 @@ mod cliente;
 use dioxus::prelude::*;
 use uuid::Uuid;
 use occb_core::{
-    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearOportunidad,
-    CrearPersona, EstadoAlumno, EtapaOportunidad, Idioma, Oportunidad,
-    Persona, Traslado, calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
-    datos_semilla_colegios, datos_semilla_oportunidades,
-    datos_semilla_personas, textos,
+    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearNota, CrearOportunidad,
+    CrearPersona, CrearTarea, EstadoAlumno, EstadoTarea, EtapaOportunidad, Idioma, Nota,
+    Oportunidad, Persona, Tarea, Traslado, calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
+    datos_semilla_colegios, datos_semilla_notas, datos_semilla_oportunidades,
+    datos_semilla_personas, datos_semilla_tareas, textos,
 };
 
 /// Hoja de estilos del frontal.
@@ -59,6 +59,10 @@ enum Ruta {
         VistaApoderados {},
         #[route("/apoderados/:id")]
         DetalleApoderado { id: Uuid },
+        #[route("/tareas")]
+        VistaTareas {},
+        #[route("/notas")]
+        VistaNotas {},
         #[route("/personas")]
         VistaPersonas {},
         #[route("/personas/:id")]
@@ -174,13 +178,13 @@ fn BarraLateral() -> Element {
                     span { class: "ico ico-admision", "◇" }
                     span { "{t.oportunidades}" }
                 }
-                div { class: "side-item dim",
-                    span { class: "ico ico-notas", "☰" }
-                    span { "{t.notas}" }
-                }
-                div { class: "side-item dim",
+                Link { to: Ruta::VistaTareas {}, class: "side-item",
                     span { class: "ico ico-tareas", "✓" }
                     span { "{t.tareas}" }
+                }
+                Link { to: Ruta::VistaNotas {}, class: "side-item",
+                    span { class: "ico ico-notas", "☰" }
+                    span { "{t.notas}" }
                 }
                 div { class: "side-item dim",
                     span { class: "ico", "⚙" }
@@ -1447,6 +1451,8 @@ fn DetalleAlumno(id: Uuid) -> Element {
     let mut tr_destino = use_signal(String::new);
     let mut tr_motivo = use_signal(String::new);
     let mut colegio_nombre = use_signal(String::new);
+    let mut rel_tareas = use_signal(Vec::<Tarea>::new);
+    let mut rel_notas = use_signal(Vec::<Nota>::new);
 
     // Sigue al id de la ruta: si cambia, recarga.
     let mut id_actual = use_signal(|| id);
@@ -1483,6 +1489,14 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     alumno.set(Some(a.clone()));
                     recargar_vinculos(pid);
                     recargar_historial(pid);
+                    spawn(async move {
+                        if let Ok(lista) = cliente::tareas_de_alumno(pid).await {
+                            rel_tareas.set(lista);
+                        }
+                        if let Ok(lista) = cliente::notas_de_alumno(pid).await {
+                            rel_notas.set(lista);
+                        }
+                    });
                     if let Some(rbd) = a.colegio_rbd.clone() {
                         let rbd_clon = rbd.clone();
                         spawn(async move {
@@ -1788,6 +1802,34 @@ fn DetalleAlumno(id: Uuid) -> Element {
                         div { class: "campo campo-btn",
                             button { class: "btn-primary", onclick: trasladar, if idioma == Idioma::Es { "Trasladar a {tr_destino}" } else { "Transfer to {tr_destino}" } }
                         }
+                    }
+                }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{rel_tareas.read().len()} · {t.tareas}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for ta in rel_tareas.read().iter() {
+                    div { class: "mini-row", key: "{ta.id}",
+                        span { class: "mini-name", "{ta.titulo}" }
+                        span { class: "mini-amt", "{etiqueta_tarea(ta.estado, idioma)}" }
+                    }
+                }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{rel_notas.read().len()} · {t.notas}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for n in rel_notas.read().iter() {
+                    div { class: "mini-row", key: "{n.id}",
+                        span { class: "mini-name", "{n.titulo}" }
+                        span { class: "mini-amt", "{n.cuerpo.chars().take(40).collect::<String>()}" }
                     }
                 }
             }
@@ -2134,6 +2176,386 @@ fn DetalleApoderado(id: Uuid) -> Element {
                 }
             }
         }
+        }
+    }
+}
+
+/// Etiqueta de estado de tarea según idioma.
+fn etiqueta_tarea(estado: EstadoTarea, idioma: Idioma) -> &'static str {
+    match (estado, idioma) {
+        (EstadoTarea::Pendiente, Idioma::Es) => "Pendiente",
+        (EstadoTarea::EnCurso, Idioma::Es) => "En curso",
+        (EstadoTarea::Hecha, Idioma::Es) => "Hecha",
+        (EstadoTarea::Pendiente, Idioma::En) => "To do",
+        (EstadoTarea::EnCurso, Idioma::En) => "In progress",
+        (EstadoTarea::Hecha, Idioma::En) => "Done",
+    }
+}
+
+/// Vista de tareas: tablero Por Estado con alta y avance persistido.
+#[component]
+fn VistaTareas() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut tareas = use_signal(Vec::<Tarea>::new);
+    let mut aviso = use_signal(String::new);
+    let mut mostrar_form = use_signal(|| false);
+    let mut titulo = use_signal(String::new);
+    let mut estado_nuevo = use_signal(|| EstadoTarea::Pendiente);
+
+    use_effect(move || {
+        spawn(async move {
+            match cliente::listar_tareas("", "").await {
+                Ok(lista) => tareas.set(lista),
+                Err(_) if tareas.read().is_empty() => tareas.set(datos_semilla_tareas()),
+                Err(_) => {}
+            }
+        });
+    });
+
+    let crear = move |_| {
+        let datos = CrearTarea {
+            titulo: titulo.read().clone(),
+            detalle: String::new(),
+            estado: estado_nuevo(),
+            prioridad: "media".into(),
+            vencimiento: None,
+            alumno_id: None,
+            apoderado_id: None,
+            oportunidad_id: None,
+        };
+        spawn(async move {
+            match cliente::crear_tarea(&datos).await {
+                Ok(_) => {
+                    aviso.set(String::new());
+                    titulo.set(String::new());
+                    estado_nuevo.set(EstadoTarea::Pendiente);
+                    mostrar_form.set(false);
+                    if let Ok(lista) = cliente::listar_tareas("", "").await {
+                        tareas.set(lista);
+                    }
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.tareas.to_string(),
+            subtitulo: format!(
+                "{} · {}",
+                tareas.read().len(),
+                if idioma == Idioma::Es { "pulsa ▶ para avanzar" } else { "click ▶ to advance" }
+            ),
+        }
+        if mostrar_form() {
+        div { class: "panel form",
+            label {
+                if idioma == Idioma::Es { "Nueva tarea · " } else { "New task · " }
+                "{etiqueta_tarea(estado_nuevo(), idioma)}"
+            }
+            div { class: "row",
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Título *" } else { "Title *" },
+                    value: "{titulo}",
+                    oninput: move |e| titulo.set(e.value()),
+                }
+                button { class: "btn-primary", onclick: crear, "{t.nueva}" }
+            }
+            if !aviso.read().is_empty() {
+                p { class: "muted small", "{aviso}" }
+            }
+        }
+        }
+        div { class: "kanban",
+            for estado in EstadoTarea::todas() {
+                div { class: "col", key: "{estado:?}",
+                    div { class: "col-head",
+                        span { class: "pill", "{etiqueta_tarea(*estado, idioma)}" }
+                        span { class: "count",
+                            "{tareas.read().iter().filter(|x| &x.estado == estado).count()}"
+                        }
+                    }
+                    for ta in tareas.read().iter().filter(|x| &x.estado == estado).cloned().collect::<Vec<_>>() {
+                        div { class: "opp-card", key: "{ta.id}",
+                            div { class: "opp-name", "{ta.titulo}" }
+                            if !ta.detalle.is_empty() {
+                                div { class: "opp-sub", "{ta.detalle}" }
+                            }
+                            div { class: "opp-foot",
+                                span { class: "opp-prob", "{ta.prioridad}" }
+                                button {
+                                    class: "btn-mini",
+                                    title: if idioma == Idioma::Es { "Eliminar" } else { "Delete" },
+                                    onclick: {
+                                        let id = ta.id;
+                                        move |_| {
+                                            spawn(async move {
+                                                if cliente::eliminar_tarea(id).await.is_ok()
+                                                    && let Ok(lista) =
+                                                        cliente::listar_tareas("", "").await
+                                                {
+                                                    tareas.set(lista);
+                                                }
+                                            });
+                                        }
+                                    },
+                                    "✕"
+                                }
+                                button {
+                                    class: "btn-mini",
+                                    title: if idioma == Idioma::Es { "Avanzar" } else { "Advance" },
+                                    onclick: {
+                                        let id = ta.id;
+                                        let siguiente = ta.estado.siguiente().como_texto();
+                                        move |_| {
+                                            spawn(async move {
+                                                match cliente::marcar_tarea(id, siguiente).await {
+                                                    Ok(_) => {
+                                                        if let Ok(lista) = cliente::listar_tareas("", "").await {
+                                                            tareas.set(lista);
+                                                        }
+                                                    }
+                                                    Err(mensaje) => aviso.set(mensaje),
+                                                }
+                                            });
+                                        }
+                                    },
+                                    "▶"
+                                }
+                            }
+                        }
+                    }
+                    button {
+                        class: "ghost-new",
+                        onclick: {
+                            let e = *estado;
+                            move |_| {
+                                estado_nuevo.set(e);
+                                mostrar_form.set(true);
+                            }
+                        },
+                        "+ Nuevo"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Vista de notas: lista con búsqueda, alta, edición inline y baja.
+#[component]
+fn VistaNotas() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut busqueda = use_signal(String::new);
+    let mut notas = use_signal(Vec::<Nota>::new);
+    let mut listo = use_signal(|| false);
+    let mut aviso = use_signal(String::new);
+    let mut mostrar_form = use_signal(|| false);
+    let mut titulo = use_signal(String::new);
+    let mut cuerpo = use_signal(String::new);
+    let mut editando = use_signal(|| None::<Uuid>);
+    let mut cuerpo_ed = use_signal(String::new);
+
+    use_effect(move || {
+        let b = busqueda.read().clone();
+        spawn(async move {
+            match cliente::listar_notas(&b).await {
+                Ok(lista) => {
+                    notas.set(lista);
+                    listo.set(true);
+                }
+                Err(_) if notas.read().is_empty() => {
+                    notas.set(datos_semilla_notas());
+                    listo.set(true);
+                }
+                Err(_) => {}
+            }
+        });
+    });
+
+    let total = notas.read().len();
+
+    let crear = move |_| {
+        let datos = CrearNota {
+            titulo: titulo.read().clone(),
+            cuerpo: cuerpo.read().clone(),
+            alumno_id: None,
+            apoderado_id: None,
+            oportunidad_id: None,
+        };
+        spawn(async move {
+            match cliente::crear_nota(&datos).await {
+                Ok(_) => {
+                    aviso.set(String::new());
+                    titulo.set(String::new());
+                    cuerpo.set(String::new());
+                    mostrar_form.set(false);
+                    if let Ok(lista) = cliente::listar_notas("").await {
+                        notas.set(lista);
+                    }
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.notas.to_string(),
+            subtitulo: format!("{total} · {}", t.tabla),
+        }
+        div { class: "toolbar",
+            input {
+                class: "input",
+                placeholder: "{t.buscar}…",
+                value: "{busqueda}",
+                oninput: move |e| busqueda.set(e.value()),
+            }
+            span { class: "pill", "{t.tabla}" }
+        }
+        if mostrar_form() {
+        div { class: "panel form",
+            label { if idioma == Idioma::Es { "Nueva nota" } else { "New note" } }
+            div { class: "row",
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Título" } else { "Title" },
+                    value: "{titulo}",
+                    oninput: move |e| titulo.set(e.value()),
+                }
+                button { class: "btn-primary", onclick: crear, "{t.nueva}" }
+            }
+            div { class: "row",
+                input {
+                    class: "input",
+                    placeholder: if idioma == Idioma::Es { "Contenido *" } else { "Body *" },
+                    value: "{cuerpo}",
+                    oninput: move |e| cuerpo.set(e.value()),
+                }
+            }
+            if !aviso.read().is_empty() {
+                p { class: "muted small", "{aviso}" }
+            }
+        }
+        }
+        div { class: "tbl-wrap",
+            if !listo() {
+                p { class: "muted", style: "padding: 12px;", "…" }
+            } else {
+                table { class: "tbl",
+                    thead {
+                        tr {
+                            th { class: "check", "☐" }
+                            th { if idioma == Idioma::Es { "Título" } else { "Title" } }
+                            th { if idioma == Idioma::Es { "Contenido" } else { "Body" } }
+                            th { if idioma == Idioma::Es { "Creada" } else { "Created" } }
+                            th { "" }
+                        }
+                    }
+                    tbody {
+                        for n in notas.read().iter() {
+                            tr { key: "{n.id}",
+                                td { class: "check", "☐" }
+                                td { class: "strong", "{n.titulo}" }
+                                td {
+                                    if editando() == Some(n.id) {
+                                        input {
+                                            class: "input",
+                                            value: "{cuerpo_ed}",
+                                            oninput: move |e| cuerpo_ed.set(e.value()),
+                                        }
+                                    } else {
+                                        span { class: "muted", "{n.cuerpo}" }
+                                    }
+                                }
+                                td { class: "muted small", "{hace_tiempo(n.creado_en, idioma)}" }
+                                td {
+                                    if editando() == Some(n.id) {
+                                        button {
+                                            class: "btn-mini",
+                                            onclick: {
+                                                let id = n.id;
+                                                let titulo_n = n.titulo.clone();
+                                                move |_| {
+                                                    let datos = CrearNota {
+                                                        titulo: titulo_n.clone(),
+                                                        cuerpo: cuerpo_ed.read().clone(),
+                                                        alumno_id: None,
+                                                        apoderado_id: None,
+                                                        oportunidad_id: None,
+                                                    };
+                                                    spawn(async move {
+                                                        match cliente::actualizar_nota(id, &datos).await {
+                                                            Ok(_) => {
+                                                                editando.set(None);
+                                                                if let Ok(lista) = cliente::listar_notas("").await {
+                                                                    notas.set(lista);
+                                                                }
+                                                            }
+                                                            Err(mensaje) => aviso.set(mensaje),
+                                                        }
+                                                    });
+                                                }
+                                            },
+                                            if idioma == Idioma::Es { "Guardar" } else { "Save" }
+                                        }
+                                    } else {
+                                        button {
+                                            class: "btn-mini",
+                                            title: "✎",
+                                            onclick: {
+                                                let (id, c) = (n.id, n.cuerpo.clone());
+                                                move |_| {
+                                                    cuerpo_ed.set(c.clone());
+                                                    editando.set(Some(id));
+                                                }
+                                            },
+                                            "✎"
+                                        }
+                                    }
+                                    button {
+                                        class: "btn-mini",
+                                        title: "✕",
+                                        onclick: {
+                                            let id = n.id;
+                                            move |_| {
+                                                spawn(async move {
+                                                    if cliente::eliminar_nota(id).await.is_ok()
+                                                        && let Ok(lista) =
+                                                            cliente::listar_notas("").await
+                                                    {
+                                                        notas.set(lista);
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        "✕"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    tfoot {
+                        tr {
+                            td { colspan: "5",
+                                button {
+                                    class: "ghost-new",
+                                    onclick: move |_| mostrar_form.set(true),
+                                    "+ Agregar nuevo"
+                                }
+                            }
+                        }
+                        tr { class: "tbl-foot",
+                            td { colspan: "2", "Calcular ▾" }
+                            td { colspan: "3", "Contar todo ", b { "{total}" } }
+                        }
+                    }
+                }
+            }
         }
     }
 }

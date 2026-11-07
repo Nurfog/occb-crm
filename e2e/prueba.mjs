@@ -382,6 +382,81 @@ afirma(
   'traslado registra historial con motivo',
 );
 
+// --- 14. Tarea por UI: alta y avance persisten ---
+const TIT_T = `Tarea ${SELLO}`;
+await ir('/tareas');
+await esperarCondicion(`!!document.querySelector('.ghost-new')`);
+await evaluar(`document.querySelector('.ghost-new').click()`);
+await dormir(800);
+await evaluar(`
+  (() => {
+    const input = document.querySelector('.panel.form input');
+    input.focus(); input.value = ${JSON.stringify(TIT_T)};
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Crear')).click()`);
+await dormir(2500);
+const filaTT = await (await fetch(`${API}/api/tareas?busqueda=${encodeURIComponent(TIT_T)}`)).json();
+afirma(filaTT.length === 1 && filaTT[0].estado === 'pendiente', 'tarea creada por UI persiste en PG');
+await evaluar(`
+  (() => {
+    const tarjeta = [...document.querySelectorAll('.opp-card')].find(c => (c.querySelector('.opp-name')?.textContent || '').includes(${JSON.stringify(TIT_T)}));
+    [...tarjeta.querySelectorAll('button')].find(b => b.textContent.includes('▶')).click();
+  })()
+`);
+await dormir(3000);
+const tareaMov = await (await fetch(`${API}/api/tareas?busqueda=${encodeURIComponent(TIT_T)}`)).json();
+afirma(tareaMov[0]?.estado === 'en_curso', 'avance de tarea persiste en PG');
+await fetch(`${API}/api/tareas/${filaTT[0].id}`, { method: 'DELETE' });
+
+// --- 15. Nota por UI: alta, edición y baja ---
+const TIT_N = `Nota ${SELLO}`;
+await ir('/notas');
+await esperarCondicion(`!!document.querySelector('.ghost-new')`);
+await evaluar(`document.querySelector('.ghost-new').click()`);
+await dormir(800);
+await evaluar(`
+  (() => {
+    const inputs = document.querySelectorAll('.panel.form input');
+    const set = (el, v) => { el.focus(); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    set(inputs[0], ${JSON.stringify(TIT_N)});
+    set(inputs[1], 'Contenido E2E');
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Crear')).click()`);
+await dormir(2500);
+let filaN = await (await fetch(`${API}/api/notas?busqueda=${encodeURIComponent(TIT_N)}`)).json();
+afirma(filaN.length === 1, 'nota creada por UI persiste en PG');
+await evaluar(`
+  (() => {
+    const fila = [...document.querySelectorAll('.tbl tbody tr')].find(tr => tr.textContent.includes(${JSON.stringify(TIT_N)}));
+    [...fila.querySelectorAll('button')].find(b => b.textContent.includes('✎')).click();
+  })()
+`);
+await dormir(800);
+await evaluar(`
+  (() => {
+    const fila = [...document.querySelectorAll('.tbl tbody tr')].find(tr => tr.textContent.includes(${JSON.stringify(TIT_N)}));
+    const input = fila.querySelector('input');
+    input.focus(); input.value = 'Editada E2E';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    [...fila.querySelectorAll('button')].find(b => b.textContent.includes('Guardar')).click();
+  })()
+`);
+await dormir(2500);
+filaN = await (await fetch(`${API}/api/notas?busqueda=${encodeURIComponent(TIT_N)}`)).json();
+afirma(filaN[0]?.cuerpo === 'Editada E2E', 'edición de nota persiste en PG');
+await evaluar(`
+  (() => {
+    const fila = [...document.querySelectorAll('.tbl tbody tr')].find(tr => tr.textContent.includes(${JSON.stringify(TIT_N)}));
+    [...fila.querySelectorAll('button')].find(b => b.textContent === '✕').click();
+  })()
+`);
+await dormir(2500);
+const filaNB = await (await fetch(`${API}/api/notas?busqueda=${encodeURIComponent(TIT_N)}`)).json();
+afirma(filaNB.length === 0, 'baja de nota por UI persiste en PG');
+
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();
 try {
