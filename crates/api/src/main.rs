@@ -96,6 +96,10 @@ async fn main() {
             get(rutas_alumnos::apoderados_de).post(rutas_alumnos::vincular),
         )
         .route(
+            "/api/alumnos/{id}/traslados",
+            get(rutas_alumnos::historial).post(rutas_alumnos::trasladar),
+        )
+        .route(
             "/api/alumnos/{alumno_id}/apoderados/{apoderado_id}",
             axum::routing::delete(rutas_alumnos::desvincular),
         )

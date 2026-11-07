@@ -304,17 +304,19 @@ const apo = await (await fetch(`${API}/api/apoderados`, {
 })).json();
 afirma(!!apo.id, 'apoderado con RUT válido se crea');
 await ir(`/alumnos/${filaA[0].id}`);
-await esperarCondicion(`document.querySelectorAll('.panel select').length >= 1`);
+await esperarCondicion(
+  `[...document.querySelectorAll('.panel select')].some(s => [...s.options].some(o => o.value === ${JSON.stringify(apo.id)}))`,
+);
 await evaluar(`
   (() => {
-    const sels = document.querySelectorAll('.panel select');
-    const sel = sels[sels.length - 1];
+    const btn = [...document.querySelectorAll('.panel button')].find(b => b.textContent.includes('Vincular'));
+    const row = btn.closest('.row');
+    const sel = row.querySelector('select');
     sel.value = ${JSON.stringify(apo.id)};
     sel.dispatchEvent(new Event('change', { bubbles: true }));
-    const inputs = document.querySelectorAll('.panel input');
-    const vinc = inputs[inputs.length - 1];
-    vinc.focus(); vinc.value = 'Padre';
-    vinc.dispatchEvent(new Event('input', { bubbles: true }));
+    const inp = row.querySelector('input');
+    inp.focus(); inp.value = 'Padre';
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
   })()
 `);
 await evaluar(`[...document.querySelectorAll('.panel button')].find(b => b.textContent.includes('Vincular')).click()`);
@@ -325,6 +327,60 @@ t = await texto();
 afirma(t.includes('Padre'), 'vínculo visible en ficha de alumno');
 await fetch(`${API}/api/alumnos/${filaA[0].id}`, { method: 'DELETE' });
 await fetch(`${API}/api/apoderados/${apo.id}`, { method: 'DELETE' });
+
+// --- 13. Traslado por UI: cambia colegio y registra historial ---
+const alumT = await (await fetch(`${API}/api/alumnos?busqueda=12345678-5`)).json();
+const idAT = alumT[0].id;
+const histAntes = await (await fetch(`${API}/api/alumnos/${idAT}/traslados`)).json();
+const cands = await (await fetch(`${API}/api/colegios?region=13&limite=2`)).json();
+const destinoT = cands.find((c) => c.rbd !== alumT[0].colegio_rbd) || cands[0];
+await ir(`/alumnos/${idAT}`);
+await esperarCondicion(`document.querySelectorAll('.record-panel select').length >= 2`);
+await evaluar(`
+  (() => {
+    const sels = document.querySelectorAll('.record-panel select');
+    sels[0].value = '13';
+    sels[0].dispatchEvent(new Event('change', { bubbles: true }));
+  })()
+`);
+await dormir(1000);
+await evaluar(`
+  (() => {
+    const sels = document.querySelectorAll('.record-panel select');
+    const opc = [...sels[1].options].find(o => o.value === ${JSON.stringify(destinoT.comuna)});
+    if (opc) { sels[1].value = ${JSON.stringify(destinoT.comuna)}; sels[1].dispatchEvent(new Event('change', { bubbles: true })); }
+    const inputs = document.querySelectorAll('.record-panel input');
+    const b = [...inputs].find(i => (i.placeholder || '').includes('destino'));
+    if (b) { b.focus(); b.value = ${JSON.stringify(destinoT.nombre.slice(0, 12))}; b.dispatchEvent(new Event('input', { bubbles: true })); }
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.record-panel button')].find(b => b.textContent.includes('Buscar')).click()`);
+await dormir(2500);
+await esperarCondicion(`[...document.querySelectorAll('.record-panel .mini-row')].some(f => f.textContent.includes(${JSON.stringify(destinoT.rbd)}) && [...f.querySelectorAll('button')].some(b => b.textContent.includes('Elegir')))`);
+await evaluar(`
+  (() => {
+    const filas = [...document.querySelectorAll('.record-panel .mini-row')];
+    const fila = filas.find(f => f.textContent.includes(${JSON.stringify(destinoT.rbd)}) && [...f.querySelectorAll('button')].some(b => b.textContent.includes('Elegir')));
+    if (fila) [...fila.querySelectorAll('button')].find(b => b.textContent.includes('Elegir')).click();
+  })()
+`);
+await dormir(800);
+await evaluar(`
+  (() => {
+    const inputs = document.querySelectorAll('.record-panel input');
+    const m = [...inputs].find(i => (i.placeholder || '').includes('Motivo'));
+    if (m) { m.focus(); m.value = 'E2E traslado'; m.dispatchEvent(new Event('input', { bubbles: true })); }
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.record-panel button')].find(b => b.textContent.includes('Trasladar')).click()`);
+await dormir(3000);
+const alumDesp = await (await fetch(`${API}/api/alumnos/${idAT}`)).json();
+afirma(alumDesp.colegio_rbd === destinoT.rbd, `traslado cambia colegio a ${destinoT.rbd}`);
+const histDesp = await (await fetch(`${API}/api/alumnos/${idAT}/traslados`)).json();
+afirma(
+  histDesp.length === histAntes.length + 1 && histDesp[0].motivo === 'E2E traslado',
+  'traslado registra historial con motivo',
+);
 
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();

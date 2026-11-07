@@ -4,7 +4,7 @@
 
 use occb_core::{
     Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearColegio, CrearOportunidad,
-    CrearPersona, Oportunidad, Persona, ResumenPanel,
+    CrearPersona, Oportunidad, Persona, ResumenPanel, Traslado,
 };
 use uuid::Uuid;
 
@@ -186,6 +186,20 @@ pub async fn apoderados_de_alumno(id: Uuid) -> Result<Vec<ApoderadoVinculado>, S
     obtener_json(&format!("/api/alumnos/{id}/apoderados")).await
 }
 
+/// Traslados (historial) de un alumno.
+pub async fn traslados_de_alumno(id: Uuid) -> Result<Vec<Traslado>, String> {
+    obtener_json(&format!("/api/alumnos/{id}/traslados")).await
+}
+
+/// Traslada un alumno a otro colegio registrando el historial.
+pub async fn trasladar_alumno(id: Uuid, destino_rbd: &str, motivo: &str) -> Result<Alumno, String> {
+    enviar_json(
+        "POST",
+        &format!("/api/alumnos/{id}/traslados"),
+        &serde_json::json!({ "destino_rbd": destino_rbd, "motivo": motivo }),
+    )
+    .await
+}
 /// Vincula un apoderado existente a un alumno.
 pub async fn vincular_apoderado(
     alumno_id: Uuid,

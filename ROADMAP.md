@@ -95,11 +95,11 @@ personas es nuestro.
 - ✅ UI reemplaza Personas por Alumnos + Apoderados en el menú.
 - ✅ E2E: alta con RUT válido/inválido, vínculo apoderado, fichas cruzadas.
 
-### ⬜ Fase E3 — Traslados
-- ⬜ Tabla `traslados` (alumno, origen RBD, destino RBD, fecha, motivo) +
+### ✅ Fase E3 — Traslados
+- ✅ Tabla `traslados` (alumno, origen RBD, destino RBD, fecha, motivo) +
   `trasladar_alumno()` (valida destino ≠ origen, actualiza colegio, registra historial).
-- ⬜ UI: desde la ficha del alumno, buscador de colegios destino por región/comuna.
-- ⬜ E2E: traslado persiste colegio nuevo + historial visible.
+- ✅ UI: desde la ficha del alumno, buscador de colegios destino por región/comuna.
+- ✅ E2E: traslado persiste colegio nuevo + historial visible.
 
 ### ✅ Fase 1.7 — Parecido visual
 - [*] Tokens oficiales (fondos, bordes, grises, radios, acento) + Inter.
@@ -319,7 +319,7 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Regiones y comunas | ✅ Funcional | 1.6 |
 | Colegios y Admisión | ✅ Funcional | E1 |
 | Alumnos y Apoderados | ✅ Funcional | E2 |
-| Traslados | ⬜ Pendiente | E3 |
+| Traslados | ✅ Funcional | E3 |
 | Tareas | [] Pendiente | 2 |
 | Notas | [] Pendiente | 2 |
 | Usuarios y acceso | 🚧 Mock (real en 3) | 3 |

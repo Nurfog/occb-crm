@@ -103,3 +103,15 @@ pub fn fila_a_apoderado(fila: &sqlx::postgres::PgRow) -> occb_core::Apoderado {
         creado_en: fila.get("creado_en"),
     }
 }
+
+/// Fila de traslado leída desde una función.
+pub fn fila_a_traslado(fila: &sqlx::postgres::PgRow) -> occb_core::Traslado {
+    occb_core::Traslado {
+        id: fila.get("id"),
+        alumno_id: fila.get("alumno_id"),
+        origen_rbd: fila.get::<Option<String>, _>("origen_rbd"),
+        destino_rbd: fila.get("destino_rbd"),
+        fecha: fila.get("fecha"),
+        motivo: fila.get::<String, _>("motivo"),
+    }
+}

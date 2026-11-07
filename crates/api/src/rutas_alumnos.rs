@@ -184,6 +184,40 @@ pub async fn apoderados_de(
     ))
 }
 
+/// Cuerpo para trasladar un alumno a otro colegio.
+#[derive(Debug, Deserialize)]
+pub struct CuerpoTraslado {
+    pub destino_rbd: String,
+    pub motivo: Option<String>,
+}
+
+/// POST /api/alumnos/:id/traslados — traslada y registra historial.
+pub async fn trasladar(
+    State(pool): State<PgPool>,
+    Path(id): Path<Uuid>,
+    Json(cuerpo): Json<CuerpoTraslado>,
+) -> Result<Json<occb_core::Alumno>, ErrorApi> {
+    let fila = sqlx::query("select * from trasladar_alumno($1, $2, $3)")
+        .bind(id)
+        .bind(cuerpo.destino_rbd.trim())
+        .bind(cuerpo.motivo.clone().unwrap_or_default())
+        .fetch_optional(&pool)
+        .await?
+        .ok_or_else(|| ErrorApi::NoEncontrado("Alumno no encontrado.".into()))?;
+    Ok(Json(bd::fila_a_alumno(&fila)))
+}
+
+/// GET /api/alumnos/:id/traslados — historial del alumno.
+pub async fn historial(
+    State(pool): State<PgPool>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<occb_core::Traslado>>, ErrorApi> {
+    let filas = sqlx::query("select * from traslados_de_alumno($1)")
+        .bind(id)
+        .fetch_all(&pool)
+        .await?;
+    Ok(Json(filas.iter().map(bd::fila_a_traslado).collect()))
+}
 /// Cuerpo para vincular un apoderado existente a un alumno.
 #[derive(Debug, Deserialize)]
 pub struct CuerpoVinculo {

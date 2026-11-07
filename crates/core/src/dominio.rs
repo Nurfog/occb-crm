@@ -136,6 +136,17 @@ pub struct VinculoApoderado {
     pub notificaciones: bool,
 }
 
+/// Traslado de un alumno entre colegios (historial).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Traslado {
+    pub id: Uuid,
+    pub alumno_id: Uuid,
+    pub origen_rbd: Option<String>,
+    pub destino_rbd: String,
+    pub fecha: DateTime<Utc>,
+    pub motivo: String,
+}
+
 /// Persona de contacto.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Persona {

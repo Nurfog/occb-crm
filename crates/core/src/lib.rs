@@ -15,8 +15,8 @@ pub mod validacion;
 
 pub use dominio::{
     Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearColegio, CrearOportunidad,
-    CrearPersona, EstadoAlumno, EtapaOportunidad, Oportunidad, Persona, ResumenPanel, VinculoApoderado,
-    calcular_resumen,
+    CrearPersona, EstadoAlumno, EtapaOportunidad, Oportunidad, Persona, ResumenPanel, Traslado,
+    VinculoApoderado, calcular_resumen,
 };
 pub use territorio::{Comuna, Region, comuna_por_cut, comunas_de_region, region};
 pub use semilla::{

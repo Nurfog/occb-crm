@@ -12,7 +12,7 @@ use uuid::Uuid;
 use occb_core::{
     Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearOportunidad,
     CrearPersona, EstadoAlumno, EtapaOportunidad, Idioma, Oportunidad,
-    Persona, calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
+    Persona, Traslado, calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
     datos_semilla_colegios, datos_semilla_oportunidades,
     datos_semilla_personas, textos,
 };
@@ -1439,6 +1439,14 @@ fn DetalleAlumno(id: Uuid) -> Element {
     let mut estado_sel = use_signal(String::new);
     let mut vinc_apoderado = use_signal(String::new);
     let mut vinc_texto = use_signal(String::new);
+    let mut tr_historial = use_signal(Vec::<Traslado>::new);
+    let tr_region = use_signal(String::new);
+    let tr_comuna = use_signal(String::new);
+    let mut tr_busqueda = use_signal(String::new);
+    let mut tr_resultados = use_signal(Vec::<Colegio>::new);
+    let mut tr_destino = use_signal(String::new);
+    let mut tr_motivo = use_signal(String::new);
+    let mut colegio_nombre = use_signal(String::new);
 
     // Sigue al id de la ruta: si cambia, recarga.
     let mut id_actual = use_signal(|| id);
@@ -1454,6 +1462,14 @@ fn DetalleAlumno(id: Uuid) -> Element {
         });
     };
 
+    let recargar_historial = move |pid: Uuid| {
+        spawn(async move {
+            if let Ok(lista) = cliente::traslados_de_alumno(pid).await {
+                tr_historial.set(lista);
+            }
+        });
+    };
+
     use_effect(move || {
         let pid = id_actual();
         spawn(async move {
@@ -1464,8 +1480,19 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     apellidos.set(a.apellidos.clone());
                     curso.set(a.curso.clone());
                     estado_sel.set(a.estado.como_texto().to_string());
-                    alumno.set(Some(a));
+                    alumno.set(Some(a.clone()));
                     recargar_vinculos(pid);
+                    recargar_historial(pid);
+                    if let Some(rbd) = a.colegio_rbd.clone() {
+                        let rbd_clon = rbd.clone();
+                        spawn(async move {
+                            if let Ok(c) = cliente::obtener_colegio(&rbd_clon).await {
+                                colegio_nombre.set(c.nombre.clone());
+                            }
+                        });
+                    } else {
+                        colegio_nombre.set(String::new());
+                    }
                     listo.set(true);
                 }
                 Err(mensaje) => aviso.set(mensaje),
@@ -1525,6 +1552,46 @@ fn DetalleAlumno(id: Uuid) -> Element {
         });
     };
 
+    let buscar_colegios = move |_| {
+        spawn(async move {
+            let region = region_codigo_de(&tr_region);
+            let comuna = tr_comuna.read().clone();
+            let texto = tr_busqueda.read().clone();
+            match cliente::listar_colegios(region, &comuna, &texto).await {
+                Ok(lista) => tr_resultados.set(lista),
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let trasladar = move |_| {
+        let pid = id_actual();
+        let destino = tr_destino.read().clone();
+        let motivo = tr_motivo.read().clone();
+        spawn(async move {
+            if destino.trim().is_empty() {
+                aviso.set(
+                    if idioma == Idioma::Es { "Elija el colegio destino.".to_string() } else { "Pick the destination school.".to_string() },
+                );
+                return;
+            }
+            match cliente::trasladar_alumno(pid, destino.trim(), &motivo).await {
+                Ok(a) => {
+                    aviso.set(String::new());
+                    alumno.set(Some(a));
+                    tr_destino.set(String::new());
+                    tr_motivo.set(String::new());
+                    tr_resultados.set(vec![]);
+                    recargar_historial(pid);
+                    if let Ok(c) = cliente::obtener_colegio(destino.trim()).await {
+                        colegio_nombre.set(c.nombre.clone());
+                    }
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
     let titulo = alumno
         .read()
         .as_ref()
@@ -1551,7 +1618,9 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "Curso" } else { "Grade" } } span { class: "mini-name", "{a.curso}" } }
                     div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "Estado" } else { "Status" } } span { class: "pill", "{etiqueta_estado(a.estado, idioma)}" } }
                     if let Some(rbd) = a.colegio_rbd.clone() {
-                        div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "Colegio" } else { "School" } } span { class: "mini-name", "{rbd}" } }
+                        div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "Colegio" } else { "School" } } span { class: "mini-name",
+                            if colegio_nombre.read().is_empty() { "{rbd}" } else { "{colegio_nombre}" }
+                        } }
                     }
                 }
             }
@@ -1647,6 +1716,79 @@ fn DetalleAlumno(id: Uuid) -> Element {
                         oninput: move |e| vinc_texto.set(e.value()),
                     }
                     button { class: "btn-primary", onclick: vincular, if idioma == Idioma::Es { "Vincular" } else { "Link" } }
+                }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        if idioma == Idioma::Es { "Traslado de colegio" } else { "School transfer" }
+                    }
+                    span { class: "link", "↗" }
+                }
+                div { class: "mini-row",
+                    span { class: "muted", if idioma == Idioma::Es { "Actual" } else { "Current" } }
+                    span { class: "mini-name",
+                        if colegio_nombre.read().is_empty() {
+                            if idioma == Idioma::Es { "Sin colegio" } else { "No school" }
+                        } else {
+                            "{colegio_nombre}"
+                        }
+                    }
+                }
+                for h in tr_historial.read().iter() {
+                    div { class: "mini-row", key: "{h.id}",
+                        match h.origen_rbd.clone() {
+                            Some(o) => rsx! {
+                                span { class: "mini-name", "{o} → {h.destino_rbd}" }
+                            },
+                            None => rsx! {
+                                span { class: "mini-name", "→ {h.destino_rbd}" }
+                            },
+                        }
+                        span { class: "mini-amt", "{h.fecha.date_naive().to_string()} {h.motivo}" }
+                    }
+                }
+                div { class: "row",
+                    input {
+                        class: "input",
+                        placeholder: if idioma == Idioma::Es { "Buscar destino…" } else { "Search destination…" },
+                        value: "{tr_busqueda}",
+                        oninput: move |e| tr_busqueda.set(e.value()),
+                    }
+                    SelectorTerritorio {
+                        region_sel: tr_region,
+                        comuna_sel: tr_comuna,
+                    }
+                    div { class: "campo campo-btn",
+                        button { class: "btn-primary", onclick: buscar_colegios, if idioma == Idioma::Es { "Buscar" } else { "Search" } }
+                    }
+                }
+                for c in tr_resultados.read().iter().take(8) {
+                    div { class: "mini-row", key: "{c.rbd}",
+                        span { class: "mini-name", "{c.nombre}" }
+                        span { class: "mini-amt", "{c.rbd}" }
+                        button {
+                            class: "btn-mini",
+                            onclick: {
+                                let rbd = c.rbd.clone();
+                                move |_| tr_destino.set(rbd.clone())
+                            },
+                            if idioma == Idioma::Es { "Elegir" } else { "Pick" }
+                        }
+                    }
+                }
+                if !tr_destino.read().is_empty() {
+                    div { class: "row",
+                        input {
+                            class: "input",
+                            placeholder: if idioma == Idioma::Es { "Motivo (opcional)" } else { "Reason (optional)" },
+                            value: "{tr_motivo}",
+                            oninput: move |e| tr_motivo.set(e.value()),
+                        }
+                        div { class: "campo campo-btn",
+                            button { class: "btn-primary", onclick: trasladar, if idioma == Idioma::Es { "Trasladar a {tr_destino}" } else { "Transfer to {tr_destino}" } }
+                        }
+                    }
                 }
             }
         }
