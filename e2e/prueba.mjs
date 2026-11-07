@@ -5,12 +5,21 @@
 // acceso en español, edición en fichas y territorio chileno.
 
 const CHROME = process.env.CHROME_BIN || '/opt/google/chrome/chrome';
-const PUERTO_CD = 9222;
 const FRONTAL = process.env.FRONTAL_URL || 'http://127.0.0.1:8080';
 const API = process.env.API_URL || 'http://127.0.0.1:3001';
 const SELLO = `E2E-${Date.now().toString(36)}`;
 
 const { spawn } = await import('node:child_process');
+const net = await import('node:net');
+
+// No reutiliza sesiones Chrome huérfanas de ejecuciones previas.
+const reservaPuerto = net.createServer();
+await new Promise((resolve, reject) => {
+  reservaPuerto.once('error', reject);
+  reservaPuerto.listen(0, '127.0.0.1', resolve);
+});
+const PUERTO_CD = reservaPuerto.address().port;
+await new Promise((resolve) => reservaPuerto.close(resolve));
 
 function dormir(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -37,6 +46,7 @@ const chrome = spawn(
     '--disable-dev-shm-usage',
     '--disable-gpu',
     '--window-size=1280,900',
+    `--user-data-dir=/tmp/opencode/e2e-chrome-${PUERTO_CD}`,
     'about:blank',
   ],
   { stdio: 'ignore', detached: true },
@@ -305,6 +315,7 @@ SES.renovacion = deNuevo.renovacion;
 
 // --- 1. Panel con datos vivos ---
 await ir('/');
+await esperarCondicion(`document.body.textContent.includes('API :3001')`);
 let t = await texto();
 afirma(t.includes('● API :3001'), 'panel indica API en línea (no demo local)');
 afirma(t.includes('Colegios') && t.includes('RBD'), 'panel muestra colegios de la API');
@@ -318,6 +329,7 @@ await api(`${API}/api/colegios`, {
   body: JSON.stringify({ rbd: RBD_UI, nombre: NOMBRE_UI, region: 13, comuna: '13101' }),
 });
 await ir(`/colegios/${encodeURIComponent(RBD_UI)}`);
+await esperarCondicion(`document.body.textContent.includes(${JSON.stringify(NOMBRE_UI)})`);
 t = await texto();
 afirma(t.includes(NOMBRE_UI) && t.includes('Ficha de colegio'), 'ficha de colegio con datos del directorio');
 
@@ -832,6 +844,176 @@ const badge = await esperarCondicion(`(() => {
 })()`);
 afirma(badge, 'menú muestra contador de no leídos');
 await api(`${API}/api/correos/${corBadge.id}`, { method: 'DELETE' });
+
+// --- 23. Búsqueda global, favoritos, vistas guardadas y timeline ---
+const NOMBRE_F5 = `Global F5 ${SELLO}`;
+const CORREO_F5 = `global-${SELLO}@test.cl`;
+const CORREO_F5_MIN = CORREO_F5.toLowerCase();
+const personaF5 = await (await api(`${API}/api/personas`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: NOMBRE_F5, apellido: 'Búsqueda', correo: CORREO_F5 }),
+})).json();
+const buscaNombre = await (await api(`${API}/api/buscar?q=${encodeURIComponent(NOMBRE_F5)}`)).json();
+afirma(buscaNombre.some((r) => r.tipo === 'persona' && r.id === personaF5.id), 'búsqueda global encuentra por nombre');
+const buscaCorreo = await (await api(`${API}/api/buscar?q=${encodeURIComponent(CORREO_F5)}`)).json();
+afirma(buscaCorreo.some((r) => r.tipo === 'persona' && r.id === personaF5.id), 'búsqueda global encuentra por correo');
+const buscaCorta = await (await api(`${API}/api/buscar?q=a`)).json();
+afirma(Array.isArray(buscaCorta) && buscaCorta.length <= 20, 'búsqueda de un carácter es segura y acotada');
+
+const favoritoF5 = await (await api(`${API}/api/favoritos/alternar`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ tipo: 'persona', id: personaF5.id }),
+})).json();
+const favoritosF5 = await (await api(`${API}/api/favoritos`)).json();
+afirma(favoritoF5.agregado && favoritosF5.some((f) => f.id === personaF5.id), 'favorito personal persiste en PG');
+const favoritosAjeno = await (await apiAdmin(`${API}/api/favoritos`)).json();
+afirma(!favoritosAjeno.some((f) => f.id === personaF5.id), 'favoritos quedan aislados por usuario');
+
+const NOMBRE_VISTA = `Vista ${SELLO}`;
+const vistaF5 = await (await api(`${API}/api/vistas?objeto=personas`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: NOMBRE_VISTA, tipo: 'tabla', filtros: { busqueda: NOMBRE_F5 } }),
+})).json();
+const vistasF5 = await (await api(`${API}/api/vistas?objeto=personas`)).json();
+afirma(!!vistaF5.id && vistasF5.some((v) => v.id === vistaF5.id), 'vista guardada queda asociada al usuario');
+const vistasAjeno = await (await apiAdmin(`${API}/api/vistas?objeto=personas`)).json();
+afirma(!vistasAjeno.some((v) => v.id === vistaF5.id), 'vistas quedan aisladas por usuario');
+
+// Crear una modificación atribuida al actor del JWT y abrir la ficha desde ⌘K.
+await api(`${API}/api/personas/${personaF5.id}`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: NOMBRE_F5, apellido: 'Búsqueda', correo: CORREO_F5, telefono: '555-0115' }),
+});
+await enviar('Page.navigate', { url: `${FRONTAL}/personas` });
+await esperarCondicion(`document.body.textContent.includes('Bienvenido de nuevo')`);
+await loginUI(E2E_CORREO, E2E_CLAVE);
+await esperarCondicion(`document.body.textContent.includes('Personas')`);
+await evaluar(`document.querySelector('.shell').dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))`);
+const modalBusqueda = await esperarCondicion(`!!document.querySelector('.search-dialog input')`);
+afirma(modalBusqueda, 'atajo ⌘K abre la búsqueda global');
+await evaluar(`(() => {
+  const i = document.querySelector('.search-dialog input');
+  i.focus(); i.value = ${JSON.stringify(CORREO_F5)}; i.dispatchEvent(new Event('input', { bubbles: true }));
+})()`);
+const apareceResultado = await esperarCondicion(`!![...document.querySelectorAll('.search-result')].find(x => x.textContent.includes(${JSON.stringify(CORREO_F5_MIN)}))`);
+if (!apareceResultado) {
+  console.log('  DIAG búsqueda:', JSON.stringify(await evaluar(`({url: location.href, q: document.querySelector('.search-dialog input')?.value, resultados: [...document.querySelectorAll('.search-result')].map(x => x.textContent).slice(0, 8), body: document.querySelector('.search-dialog')?.textContent?.slice(0, 300)})`)));
+}
+afirma(apareceResultado, 'buscador global muestra resultados agrupados y navegables');
+if (apareceResultado) {
+  await evaluar(`[...document.querySelectorAll('.search-result')].find(x => x.textContent.includes(${JSON.stringify(CORREO_F5_MIN)})).click()`);
+  await esperarCondicion(`document.body.textContent.includes('Ficha de persona')`);
+} else {
+  await ir(`/personas/${personaF5.id}`);
+  await esperarCondicion(`document.body.textContent.includes('Ficha de persona')`);
+}
+const timelineVisible = await esperarCondicion(`document.body.textContent.includes('actualizó el registro')`);
+afirma(timelineVisible, 'edición genera actividad visible en la ficha');
+afirma((await texto()).includes('E2E API'), 'timeline muestra autor del JWT');
+
+// La estrella y la vista cargan de nuevo desde servidor tras navegar.
+await ir('/personas');
+await esperarCondicion(`!![...document.querySelectorAll('tr')].find(x => x.textContent.includes(${JSON.stringify(NOMBRE_F5)}))`);
+const estrellaPersistida = await evaluar(`(() => {
+  const fila = [...document.querySelectorAll('tr')].find(x => x.textContent.includes(${JSON.stringify(NOMBRE_F5)}));
+  return !!fila?.querySelector('.star-favorite.marked');
+})()`);
+afirma(estrellaPersistida, 'estrella refleja favorito tras volver a cargar');
+const selectVista = await esperarCondicion(`!![...document.querySelectorAll('.saved-view-select option')].find(o => o.textContent === ${JSON.stringify(NOMBRE_VISTA)})`);
+afirma(selectVista, 'selector presenta vistas personales guardadas');
+await evaluar(`(() => {
+  const s = document.querySelector('.saved-view-select');
+  const o = [...s.options].find(x => x.textContent === ${JSON.stringify(NOMBRE_VISTA)});
+  s.value = o.value; s.dispatchEvent(new Event('change', { bubbles: true }));
+})()`);
+const vistaAplica = await esperarCondicion(`document.querySelector('.toolbar input')?.value === ${JSON.stringify(NOMBRE_F5)}`);
+afirma(vistaAplica, 'elegir vista aplica sus filtros guardados');
+
+await api(`${API}/api/favoritos/alternar`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ tipo: 'persona', id: personaF5.id }),
+});
+await api(`${API}/api/vistas/${vistaF5.id}`, { method: 'DELETE' });
+await api(`${API}/api/personas/${personaF5.id}`, { method: 'DELETE' });
+
+// --- 24. Automatización escolar guiada, activación y ejecución fallida ---
+const NOMBRE_REGLA = `Regla E2E ${SELLO}`;
+const TITULO_AUTO = `Tarea automática ${SELLO}`;
+await ir('/automatizaciones');
+await esperarCondicion(`!!document.querySelector('.automation-form input')`);
+await evaluar(`(() => {
+  const form = document.querySelector('.automation-form');
+  const inputs = form.querySelectorAll('input');
+  const set = (el, v) => { el.focus(); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+  set(inputs[0], ${JSON.stringify(NOMBRE_REGLA)});
+  set(inputs[3], ${JSON.stringify(TITULO_AUTO)});
+})()`);
+await evaluar(`[...document.querySelectorAll('.automation-form button')].find(b => b.className.includes('btn-primary')).click()`);
+const reglaVisible = await esperarCondicion(`document.body.textContent.includes(${JSON.stringify(NOMBRE_REGLA)})`);
+afirma(reglaVisible, 'regla de admisión se crea desde el editor guiado');
+const regla = (await (await api(`${API}/api/automatizaciones`)).json()).find((r) => r.nombre === NOMBRE_REGLA);
+afirma(!!regla?.id, 'regla guiada persiste en PG');
+
+const OPP_AUTO = `Postulación automática ${SELLO}`;
+const oppAuto = await (await api(`${API}/api/oportunidades`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: OPP_AUTO, importe: 150000 }),
+})).json();
+let tareasAuto = [];
+for (let i = 0; i < 12; i++) {
+  await dormir(500);
+  tareasAuto = await (await api(`${API}/api/tareas?busqueda=${encodeURIComponent(TITULO_AUTO)}`)).json();
+  if (tareasAuto.length) break;
+}
+afirma(tareasAuto.length === 1 && tareasAuto[0].oportunidad_id === oppAuto.id, 'regla crea tarea vinculada a la postulación');
+
+await ir('/automatizaciones');
+await esperarCondicion(`document.body.textContent.includes(${JSON.stringify(NOMBRE_REGLA)})`);
+await evaluar(`(() => {
+  const card = [...document.querySelectorAll('.automation-card')].find(c => c.textContent.includes(${JSON.stringify(NOMBRE_REGLA)}));
+  [...card.querySelectorAll('button')].find(b => b.textContent.includes('Desactivar')).click();
+})()`);
+await esperarCondicion(`(() => {
+  const card = [...document.querySelectorAll('.automation-card')].find(c => c.textContent.includes(${JSON.stringify(NOMBRE_REGLA)}));
+  return card && card.textContent.includes('Inactiva');
+})()`);
+const OPP_APAGADA = `Postulación sin automatización ${SELLO}`;
+const oppApagada = await (await api(`${API}/api/oportunidades`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: OPP_APAGADA, importe: 160000 }),
+})).json();
+const sinTarea = await (await api(`${API}/api/tareas?busqueda=${encodeURIComponent(TITULO_AUTO)}`)).json();
+afirma(sinTarea.length === 1, 'desactivar la regla evita nuevas tareas');
+
+const REGLA_MALA = `Regla fallida ${SELLO}`;
+const reglaMala = await (await api(`${API}/api/automatizaciones`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nombre: REGLA_MALA, disparador: 'al_crear', condiciones: [],
+    acciones: [{ tipo: 'crear_tarea', params: { titulo: `Tarea inválida ${SELLO}`, prioridad: 'urgente' } }],
+  }),
+})).json();
+const OPP_MALA = `Postulación con regla fallida ${SELLO}`;
+const oppMalaResp = await api(`${API}/api/oportunidades`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: OPP_MALA, importe: 1 }),
+});
+const oppMala = await oppMalaResp.json();
+const histMala = await (await api(`${API}/api/automatizaciones/${reglaMala.id}/ejecuciones`)).json();
+afirma(oppMalaResp.status === 201 && !!oppMala.id, 'error de regla no revierte la postulación');
+afirma(histMala.some((x) => !x.ok), 'error de regla queda en historial de ejecuciones');
+
+for (const o of [oppAuto, oppApagada, oppMala]) {
+  await api(`${API}/api/oportunidades/${o.id}`, { method: 'DELETE' });
+}
+for (const tarea of tareasAuto) await api(`${API}/api/tareas/${tarea.id}`, { method: 'DELETE' });
+await api(`${API}/api/automatizaciones/${regla.id}`, { method: 'DELETE' });
+await api(`${API}/api/automatizaciones/${reglaMala.id}`, { method: 'DELETE' });
 
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();

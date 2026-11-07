@@ -82,9 +82,11 @@ fn a_dominio(cuerpo: &CuerpoApoderado) -> Result<occb_core::CrearApoderado, Erro
 /// POST /api/apoderados
 pub async fn crear(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Json(cuerpo): Json<CuerpoApoderado>,
 ) -> Result<(StatusCode, Json<occb_core::Apoderado>), ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from crear_apoderado($1, $2, $3, $4, $5, $6, $7, $8)")
         .bind(&entrada.rut)
         .bind(&entrada.nombres)
@@ -94,18 +96,21 @@ pub async fn crear(
         .bind(&entrada.direccion)
         .bind(entrada.region_codigo)
         .bind(&entrada.comuna_codigo)
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_apoderado(&fila))))
 }
 
 /// PATCH /api/apoderados/:id
 pub async fn actualizar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoApoderado>,
 ) -> Result<Json<occb_core::Apoderado>, ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from actualizar_apoderado($1, $2, $3, $4, $5, $6, $7, $8, $9)")
         .bind(id)
         .bind(&entrada.rut)
@@ -116,22 +121,26 @@ pub async fn actualizar(
         .bind(&entrada.direccion)
         .bind(entrada.region_codigo)
         .bind(&entrada.comuna_codigo)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Apoderado no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_apoderado(&fila)))
 }
 
 /// DELETE /api/apoderados/:id
 pub async fn eliminar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     sqlx::query("select eliminar_apoderado($1)")
         .bind(id)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Apoderado no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

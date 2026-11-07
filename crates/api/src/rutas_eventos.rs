@@ -106,9 +106,11 @@ fn a_dominio(cuerpo: &CuerpoEvento) -> Result<occb_core::CrearEvento, ErrorApi> 
 /// POST /api/eventos
 pub async fn crear(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Json(cuerpo): Json<CuerpoEvento>,
 ) -> Result<(StatusCode, Json<occb_core::Evento>), ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from crear_evento($1, $2, $3, $4, $5, $6, $7, $8)")
         .bind(&entrada.titulo)
         .bind(entrada.inicio)
@@ -118,18 +120,21 @@ pub async fn crear(
         .bind(entrada.alumno_id)
         .bind(entrada.apoderado_id)
         .bind(entrada.oportunidad_id)
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_evento(&fila))))
 }
 
 /// PATCH /api/eventos/:id
 pub async fn actualizar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoEvento>,
 ) -> Result<Json<occb_core::Evento>, ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from actualizar_evento($1, $2, $3, $4, $5, $6)")
         .bind(id)
         .bind(&entrada.titulo)
@@ -137,21 +142,25 @@ pub async fn actualizar(
         .bind(entrada.fin)
         .bind(&entrada.lugar)
         .bind(&entrada.descripcion)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Evento no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_evento(&fila)))
 }
 
 /// DELETE /api/eventos/:id
 pub async fn eliminar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     sqlx::query("select eliminar_evento($1)")
         .bind(id)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Evento no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -66,6 +66,7 @@ pub async fn obtener(
 /// POST /api/personas
 pub async fn crear(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Json(cuerpo): Json<CuerpoPersona>,
 ) -> Result<(StatusCode, Json<occb_core::Persona>), ErrorApi> {
     cuerpo
@@ -81,6 +82,7 @@ pub async fn crear(
         region_codigo: cuerpo.region_codigo,
         comuna_codigo: cuerpo.comuna_codigo.clone(),
     })?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query(
         "select * from crear_persona($1, $2, $3, $4, $5, $6, $7, $8)",
     )
@@ -92,27 +94,32 @@ pub async fn crear(
     .bind(&entrada.ciudad)
     .bind(entrada.region_codigo)
     .bind(&entrada.comuna_codigo)
-    .fetch_one(&pool)
+    .fetch_one(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_persona(&fila))))
 }
 
 /// DELETE /api/personas/:id
 pub async fn eliminar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     sqlx::query("select eliminar_persona($1)")
         .bind(id)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Persona no encontrada.".into()))?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// PATCH /api/personas/:id — valida y llama a `actualizar_persona()`.
 pub async fn actualizar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoPersona>,
 ) -> Result<Json<occb_core::Persona>, ErrorApi> {
@@ -129,6 +136,7 @@ pub async fn actualizar(
         region_codigo: cuerpo.region_codigo,
         comuna_codigo: cuerpo.comuna_codigo.clone(),
     })?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query(
         "select * from actualizar_persona($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
@@ -141,8 +149,9 @@ pub async fn actualizar(
     .bind(&entrada.ciudad)
     .bind(entrada.region_codigo)
     .bind(&entrada.comuna_codigo)
-    .fetch_optional(&pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| ErrorApi::NoEncontrado("Persona no encontrada.".into()))?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_persona(&fila)))
 }

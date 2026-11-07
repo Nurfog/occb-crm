@@ -7,7 +7,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::Deserialize;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -54,6 +54,7 @@ pub async fn listar(
 /// POST /api/oportunidades
 pub async fn crear(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Json(cuerpo): Json<CuerpoOportunidad>,
 ) -> Result<(StatusCode, Json<occb_core::Oportunidad>), ErrorApi> {
     cuerpo
@@ -72,6 +73,7 @@ pub async fn crear(
         etapa: etapa_enum,
         colegio_rbd: cuerpo.colegio_rbd.clone(),
     })?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query(
         "select * from crear_oportunidad($1, $2, $3, $4)",
     )
@@ -79,42 +81,61 @@ pub async fn crear(
     .bind(entrada.importe)
     .bind(entrada.etapa.como_texto())
     .bind(entrada.colegio_rbd.clone())
-    .fetch_one(&pool)
+    .fetch_one(&mut *tx)
     .await?;
+    let id: Uuid = fila.get("id");
+    let _: i32 = sqlx::query_scalar("select ejecutar_automatizaciones('al_crear','postulacion',$1,$2)")
+        .bind(id)
+        .bind(usuario.id)
+        .fetch_one(&mut *tx)
+        .await?;
+    tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_oportunidad(&fila))))
 }
 
 /// PATCH /api/oportunidades/:id/etapa
 pub async fn mover_etapa(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoEtapa>,
 ) -> Result<Json<occb_core::Oportunidad>, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from mover_etapa_oportunidad($1, $2)")
         .bind(id)
         .bind(cuerpo.etapa.to_lowercase())
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Oportunidad no encontrada.".into()))?;
+    let _: i32 = sqlx::query_scalar("select ejecutar_automatizaciones('al_actualizar','postulacion',$1,$2)")
+        .bind(id)
+        .bind(usuario.id)
+        .fetch_one(&mut *tx)
+        .await?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_oportunidad(&fila)))
 }
 
 /// DELETE /api/oportunidades/:id
 pub async fn eliminar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     sqlx::query("select eliminar_oportunidad($1)")
         .bind(id)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Oportunidad no encontrada.".into()))?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// PATCH /api/oportunidades/:id — edición completa vía `actualizar_oportunidad()`.
 pub async fn actualizar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoOportunidad>,
 ) -> Result<Json<occb_core::Oportunidad>, ErrorApi> {
@@ -134,6 +155,7 @@ pub async fn actualizar(
         etapa: etapa_enum,
         colegio_rbd: cuerpo.colegio_rbd.clone(),
     })?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query(
         "select * from actualizar_oportunidad($1, $2, $3, $4, $5)",
     )
@@ -142,9 +164,15 @@ pub async fn actualizar(
     .bind(entrada.importe)
     .bind(entrada.etapa.como_texto())
     .bind(entrada.colegio_rbd.clone())
-    .fetch_optional(&pool)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| ErrorApi::NoEncontrado("Oportunidad no encontrada.".into()))?;
+    let _: i32 = sqlx::query_scalar("select ejecutar_automatizaciones('al_actualizar','postulacion',$1,$2)")
+        .bind(id)
+        .bind(usuario.id)
+        .fetch_one(&mut *tx)
+        .await?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_oportunidad(&fila)))
 }
 

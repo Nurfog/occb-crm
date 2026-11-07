@@ -91,9 +91,11 @@ fn a_dominio(cuerpo: &CuerpoAlumno) -> Result<occb_core::CrearAlumno, ErrorApi> 
 /// POST /api/alumnos — valida en Rust y delega a `crear_alumno()`.
 pub async fn crear(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Json(cuerpo): Json<CuerpoAlumno>,
 ) -> Result<(StatusCode, Json<occb_core::Alumno>), ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from crear_alumno($1, $2, $3, $4, $5, $6, $7)")
         .bind(&entrada.rut)
         .bind(&entrada.nombres)
@@ -102,18 +104,21 @@ pub async fn crear(
         .bind(&entrada.curso)
         .bind(entrada.colegio_rbd.clone())
         .bind(entrada.estado.como_texto())
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_alumno(&fila))))
 }
 
 /// PATCH /api/alumnos/:id — valida y llama a `actualizar_alumno()`.
 pub async fn actualizar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoAlumno>,
 ) -> Result<Json<occb_core::Alumno>, ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from actualizar_alumno($1, $2, $3, $4, $5, $6, $7, $8)")
         .bind(id)
         .bind(&entrada.rut)
@@ -123,22 +128,26 @@ pub async fn actualizar(
         .bind(&entrada.curso)
         .bind(entrada.colegio_rbd.clone())
         .bind(entrada.estado.como_texto())
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Alumno no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_alumno(&fila)))
 }
 
 /// DELETE /api/alumnos/:id
 pub async fn eliminar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     sqlx::query("select eliminar_alumno($1)")
         .bind(id)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Alumno no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -194,16 +203,19 @@ pub struct CuerpoTraslado {
 /// POST /api/alumnos/:id/traslados — traslada y registra historial.
 pub async fn trasladar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoTraslado>,
 ) -> Result<Json<occb_core::Alumno>, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from trasladar_alumno($1, $2, $3)")
         .bind(id)
         .bind(cuerpo.destino_rbd.trim())
         .bind(cuerpo.motivo.clone().unwrap_or_default())
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Alumno no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_alumno(&fila)))
 }
 

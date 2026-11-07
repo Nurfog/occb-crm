@@ -27,6 +27,8 @@ static IDIOMA: GlobalSignal<Idioma> = Signal::global(|| Idioma::Es);
 
 /// Destino pendiente tras entrar (el guardia lo fija antes de mandar a acceso).
 static VOLVER: GlobalSignal<Option<Ruta>> = Signal::global(|| None);
+/// Diálogo de búsqueda global (⌘K / Ctrl+K).
+static BUSQUEDA_ABIERTA: GlobalSignal<bool> = Signal::global(|| false);
 
 fn main() {
     dioxus::launch(Aplicacion);
@@ -76,12 +78,16 @@ enum Ruta {
         DetalleColegio { rbd: String },
         #[route("/oportunidades")]
         VistaOportunidades {},
+        #[route("/oportunidades/:id")]
+        DetalleOportunidad { id: Uuid },
         #[route("/miembros")]
         VistaMiembros {},
         #[route("/calendario")]
         VistaCalendario {},
         #[route("/correos")]
         VistaCorreos {},
+        #[route("/automatizaciones")]
+        VistaAutomatizaciones {},
         #[route("/ajustes")]
         VistaAjustes {},
     #[route("/:..segmentos")]
@@ -145,11 +151,93 @@ fn DisposicionApp() -> Element {
         };
     }
     rsx! {
-        div { class: "shell",
+        div {
+            class: "shell",
+            tabindex: "-1",
+            onkeydown: move |e| {
+                let k = e.key().to_string().to_lowercase() == "k";
+                if k && (e.modifiers().meta() || e.modifiers().ctrl()) {
+                    e.prevent_default();
+                    *BUSQUEDA_ABIERTA.write() = true;
+                } else if e.key().to_string() == "Escape" {
+                    *BUSQUEDA_ABIERTA.write() = false;
+                }
+            },
             BarraLateral {}
             div { class: "main",
                 Outlet::<Ruta> {}
             }
+        }
+    }
+}
+
+/// Convierte un resultado global a su pantalla más útil.
+fn ruta_busqueda(tipo: &str, id: &str) -> Ruta {
+    match tipo {
+        "alumno" => Uuid::parse_str(id).map(|id| Ruta::DetalleAlumno { id }).unwrap_or(Ruta::VistaAlumnos {}),
+        "apoderado" => Uuid::parse_str(id).map(|id| Ruta::DetalleApoderado { id }).unwrap_or(Ruta::VistaApoderados {}),
+        "persona" => Uuid::parse_str(id).map(|id| Ruta::DetallePersona { id }).unwrap_or(Ruta::VistaPersonas {}),
+        "postulacion" => Uuid::parse_str(id).map(|id| Ruta::DetalleOportunidad { id }).unwrap_or(Ruta::VistaOportunidades {}),
+        "tarea" => Ruta::VistaTareas {},
+        "nota" => Ruta::VistaNotas {},
+        "evento" => Ruta::VistaCalendario {},
+        "correo" => Ruta::VistaCorreos {},
+        "colegio" => Ruta::DetalleColegio { rbd: id.to_string() },
+        _ => Ruta::Panel {},
+    }
+}
+
+fn etiqueta_tipo_busqueda(tipo: &str, idioma: Idioma) -> &'static str {
+    match (tipo, idioma) {
+        ("alumno", Idioma::Es) => "Alumnos",
+        ("alumno", Idioma::En) => "Students",
+        ("apoderado", Idioma::Es) => "Apoderados",
+        ("apoderado", Idioma::En) => "Guardians",
+        ("persona", Idioma::Es) => "Personas",
+        ("persona", Idioma::En) => "People",
+        ("postulacion", Idioma::Es) => "Admisión",
+        ("postulacion", Idioma::En) => "Admissions",
+        ("tarea", Idioma::Es) => "Tareas",
+        ("tarea", Idioma::En) => "Tasks",
+        ("nota", Idioma::Es) => "Notas",
+        ("nota", Idioma::En) => "Notes",
+        ("evento", Idioma::Es) => "Eventos",
+        ("evento", Idioma::En) => "Events",
+        ("correo", Idioma::Es) => "Correos",
+        ("correo", Idioma::En) => "Mail",
+        ("colegio", Idioma::Es) => "Colegios",
+        ("colegio", Idioma::En) => "Schools",
+        _ => "",
+    }
+}
+
+fn ruta_favorito(tipo: &str, id: Uuid) -> Ruta {
+    match tipo {
+        "alumno" => Ruta::DetalleAlumno { id },
+        "apoderado" => Ruta::DetalleApoderado { id },
+        "persona" => Ruta::DetallePersona { id },
+        _ => Ruta::VistaOportunidades {},
+    }
+}
+
+/// Estrella personal persistida para el registro dado.
+#[component]
+fn EstrellaFavorito(tipo: String, id: Uuid) -> Element {
+    let marcado = cliente::FAVORITOS()
+        .iter()
+        .any(|f| f.tipo == tipo && f.id == id);
+    rsx! {
+        button {
+            class: if marcado { "star-favorite marked" } else { "star-favorite" },
+            title: if marcado { "Quitar de favoritos" } else { "Agregar a favoritos" },
+            onclick: move |e| {
+                e.stop_propagation();
+                let accion = tipo.clone();
+                spawn(async move {
+                    let _ = cliente::alternar_favorito(&accion, id).await;
+                });
+            },
+            if marcado { "★" } else { "☆" }
         }
     }
 }
@@ -160,12 +248,34 @@ fn BarraLateral() -> Element {
     let t = textos(IDIOMA());
     let nav = use_navigator();
     let sesion = cliente::SESION();
+    let mut busqueda = use_signal(String::new);
+    let mut resultados = use_signal(Vec::<occb_core::ResultadoBusqueda>::new);
+    let mut cargando_busqueda = use_signal(|| false);
     use_effect(move || {
         if cliente::SESION().is_some() {
             spawn(async move {
                 cliente::refrescar_no_leidos().await;
+                cliente::refrescar_favoritos().await;
             });
         }
+    });
+    use_effect(move || {
+        let q = busqueda().trim().to_string();
+        if q.is_empty() {
+            resultados.set(Vec::new());
+            return;
+        }
+        cargando_busqueda.set(true);
+        spawn(async move {
+            match cliente::buscar_espacio(&q).await {
+                Ok(lista) if busqueda().trim() == q => resultados.set(lista),
+                Err(_) if busqueda().trim() == q => resultados.set(Vec::new()),
+                _ => {}
+            }
+            if busqueda().trim() == q {
+                cargando_busqueda.set(false);
+            }
+        });
     });
     let salir = move |_| {
         spawn(async move {
@@ -183,9 +293,9 @@ fn BarraLateral() -> Element {
                 }
                 div { class: "avatar", "OC" }
             }
-            div { class: "search",
+            button { class: "search", onclick: move |_| *BUSQUEDA_ABIERTA.write() = true,
                 span { class: "search-icon", "⌕" }
-                span { "{t.buscar}" }
+                span { "{t.buscar_global}" }
                 span { style: "margin-left: auto; display: flex; gap: 2px;",
                     kbd { "⌘" }
                     kbd { "K" }
@@ -193,9 +303,14 @@ fn BarraLateral() -> Element {
             }
             div { class: "side-section",
                 div { class: "side-title", "{t.favoritos}" }
-                Link { to: Ruta::VistaOportunidades {}, class: "side-item",
-                    span { "★" }
-                    span { "Q3" }
+                if cliente::FAVORITOS().is_empty() {
+                    div { class: "side-item dim", "{t.favoritos_vacios}" }
+                }
+                for f in cliente::FAVORITOS().iter().take(5) {
+                    Link { to: ruta_favorito(&f.tipo, f.id), class: "side-item", key: "{f.tipo}-{f.id}",
+                        span { "★" }
+                        span { "{f.titulo}" }
+                    }
                 }
             }
             div { class: "side-section",
@@ -240,7 +355,7 @@ fn BarraLateral() -> Element {
                         span { class: "count", "{cliente::NO_LEIDOS()}" }
                     }
                 }
-                div { class: "side-item dim",
+                Link { to: Ruta::VistaAutomatizaciones {}, class: "side-item",
                     span { class: "ico", "⚙" }
                     span { "{t.automatizaciones}" }
                 }
@@ -283,6 +398,60 @@ fn BarraLateral() -> Element {
                 div { class: "invite-title", "{t.invitar} · OCCB" }
                 div { class: "invite-sub", "{t.invitar_subtitulo}" }
                 button { class: "btn-primary", "{t.invitar}" }
+            }
+            if BUSQUEDA_ABIERTA() {
+                div { class: "search-overlay",
+                    div { class: "search-dialog",
+                        div { class: "cal-bar",
+                            input {
+                                class: "input",
+                                autofocus: true,
+                                placeholder: "{t.buscar_global}",
+                                value: "{busqueda}",
+                                oninput: move |e| busqueda.set(e.value()),
+                                onkeydown: move |e| {
+                                    if e.key().to_string() == "Escape" {
+                                        *BUSQUEDA_ABIERTA.write() = false;
+                                    } else if e.key().to_string() == "Enter"
+                                        && let Some(r) = resultados.read().first()
+                                    {
+                                        nav.push(ruta_busqueda(&r.tipo, &r.id));
+                                        *BUSQUEDA_ABIERTA.write() = false;
+                                    }
+                                },
+                            }
+                            button { class: "btn-mini", onclick: move |_| *BUSQUEDA_ABIERTA.write() = false, "Esc" }
+                        }
+                        if cargando_busqueda() {
+                            p { class: "muted", "…" }
+                        }
+                        if !busqueda.read().is_empty() && resultados.read().is_empty() && !cargando_busqueda() {
+                            p { class: "muted", if IDIOMA() == Idioma::Es { "Sin resultados" } else { "No results" } }
+                        }
+                        for tipo in ["alumno", "apoderado", "persona", "postulacion", "tarea", "nota", "evento", "correo", "colegio"] {
+                            {
+                                let grupo: Vec<_> = resultados.read().iter().filter(|r| r.tipo == tipo).cloned().collect();
+                                rsx! {
+                                    if !grupo.is_empty() {
+                                        div { class: "search-group", key: "{tipo}",
+                                            div { class: "search-group-title", "{etiqueta_tipo_busqueda(tipo, IDIOMA())}" }
+                                            for r in grupo.iter() {
+                                                Link {
+                                                    to: ruta_busqueda(&r.tipo, &r.id),
+                                                    class: "search-result",
+                                                    key: "{r.id}",
+                                                    onclick: move |_| *BUSQUEDA_ABIERTA.write() = false,
+                                                    span { class: "mini-name", "{r.titulo}" }
+                                                    span { class: "mini-amt", "{r.detalle}" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -603,6 +772,16 @@ fn VistaPersonas() -> Element {
             }
             span { class: "pill", "{t.tabla}" }
         }
+        SelectorVistas {
+            objeto: "personas".to_string(),
+            modo: "tabla".to_string(),
+            filtros: serde_json::json!({ "busqueda": busqueda() }),
+            on_cargar: move |v: occb_core::VistaGuardada| {
+                if let Some(q) = v.filtros.get("busqueda").and_then(|x| x.as_str()) {
+                    busqueda.set(q.to_string());
+                }
+            },
+        }
         if mostrar_form() {
             div { class: "panel form",
                 label { if idioma == Idioma::Es { "Nueva persona" } else { "New person" } }
@@ -673,6 +852,7 @@ fn VistaPersonas() -> Element {
                                         Link { to: Ruta::DetallePersona { id: p.id }, class: "link",
                                             "{p.nombre_completo()}"
                                         }
+        EstrellaFavorito { tipo: "persona".to_string(), id: p.id }
                                     }
                                 }
                                 td { span { class: "chip plain", "{p.correo}" } }
@@ -806,6 +986,12 @@ fn VistaOportunidades() -> Element {
                 "{t.kanban}"
             }
         }
+        SelectorVistas {
+            objeto: "oportunidades".to_string(),
+            modo: if vista_tabla() { "tabla".to_string() } else { "kanban".to_string() },
+            filtros: serde_json::json!({}),
+            on_cargar: move |v: occb_core::VistaGuardada| vista_tabla.set(v.tipo == "tabla"),
+        }
         if mostrar_form() {
         div { class: "panel form",
             label {
@@ -857,7 +1043,10 @@ fn VistaOportunidades() -> Element {
                         for o in oportunidades.read().iter() {
                             tr { key: "{o.id}",
                                 td { class: "check", "☐" }
-                                td { class: "strong", "{o.nombre}" }
+                                td { class: "strong",
+                                    Link { to: Ruta::DetalleOportunidad { id: o.id }, class: "link", "{o.nombre}" }
+                                    EstrellaFavorito { tipo: "postulacion".to_string(), id: o.id }
+                                }
                                 td { "${o.importe}" }
                                 td { span { class: "stage stage-{o.etapa:?}", "{etiqueta_etapa(o.etapa, idioma)}" } }
                                 td { class: "muted", "{o.colegio_rbd.clone().unwrap_or_default()}" }
@@ -949,7 +1138,8 @@ fn VistaOportunidades() -> Element {
                             } else {
                                 div { class: "opp-name",
                                     span { class: "mini-avatar", "{op.nombre.chars().next().unwrap_or('?')}" }
-                                    "{op.nombre}"
+                                    Link { to: Ruta::DetalleOportunidad { id: op.id }, class: "link", "{op.nombre}" }
+                                    EstrellaFavorito { tipo: "postulacion".to_string(), id: op.id }
                                 }
                                 div { class: "opp-row", "💲 ", span { class: "opp-amt", "${op.importe}" } }
                                 div { class: "opp-row muted",
@@ -1030,6 +1220,63 @@ fn VistaOportunidades() -> Element {
                 }
             }
         }
+        }
+    }
+}
+
+/// Ficha de postulación: etapa, colegio asociado y actividad del registro.
+#[component]
+fn DetalleOportunidad(id: Uuid) -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut oportunidad = use_signal(|| None::<Oportunidad>);
+    let mut aviso = use_signal(String::new);
+    let mut id_actual = use_signal(|| id);
+    if id_actual() != id {
+        id_actual.set(id);
+    }
+    use_effect(move || {
+        let id = id_actual();
+        spawn(async move {
+            match cliente::listar_oportunidades().await {
+                Ok(lista) => oportunidad.set(lista.into_iter().find(|o| o.id == id)),
+                Err(m) => aviso.set(m),
+            }
+        });
+    });
+    let titulo = oportunidad.read().as_ref().map(|o| o.nombre.clone()).unwrap_or_default();
+    rsx! {
+        VistaOportunidades {}
+        div { class: "record-panel",
+            Link { to: Ruta::VistaOportunidades {}, class: "record-close", "✕ {t.oportunidades}" }
+            h2 { class: "record-title", if titulo.is_empty() { "…" } else { "{titulo}" } }
+            p { class: "page-sub", if idioma == Idioma::Es { "Ficha de postulación" } else { "Application record" } }
+            if !aviso.read().is_empty() { p { class: "form-error", "{aviso}" } }
+            if let Some(o) = oportunidad.read().as_ref() {
+                div { class: "panel",
+                    div { class: "panel-head",
+                        span { class: "panel-title", if idioma == Idioma::Es { "General" } else { "General" } }
+                        EstrellaFavorito { tipo: "postulacion".to_string(), id: o.id }
+                    }
+                    div { class: "mini-row",
+                        span { class: "muted", "{t.oportunidades}" }
+                        span { class: "stage stage-{o.etapa:?}", "{etiqueta_etapa(o.etapa, idioma)}" }
+                    }
+                    div { class: "mini-row",
+                        span { class: "muted", if idioma == Idioma::Es { "Aporte" } else { "Amount" } }
+                        span { class: "mini-name", "${o.importe}" }
+                    }
+                    div { class: "mini-row",
+                        span { class: "muted", "RBD" }
+                        span { class: "mini-name", "{o.colegio_rbd.clone().unwrap_or_default()}" }
+                    }
+                    div { class: "mini-row",
+                        span { class: "muted", if idioma == Idioma::Es { "Creada" } else { "Created" } }
+                        span { class: "mini-name", "{fmt_dia_hora(o.creado_en)}" }
+                    }
+                }
+                Timeline { tipo: "postulacion".to_string(), id: o.id }
+            }
         }
     }
 }
@@ -1197,7 +1444,7 @@ fn DetallePersona(id: Uuid) -> Element {
         VistaPersonas {}
         div { class: "record-panel",
         Link { to: Ruta::VistaPersonas {}, class: "record-close", "✕ {t.personas}" }
-        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
+        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo.clone() }} EstrellaFavorito { tipo: "persona".to_string(), id } }
         p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de persona" } else { "Person record" }).to_string()} }
         if !aviso.read().is_empty() && !listo() {
             div { class: "panel",
@@ -1272,8 +1519,370 @@ fn DetallePersona(id: Uuid) -> Element {
                     }
                 }
             }
+            Timeline { tipo: "persona".to_string(), id }
         }
         }
+    }
+}
+
+/// Reglas guiadas para el flujo de admisión; sin código arbitrario.
+#[component]
+fn VistaAutomatizaciones() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut reglas = use_signal(Vec::<occb_core::Automatizacion>::new);
+    let mut aviso = use_signal(String::new);
+    let mut nombre = use_signal(String::new);
+    let mut disparador = use_signal(|| "al_crear".to_string());
+    let mut con_condicion = use_signal(|| true);
+    let mut campo = use_signal(|| "importe".to_string());
+    let mut operador = use_signal(|| "mayor_que".to_string());
+    let mut valor = use_signal(|| "100000".to_string());
+    let mut accion = use_signal(|| "crear_tarea".to_string());
+    let mut titulo_accion = use_signal(String::new);
+    let mut cuerpo_accion = use_signal(String::new);
+    let mut prioridad_accion = use_signal(|| "media".to_string());
+    let mut etapa_accion = use_signal(|| "postulante".to_string());
+    let mut regla_elegida = use_signal(|| None::<Uuid>);
+    let mut ejecuciones = use_signal(Vec::<occb_core::Ejecucion>::new);
+
+    let recargar = move || {
+        spawn(async move {
+            match cliente::listar_automatizaciones().await {
+                Ok(lista) => reglas.set(lista),
+                Err(m) => aviso.set(m),
+            }
+        });
+    };
+    use_effect(move || {
+        spawn(async move {
+            match cliente::listar_automatizaciones().await {
+                Ok(lista) => reglas.set(lista),
+                Err(m) => aviso.set(m),
+            }
+        });
+    });
+
+    let crear = move |_| {
+        let nombre_clon = nombre.read().trim().to_string();
+        let campo_clon = campo.read().clone();
+        let operador_clon = operador.read().clone();
+        let valor_clon = valor.read().trim().to_string();
+        let condiciones = if con_condicion() && !valor_clon.is_empty() {
+            serde_json::json!([{ "campo": campo_clon, "operador": operador_clon, "valor": valor_clon }])
+        } else {
+            serde_json::json!([])
+        };
+        let tipo_accion = accion.read().clone();
+        let params = match tipo_accion.as_str() {
+            "crear_nota" => serde_json::json!({ "titulo": titulo_accion.read().clone(), "cuerpo": cuerpo_accion.read().clone() }),
+            "mover_etapa" => serde_json::json!({ "etapa": etapa_accion.read().clone() }),
+            _ => serde_json::json!({ "titulo": titulo_accion.read().clone(), "detalle": cuerpo_accion.read().clone(), "prioridad": prioridad_accion.read().clone() }),
+        };
+        let acciones = serde_json::json!([{ "tipo": tipo_accion, "params": params }]);
+        let disp = disparador.read().clone();
+        spawn(async move {
+            match cliente::crear_automatizacion(&nombre_clon, &disp, condiciones, acciones).await {
+                Ok(_) => {
+                    nombre.set(String::new());
+                    titulo_accion.set(String::new());
+                    cuerpo_accion.set(String::new());
+                    aviso.set(String::new());
+                    recargar();
+                }
+                Err(m) => aviso.set(m),
+            }
+        });
+    };
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.automatizaciones.to_string(),
+            subtitulo: if idioma == Idioma::Es { "Reglas para el proceso de admisión".to_string() } else { "Rules for the admissions process".to_string() },
+        }
+        if !aviso.read().is_empty() { p { class: "form-error", "{aviso}" } }
+        div { class: "panel form automation-form",
+            div { class: "panel-head", span { class: "panel-title", if idioma == Idioma::Es { "Nueva regla" } else { "New rule" } } }
+            div { class: "row",
+                div { class: "campo",
+                    label { "{t.nombre}" }
+                    input { class: "input", value: "{nombre}", oninput: move |e| nombre.set(e.value()) }
+                }
+                div { class: "campo",
+                    label { "{t.disparador}" }
+                    select { class: "input", value: "{disparador}", onchange: move |e| disparador.set(e.value()),
+                        option { value: "al_crear", if idioma == Idioma::Es { "Al crear postulación" } else { "When application is created" } }
+                        option { value: "al_actualizar", if idioma == Idioma::Es { "Al actualizar postulación" } else { "When application is updated" } }
+                    }
+                }
+            }
+            div { class: "automation-subform",
+                label { class: "check-label",
+                    input { r#type: "checkbox", checked: con_condicion(), onchange: move |e| con_condicion.set(e.checked()) }
+                    "{t.condicion}"
+                }
+                if con_condicion() {
+                    div { class: "row",
+                        select { class: "input", value: "{campo}", onchange: move |e| campo.set(e.value()),
+                            option { value: "importe", if idioma == Idioma::Es { "Importe" } else { "Amount" } }
+                            option { value: "nombre", if idioma == Idioma::Es { "Nombre" } else { "Name" } }
+                            option { value: "etapa", if idioma == Idioma::Es { "Etapa" } else { "Stage" } }
+                            option { value: "colegio_rbd", "RBD" }
+                        }
+                        select { class: "input", value: "{operador}", onchange: move |e| operador.set(e.value()),
+                            option { value: "igual", "{t.igual}" }
+                            option { value: "contiene", "{t.contiene}" }
+                            option { value: "mayor_que", "{t.mayor_que}" }
+                        }
+                        input { class: "input", placeholder: "{t.valor}", value: "{valor}", oninput: move |e| valor.set(e.value()) }
+                    }
+                }
+            }
+            div { class: "automation-subform",
+                label { "{t.accion}" }
+                select { class: "input", value: "{accion}", onchange: move |e| accion.set(e.value()),
+                    option { value: "crear_tarea", "{t.crear_tarea}" }
+                    option { value: "crear_nota", "{t.crear_nota}" }
+                    option { value: "mover_etapa", "{t.mover_etapa}" }
+                }
+                if accion() == "crear_tarea" || accion() == "crear_nota" {
+                    input { class: "input", placeholder: if accion() == "crear_tarea" { if idioma == Idioma::Es { "Título de la tarea" } else { "Task title" } } else { if idioma == Idioma::Es { "Título de la nota" } else { "Note title" } }, value: "{titulo_accion}", oninput: move |e| titulo_accion.set(e.value()) }
+                    input { class: "input", placeholder: if accion() == "crear_tarea" { if idioma == Idioma::Es { "Detalle (opcional)" } else { "Details (optional)" } } else { if idioma == Idioma::Es { "Contenido de la nota" } else { "Note body" } }, value: "{cuerpo_accion}", oninput: move |e| cuerpo_accion.set(e.value()) }
+                }
+                if accion() == "crear_tarea" {
+                    select { class: "input", value: "{prioridad_accion}", onchange: move |e| prioridad_accion.set(e.value()),
+                        option { value: "baja", if idioma == Idioma::Es { "Prioridad baja" } else { "Low priority" } }
+                        option { value: "media", if idioma == Idioma::Es { "Prioridad media" } else { "Medium priority" } }
+                        option { value: "alta", if idioma == Idioma::Es { "Prioridad alta" } else { "High priority" } }
+                    }
+                }
+                if accion() == "mover_etapa" {
+                    select { class: "input", value: "{etapa_accion}", onchange: move |e| etapa_accion.set(e.value()),
+                        for etapa in occb_core::EtapaOportunidad::todas() {
+                            option { value: "{etapa.como_texto()}", "{etiqueta_etapa(*etapa, idioma)}" }
+                        }
+                    }
+                }
+            }
+            button { class: "btn-primary", onclick: crear, "{t.guardar}" }
+        }
+        for regla in reglas.read().iter() {
+            div { class: "panel automation-card", key: "{regla.id}",
+                div { class: "panel-head",
+                    span { class: "panel-title", "{regla.nombre}" }
+                    span { class: if regla.activa { "pill" } else { "pill muted" }, if regla.activa { if idioma == Idioma::Es { "Activa" } else { "Active" } } else { if idioma == Idioma::Es { "Inactiva" } else { "Inactive" } } }
+                }
+                p { class: "muted", "{regla.disparador} · postulacion" }
+                p { class: "automation-json", "{regla.condiciones}" }
+                p { class: "automation-json", "{regla.acciones}" }
+                div { class: "cal-bar",
+                    button { class: "btn-mini",
+                        onclick: {
+                            let id = regla.id;
+                            let activa = !regla.activa;
+                            move |_| { spawn(async move {
+                                match cliente::alternar_automatizacion(id, activa).await {
+                                    Ok(_) => recargar(),
+                                    Err(m) => aviso.set(m),
+                                }
+                            }); }
+                        },
+                        if regla.activa { "{t.desactivar}" } else { "{t.activar}" }
+                    }
+                    button { class: "btn-mini",
+                        onclick: {
+                            let id = regla.id;
+                            move |_| { spawn(async move {
+                                regla_elegida.set(Some(id));
+                                match cliente::ejecuciones_automatizacion(id).await {
+                                    Ok(lista) => ejecuciones.set(lista),
+                                    Err(m) => aviso.set(m),
+                                }
+                            }); }
+                        },
+                        "{t.historial}"
+                    }
+                    button { class: "btn-mini", onclick: {
+                        let id=regla.id;
+                        move |_| { spawn(async move {
+                            match cliente::eliminar_automatizacion(id).await {
+                                Ok(()) => recargar(),
+                                Err(m) => aviso.set(m),
+                            }
+                        }); }
+                    }, "✕" }
+                }
+                if regla_elegida() == Some(regla.id) {
+                    for ejecucion in ejecuciones.read().iter() {
+                        div { class: "mini-row", key: "{ejecucion.id}",
+                            span { class: if ejecucion.ok { "pill" } else { "pill error-pill" }, if ejecucion.ok { "✓" } else { "!" } }
+                            span { class: "mini-name", "{ejecucion.disparador} · {ejecucion.detalle}" }
+                            span { class: "mini-amt", "{fmt_dia_hora(ejecucion.creado_en)}" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Timeline visible en fichas, con autor y detalle seguro de la actividad.
+#[component]
+fn Timeline(tipo: String, id: Uuid) -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut filas = use_signal(Vec::<occb_core::Actividad>::new);
+    let mut id_actual = use_signal(|| id);
+    if id_actual() != id {
+        id_actual.set(id);
+    }
+    use_effect(move || {
+        let tipo = tipo.clone();
+        let id = id_actual();
+        spawn(async move {
+            if let Ok(lista) = cliente::timeline(&tipo, id).await {
+                filas.set(lista);
+            }
+        });
+    });
+    rsx! {
+        div { class: "panel timeline",
+            div { class: "panel-head",
+                span { class: "panel-title", "{t.timeline}" }
+            }
+            if filas.read().is_empty() {
+                p { class: "muted", if idioma == Idioma::Es { "Sin actividad registrada" } else { "No activity yet" } }
+            }
+            for a in filas.read().iter() {
+                div { class: "timeline-item", key: "{a.id}",
+                    span { class: "timeline-dot", "•" }
+                    div {
+                        div { class: "timeline-text",
+                            b { "{a.autor}" }
+                            " "
+                            match a.accion.as_str() {
+                                "creado" => rsx! { "{t.creado}" },
+                                "actualizado" => rsx! { "{t.actualizado}" },
+                                _ => rsx! { "{t.eliminado}" },
+                            }
+                            " · "
+                            "{titulo_actividad(a)}"
+                        }
+                        div { class: "timeline-date muted", "{fmt_dia_hora(a.creado_en)}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn titulo_actividad(actividad: &occb_core::Actividad) -> &str {
+    actividad
+        .detalle
+        .get("titulo")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("Registro")
+}
+
+/// Selector y guardado de vistas personales. `on_cargar` aplica los filtros
+/// almacenados en la pantalla que lo contiene.
+#[component]
+fn SelectorVistas(
+    objeto: String,
+    modo: String,
+    filtros: serde_json::Value,
+    on_cargar: EventHandler<occb_core::VistaGuardada>,
+) -> Element {
+    let t = textos(IDIOMA());
+    let mut vistas = use_signal(Vec::<occb_core::VistaGuardada>::new);
+    let mut seleccionada = use_signal(|| None::<Uuid>);
+    let mut nombre = use_signal(String::new);
+    let mut aviso = use_signal(String::new);
+    let objeto_cargar = objeto.clone();
+    use_effect(move || {
+        let objeto = objeto_cargar.clone();
+        spawn(async move {
+            if let Ok(lista) = cliente::listar_vistas(&objeto).await {
+                vistas.set(lista);
+            }
+        });
+    });
+    let guardar = move |_| {
+        let nombre_vista = nombre.read().trim().to_string();
+        if nombre_vista.is_empty() {
+            aviso.set(if IDIOMA() == Idioma::Es {
+                "Escribe un nombre para la vista.".into()
+            } else {
+                "Enter a name for the view.".into()
+            });
+            return;
+        }
+        let (objeto, modo, filtros) = (objeto.clone(), modo.clone(), filtros.clone());
+        spawn(async move {
+            match cliente::crear_vista(
+                &objeto,
+                &nombre_vista,
+                &modo,
+                filtros,
+                serde_json::json!({}),
+            )
+            .await
+            {
+                Ok(v) => {
+                    aviso.set(String::new());
+                    nombre.set(String::new());
+                    vistas.write().push(v);
+                }
+                Err(m) => aviso.set(m),
+            }
+        });
+    };
+    rsx! {
+        div { class: "saved-view-controls",
+            select {
+                class: "input saved-view-select",
+                onchange: move |e| {
+                    if let Ok(id) = Uuid::parse_str(&e.value())
+                        && let Some(v) = vistas.read().iter().find(|v| v.id == id).cloned()
+                    {
+                        seleccionada.set(Some(id));
+                        on_cargar.call(v);
+                    } else {
+                        seleccionada.set(None);
+                    }
+                },
+                option { value: "", "{t.vista_guardada}" }
+                for v in vistas.read().iter() {
+                    option { value: "{v.id}", "{v.nombre}" }
+                }
+            }
+            if let Some(id) = seleccionada() {
+                button {
+                    class: "btn-mini",
+                    title: if IDIOMA() == Idioma::Es { "Eliminar vista" } else { "Delete view" },
+                    onclick: move |_| {
+                        spawn(async move {
+                            match cliente::eliminar_vista(id).await {
+                                Ok(()) => {
+                                    vistas.write().retain(|v| v.id != id);
+                                    seleccionada.set(None);
+                                }
+                                Err(m) => aviso.set(m),
+                            }
+                        });
+                    },
+                    "✕"
+                }
+            }
+            input {
+                class: "input saved-view-name",
+                placeholder: "{t.nombre_vista}",
+                value: "{nombre}",
+                oninput: move |e| nombre.set(e.value()),
+            }
+            button { class: "btn-mini", onclick: guardar, "{t.guardar_vista}" }
+        }
+        if !aviso.read().is_empty() { p { class: "form-error", "{aviso}" } }
     }
 }
 
@@ -1387,6 +1996,19 @@ fn VistaAlumnos() -> Element {
             }
             span { class: "pill", "{t.tabla}" }
         }
+        SelectorVistas {
+            objeto: "alumnos".to_string(),
+            modo: "tabla".to_string(),
+            filtros: serde_json::json!({ "busqueda": busqueda(), "estado": estado_f() }),
+            on_cargar: move |v: occb_core::VistaGuardada| {
+                if let Some(q) = v.filtros.get("busqueda").and_then(|x| x.as_str()) {
+                    busqueda.set(q.to_string());
+                }
+                if let Some(e) = v.filtros.get("estado").and_then(|x| x.as_str()) {
+                    estado_f.set(e.to_string());
+                }
+            },
+        }
         if mostrar_form() {
         div { class: "panel form",
             label { if idioma == Idioma::Es { "Matricular alumno" } else { "Enroll student" } }
@@ -1442,6 +2064,7 @@ fn VistaAlumnos() -> Element {
                                         Link { to: Ruta::DetalleAlumno { id: a.id }, class: "link",
                                             "{a.nombres} {a.apellidos}"
                                         }
+                                        EstrellaFavorito { tipo: "alumno".to_string(), id: a.id }
                                     }
                                 }
                                 td { "{a.curso}" }
@@ -1688,7 +2311,7 @@ fn DetalleAlumno(id: Uuid) -> Element {
         VistaAlumnos {}
         div { class: "record-panel",
         Link { to: Ruta::VistaAlumnos {}, class: "record-close", "✕ {t.alumnos}" }
-        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
+        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo.clone() }} EstrellaFavorito { tipo: "alumno".to_string(), id } }
         p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de alumno" } else { "Student record" }).to_string()} }
         if !aviso.read().is_empty() && !listo() {
             div { class: "panel",
@@ -1936,6 +2559,7 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
             }
+            Timeline { tipo: "alumno".to_string(), id }
         }
         }
     }
@@ -2021,6 +2645,16 @@ fn VistaApoderados() -> Element {
             }
             span { class: "pill", "{t.tabla}" }
         }
+        SelectorVistas {
+            objeto: "apoderados".to_string(),
+            modo: "tabla".to_string(),
+            filtros: serde_json::json!({ "busqueda": busqueda() }),
+            on_cargar: move |v: occb_core::VistaGuardada| {
+                if let Some(q) = v.filtros.get("busqueda").and_then(|x| x.as_str()) {
+                    busqueda.set(q.to_string());
+                }
+            },
+        }
         if mostrar_form() {
         div { class: "panel form",
             label { if idioma == Idioma::Es { "Nuevo apoderado" } else { "New guardian" } }
@@ -2079,6 +2713,7 @@ fn VistaApoderados() -> Element {
                                         Link { to: Ruta::DetalleApoderado { id: a.id }, class: "link",
                                             "{a.nombres} {a.apellidos}"
                                         }
+                                        EstrellaFavorito { tipo: "apoderado".to_string(), id: a.id }
                                     }
                                 }
                                 td { "{a.telefono}" }
@@ -2218,7 +2853,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
         VistaApoderados {}
         div { class: "record-panel",
         Link { to: Ruta::VistaApoderados {}, class: "record-close", "✕ {t.apoderados}" }
-        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
+        h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo.clone() }} EstrellaFavorito { tipo: "apoderado".to_string(), id } }
         p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de apoderado" } else { "Guardian record" }).to_string()} }
         if !aviso.read().is_empty() && !listo() {
             div { class: "panel",
@@ -2316,6 +2951,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
                     }
                 }
             }
+            Timeline { tipo: "apoderado".to_string(), id }
         }
         }
     }

@@ -14,10 +14,11 @@ pub mod territorio;
 pub mod validacion;
 
 pub use dominio::{
-    Alumno, Apoderado, Colegio, Correo, CrearAlumno, CrearApoderado, CrearColegio, CrearCorreo,
-    CrearEvento, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno, EstadoTarea,
-    EtapaOportunidad, Evento, Nota, Oportunidad, Persona, ResumenPanel, Tarea, Traslado,
-    VinculoApoderado, calcular_resumen,
+    Actividad, Alumno, Apoderado, Automatizacion, Colegio, Correo, CrearAlumno, CrearApoderado, CrearColegio,
+    CrearCorreo, CrearEvento, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno,
+    Ejecucion, EstadoTarea, EtapaOportunidad, Evento, Favorito, Nota, Oportunidad, Persona,
+    ResultadoBusqueda, ResumenPanel, Tarea, Traslado, VistaGuardada, VinculoApoderado,
+    calcular_resumen,
 };
 pub use territorio::{Comuna, Region, comuna_por_cut, comunas_de_region, region};
 pub use semilla::{

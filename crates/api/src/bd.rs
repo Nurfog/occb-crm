@@ -2,6 +2,7 @@
 //! La API jamás hace INSERT/UPDATE/DELETE directos (buena práctica de seguridad).
 
 use sqlx::{PgPool, Row, postgres::PgPoolOptions};
+use uuid::Uuid;
 
 /// Crea el pool de conexiones a PostgreSQL.
 pub async fn crear_pool(url_bd: &str) -> Result<PgPool, sqlx::Error> {
@@ -9,6 +10,21 @@ pub async fn crear_pool(url_bd: &str) -> Result<PgPool, sqlx::Error> {
         .max_connections(10)
         .connect(url_bd)
         .await
+}
+
+/// Inicia una transacción y fija el actor del JWT solo durante ella.
+/// Los triggers de auditoría leen este valor; `SET LOCAL` evita filtrarlo a
+/// otra petición cuando la conexión vuelva al pool.
+pub async fn transaccion_con_actor(
+    pool: &PgPool,
+    usuario_id: Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("select set_config('app.usuario_id', $1, true)")
+        .bind(usuario_id.to_string())
+        .execute(&mut *tx)
+        .await?;
+    Ok(tx)
 }
 
 /// Ejecuta las migraciones empaquetadas en `migrations/` y siembra demo si está vacío.

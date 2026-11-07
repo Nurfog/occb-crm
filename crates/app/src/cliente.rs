@@ -9,8 +9,9 @@
 use dioxus::prelude::{GlobalSignal, Signal};
 use occb_core::{
     Alumno, Apoderado, Colegio, Correo, CrearAlumno, CrearApoderado, CrearColegio, CrearCorreo,
-    CrearEvento, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, Evento, Nota, Oportunidad,
-    Persona, ResumenPanel, Tarea, Traslado,
+    Actividad, Automatizacion, CrearEvento, CrearNota, CrearOportunidad, CrearPersona,
+    CrearTarea, Ejecucion, Evento, Favorito, Nota, Oportunidad, Persona, ResumenPanel,
+    ResultadoBusqueda, Tarea, Traslado, VistaGuardada,
 };
 use uuid::Uuid;
 
@@ -91,6 +92,8 @@ pub async fn cerrar_sesion() -> Result<(), String> {
         .unwrap_or(serde_json::Value::Null);
     }
     *SESION.write() = None;
+    *FAVORITOS.write() = Vec::new();
+    *NO_LEIDOS.write() = 0;
     Ok(())
 }
 
@@ -554,6 +557,15 @@ pub async fn notas_de_alumno(alumno_id: Uuid) -> Result<Vec<Nota>, String> {
 
 /// No leídos global (contador del menú; lo actualizan correos y barra).
 pub static NO_LEIDOS: GlobalSignal<i64> = Signal::global(|| 0);
+/// Favoritos cargados para la barra lateral y las estrellas de las filas.
+pub static FAVORITOS: GlobalSignal<Vec<Favorito>> = Signal::global(Vec::new);
+
+/// Recarga los favoritos personales.
+pub async fn refrescar_favoritos() {
+    if let Ok(lista) = listar_favoritos().await {
+        *FAVORITOS.write() = lista;
+    }
+}
 
 /// Recalcula el contador de no leídos desde la API.
 pub async fn refrescar_no_leidos() {
@@ -658,4 +670,98 @@ pub async fn correos_de_apoderado(apoderado_id: Uuid) -> Result<Vec<Correo>, Str
         .into_iter()
         .filter(|c| c.apoderado_id == Some(apoderado_id))
         .collect())
+}
+
+/// Búsqueda global (la API limita a 20 resultados y admite consultas cortas).
+pub async fn buscar_espacio(texto: &str) -> Result<Vec<ResultadoBusqueda>, String> {
+    obtener_json(&format!("/api/buscar?q={}", texto.trim())).await
+}
+
+/// Favoritos personales del usuario actual.
+pub async fn listar_favoritos() -> Result<Vec<Favorito>, String> {
+    obtener_json("/api/favoritos").await
+}
+
+/// Alterna favorito; devuelve `true` si se agregó.
+pub async fn alternar_favorito(tipo: &str, id: Uuid) -> Result<bool, String> {
+    let r: serde_json::Value = enviar_json(
+        "POST",
+        "/api/favoritos/alternar",
+        &serde_json::json!({ "tipo": tipo, "id": id }),
+    )
+    .await?;
+    let agregado = r.get("agregado").and_then(|v| v.as_bool()).unwrap_or(false);
+    refrescar_favoritos().await;
+    Ok(agregado)
+}
+
+/// Vistas guardadas del objeto indicado.
+pub async fn listar_vistas(objeto: &str) -> Result<Vec<VistaGuardada>, String> {
+    obtener_json(&format!("/api/vistas?objeto={objeto}")).await
+}
+
+/// Guarda la configuración visible del selector/lista.
+pub async fn crear_vista(
+    objeto: &str,
+    nombre: &str,
+    tipo: &str,
+    filtros: serde_json::Value,
+    orden: serde_json::Value,
+) -> Result<VistaGuardada, String> {
+    enviar_json(
+        "POST",
+        &format!("/api/vistas?objeto={objeto}"),
+        &serde_json::json!({ "nombre": nombre, "tipo": tipo, "filtros": filtros, "orden": orden }),
+    )
+    .await
+}
+
+/// Elimina una vista propia.
+pub async fn eliminar_vista(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/vistas/{id}")).await
+}
+
+/// Actividad reciente de una ficha.
+pub async fn timeline(tipo: &str, id: Uuid) -> Result<Vec<Actividad>, String> {
+    obtener_json(&format!("/api/actividad?tipo={tipo}&id={id}&limite=50")).await
+}
+
+/// Lista reglas de automatización.
+pub async fn listar_automatizaciones() -> Result<Vec<Automatizacion>, String> {
+    obtener_json("/api/automatizaciones").await
+}
+
+/// Crea regla de admisión con condición(es) y acción(es) guiadas.
+pub async fn crear_automatizacion(
+    nombre: &str,
+    disparador: &str,
+    condiciones: serde_json::Value,
+    acciones: serde_json::Value,
+) -> Result<Automatizacion, String> {
+    enviar_json(
+        "POST",
+        "/api/automatizaciones",
+        &serde_json::json!({ "nombre": nombre, "disparador": disparador, "condiciones": condiciones, "acciones": acciones }),
+    )
+    .await
+}
+
+/// Activa o desactiva una regla.
+pub async fn alternar_automatizacion(id: Uuid, activa: bool) -> Result<Automatizacion, String> {
+    enviar_json(
+        "PATCH",
+        &format!("/api/automatizaciones/{id}/activa"),
+        &serde_json::json!({ "activa": activa }),
+    )
+    .await
+}
+
+/// Baja una regla.
+pub async fn eliminar_automatizacion(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/automatizaciones/{id}")).await
+}
+
+/// Historial de ejecuciones, éxitos y fallas.
+pub async fn ejecuciones_automatizacion(id: Uuid) -> Result<Vec<Ejecucion>, String> {
+    obtener_json(&format!("/api/automatizaciones/{id}/ejecuciones")).await
 }

@@ -219,63 +219,56 @@ Objetivo: agenda y bandeja vinculadas a los registros.
   ficha del apoderado; leído persiste; contador en menú; validaciones.
 - ✅ Hecho cuando: E2E 55/55, clippy limpio, mes de 31 días renderiza bien.
 
-### ⬜ Fase 5 — Búsqueda global + Favoritos + Vistas + Timeline
+### ✅ Fase 5 — Búsqueda global + Favoritos + Vistas + Timeline
 Objetivo: moverse por el espacio como en un CRM grande.
 
-- ⬜ Base de datos (migración 016):
-  - ⬜ Búsqueda: columnas `tsvector` en español (`pg_catalog.spanish`) para
-    empresas/personas/oportunidades/notas/tareas + función `buscar_espacio(texto)`
-    que devuelve `(tipo, id, titulo, detalle)` rankeada, límite 20.
-  - ⬜ Tabla `favoritos`: `usuario_id`, `tipo` (empresa|persona|oportunidad),
-    `referencia_id`, único por tríada. Funciones `alternar_favorito`, `listar_favoritos`.
-  - ⬜ Tabla `vistas`: `id`, `usuario_id`, `objeto` (empresas|personas|oportunidades),
-    `nombre`, `tipo` (tabla|kanban), `filtros jsonb`, `orden jsonb`.
-    CRUD + `listar_vistas(objeto)`.
-  - ⬜ Tabla `actividad`: `id`, `tipo`, `referencia_id`, `accion`, `detalle jsonb`,
-    `usuario_id`, `creado_en`. Triggers que registran altas/cambios/bajas de los
-    objetos núcleo. Función `timeline(tipo, id, limite)`.
-- ✅ API:
-  - ⬜ `GET /api/buscar?q=`, `GET /api/favoritos`, `POST /api/favoritos/alternar`.
-  - ⬜ `GET/POST /api/vistas?objeto=`, `PATCH/DELETE /api/vistas/{id}`.
-  - ⬜ `GET /api/actividad?tipo=&id=` para el timeline de cada ficha.
+-- ✅ Base de datos (migraciones 018 + 019):
+  - ✅ Búsqueda FTS española + respaldo para prefijos/consultas de 1 carácter en
+    colegios, alumnos, apoderados, personas, postulaciones, tareas, notas,
+    eventos y correos. `buscar_espacio(texto)` ordena por relevancia y limita 20.
+  - ✅ Favoritos personales para alumno/apoderado/persona/postulación;
+    vistas personales para alumnos/apoderados/personas/postulaciones
+    (tabla o Kanban de postulaciones). 019 normaliza `null` JSON a `{}`.
+  - ✅ Actividad y triggers acotados (no guardan RUT, teléfono ni cuerpo de
+    correo); las escrituras se ejecutan con transacción y `app.usuario_id` local,
+    que atribuye el autor desde el JWT sin aceptar IDs del cliente.
+- ✅ API protegida: búsqueda, listar/alternar favoritos, CRUD vistas y timeline.
+  Las colecciones personales se filtran por el usuario autenticado.
 - ✅ Frontal:
-  - ⬜ Buscador ⌘K en la barra lateral (atajo real, resultados agrupados, Enter abre).
-  - ⬜ Estrellas ★ funcionales en listas y fichas; sección Favoritos viva.
-  - ⬜ Selector de vista por objeto (tabla/kanban donde aplique) con guardar vista.
-  - ⬜ Timeline en cada ficha (actividad ordenada con autor y fecha).
-- ⬜ E2E: buscar encuentra por nombre/correo; favorito persiste tras recargar;
-  editar un registro genera entrada de timeline visible en su ficha.
-- ⬜ Hecho cuando: E2E 28/28 y búsqueda con 1 carácter no rompe nada.
+  - ✅ ⌘K/Ctrl+K abre búsqueda agrupada; Enter abre el primer resultado.
+  - ✅ Estrellas en listas y fichas; favoritos vivos en la barra lateral.
+  - ✅ Guardar/aplicar/eliminar vistas personales en listas; Kanban donde aplica.
+  - ✅ Timeline con autor, acción y fecha en fichas de persona, alumno,
+    apoderado y postulación.
+- ✅ E2E: encuentra por nombre/correo, tolera un carácter, favoritos y vistas
+  quedan aislados por usuario, favoritos sobreviven navegación, cambio de persona
+  aparece en timeline con el autor real.
+- ✅ Hecho cuando: E2E 69/69 y clippy limpio.
 
-### ⬜ Fase 6 — Automatizaciones
+### ✅ Fase 6 — Automatizaciones
 Objetivo: reglas sencillas sin programar.
 
-- ⬜ Base de datos (migración 017):
-  - ⬜ Tabla `automatizaciones`: `id`, `nombre` obligatorio, `activa` (defecto true),
-    `disparador` (`al_crear|al_actualizar` + objeto), `condiciones jsonb`
-    (lista de `{campo, operador, valor}` con operadores `igual|contiene|mayor_que`),
-    `acciones jsonb` (lista de `{tipo: mover_etapa|crear_tarea|crear_nota, params}`),
-    `creado_en`. RLS.
-  - ⬜ Tabla `ejecuciones`: `id`, `automatizacion_id`, `ok`, `detalle`,
-    `creado_en`. Función `registrar_ejecucion`.
-  - ⬜ CRUD + `listar_automatizaciones` + `alternar_automatizacion`.
+- ✅ Base de datos (migración 020): reglas limitadas a postulaciones escolares,
+  condiciones guiadas (`igual|contiene|mayor_que`) y acciones seguras
+  (`mover_etapa|crear_tarea|crear_nota`), con historial de ejecuciones.
 - ✅ API:
-  - ⬜ `GET/POST /api/automatizaciones`, `GET/PATCH/DELETE /api/automatizaciones/{id}`,
+  - ✅ `GET/POST /api/automatizaciones`, `GET/PATCH/DELETE /api/automatizaciones/{id}`,
     `PATCH /api/automatizaciones/{id}/activa`, `GET /api/automatizaciones/{id}/ejecuciones`.
-  - ⬜ Motor: tras cada crear/actualizar de oportunidades (y luego resto), evalúa
-    reglas activas del objeto y ejecuta acciones con las mismas funciones seguras.
+  - ✅ Motor al crear, actualizar o mover postulaciones. Una subtransacción por
+    regla revierte sus acciones si falla, registra el error y conserva la operación
+    original; las acciones usan funciones SQL seguras existentes.
 - ✅ Frontal:
-  - ⬜ Ruta `/automatizaciones`: lista con interruptor, editor (disparador +
-    condiciones + acciones con formularios guiados), historial por regla.
-- ⬜ E2E: regla «al crear oportunidad con importe > 100000 → crear tarea» genera la
-  tarea visible; desactivarla deja de generar.
-- ⬜ Hecho cuando: E2E 30/30 y una regla que falla registra ejecución con error sin
-  romper la operación original.
+  - ✅ Ruta `/automatizaciones`: lista, activar/desactivar, editor guiado y
+    ejecuciones por regla.
+- ✅ E2E: «al crear postulación con importe > 100000 → crear tarea» genera tarea
+  vinculada; desactivarla detiene nuevas tareas; error de regla queda registrado
+  sin revertir la postulación.
+- ✅ Hecho cuando: E2E 75/75, clippy limpio y fallo aislado por regla.
 
 ### ⬜ Fase 7 — Agentes IA + chat
 Objetivo: pedirle cosas al CRM conversando.
 
-- ⬜ Base de datos (migración 018):
+- ⬜ Base de datos (migración 021):
   - ⬜ Tabla `conversaciones`: `id`, `usuario_id`, `titulo`, `creado_en`.
   - ⬜ Tabla `mensajes`: `id`, `conversacion_id` (`on delete cascade`), `rol`
     (`usuario|agente`), `contenido`, `creado_en`.
@@ -298,7 +291,7 @@ Objetivo: pedirle cosas al CRM conversando.
 ### ⬜ Fase 8 — Plataforma y producción
 Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 
-- ⬜ Integraciones (migración 019):
+- ⬜ Integraciones (migración 022):
   - ⬜ Tabla `claves_api`: `id`, `usuario_id`, `nombre`, `clave_hash` (sha256, se
     muestra una sola vez al crear), `alcances text[]`, `revocada`,
     `creado_en`. Auth por cabecera `X-Clave-API` con mismos permisos que el dueño.
@@ -308,7 +301,7 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
     `intentos`, `ok`, `creado_en`. Reintentos con espera exponencial (3 intentos).
   - ⬜ UI en Ajustes: claves (crear/ver una vez/revocar) y webhooks (crear/probar/ver).
 - ⬜ Importación CSV:
-  - ⬜ `POST /api/importar/empresas|personas` (multipart): valida cabecera, previsualiza
+  - ⬜ `POST /api/importar/alumnos|apoderados` (multipart): valida cabecera, previsualiza
     5 filas con errores por fila, aplica el resto en una transacción, devuelve resumen.
   - ⬜ UI con subida, previsualización y reporte de errores descargable.
 - ⬜ Operación:
@@ -344,11 +337,11 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Miembros y roles | ✅ Funcional (solo admin cambia rol) | 3 |
 | Calendario | ✅ Funcional | 4 |
 | Correos | ✅ Funcional | 4 |
-| Búsqueda global | [] Pendiente | 5 |
-| Favoritos | 🚧 Solo visual (funcional en 5) | 5 |
-| Vistas guardadas | [] Pendiente | 5 |
-| Timeline | [] Pendiente | 5 |
-| Automatizaciones | 🚧 Solo visual (funcional en 6) | 6 |
+| Búsqueda global | ✅ FTS + ⌘K | 5 |
+| Favoritos | ✅ Personal por usuario | 5 |
+| Vistas guardadas | ✅ Filtros por usuario | 5 |
+| Timeline | ✅ Autoría y trazabilidad | 5 |
+| Automatizaciones | ✅ Reglas de admisión con historial | 6 |
 | Agentes IA y chat | [] Pendiente | 7 |
 | Claves API y webhooks | [] Pendiente | 8 |
 | Importación CSV | [] Pendiente | 8 |

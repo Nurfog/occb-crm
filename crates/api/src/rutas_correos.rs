@@ -71,6 +71,7 @@ pub async fn obtener(
 /// POST /api/correos
 pub async fn crear(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Json(cuerpo): Json<CuerpoCorreo>,
 ) -> Result<(StatusCode, Json<occb_core::Correo>), ErrorApi> {
     cuerpo
@@ -84,6 +85,7 @@ pub async fn crear(
         apoderado_id: cuerpo.apoderado_id,
         oportunidad_id: cuerpo.oportunidad_id,
     })?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from crear_correo($1, $2, $3, $4, $5, $6)")
         .bind(&entrada.asunto)
         .bind(&entrada.cuerpo)
@@ -91,35 +93,42 @@ pub async fn crear(
         .bind(entrada.alumno_id)
         .bind(entrada.apoderado_id)
         .bind(entrada.oportunidad_id)
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_correo(&fila))))
 }
 
 /// PATCH /api/correos/:id/leido
 pub async fn marcar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoLeido>,
 ) -> Result<Json<occb_core::Correo>, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from marcar_correo_leido($1, $2)")
         .bind(id)
         .bind(cuerpo.leido.unwrap_or(true))
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Correo no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_correo(&fila)))
 }
 
 /// DELETE /api/correos/:id
 pub async fn eliminar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     sqlx::query("select eliminar_correo($1)")
         .bind(id)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Correo no encontrado.".into()))?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }

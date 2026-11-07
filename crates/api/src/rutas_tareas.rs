@@ -87,9 +87,11 @@ fn a_dominio(cuerpo: &CuerpoTarea) -> Result<occb_core::CrearTarea, ErrorApi> {
 /// POST /api/tareas
 pub async fn crear(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Json(cuerpo): Json<CuerpoTarea>,
 ) -> Result<(StatusCode, Json<occb_core::Tarea>), ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from crear_tarea($1, $2, $3, $4, $5, $6, $7, $8)")
         .bind(&entrada.titulo)
         .bind(&entrada.detalle)
@@ -99,18 +101,21 @@ pub async fn crear(
         .bind(entrada.alumno_id)
         .bind(entrada.apoderado_id)
         .bind(entrada.oportunidad_id)
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_tarea(&fila))))
 }
 
 /// PATCH /api/tareas/:id
 pub async fn actualizar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoTarea>,
 ) -> Result<Json<occb_core::Tarea>, ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from actualizar_tarea($1, $2, $3, $4, $5, $6)")
         .bind(id)
         .bind(&entrada.titulo)
@@ -118,9 +123,10 @@ pub async fn actualizar(
         .bind(entrada.estado.como_texto())
         .bind(&entrada.prioridad)
         .bind(entrada.vencimiento)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Tarea no encontrada.".into()))?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_tarea(&fila)))
 }
 
@@ -133,27 +139,33 @@ pub struct CuerpoEstado {
 /// PATCH /api/tareas/:id/estado
 pub async fn marcar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
     Json(cuerpo): Json<CuerpoEstado>,
 ) -> Result<Json<occb_core::Tarea>, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     let fila = sqlx::query("select * from marcar_tarea($1, $2)")
         .bind(id)
         .bind(cuerpo.estado.to_lowercase())
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Tarea no encontrada.".into()))?;
+    tx.commit().await?;
     Ok(Json(bd::fila_a_tarea(&fila)))
 }
 
 /// DELETE /api/tareas/:id
 pub async fn eliminar(
     State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ErrorApi> {
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
     sqlx::query("select eliminar_tarea($1)")
         .bind(id)
-        .fetch_optional(&pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Tarea no encontrada.".into()))?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }

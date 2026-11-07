@@ -12,10 +12,12 @@ mod bd;
 mod configuracion;
 mod errores;
 mod rutas_alumnos;
+mod rutas_automatizaciones;
 mod rutas_apoderados;
 mod rutas_colegios;
 mod rutas_correos;
 mod rutas_eventos;
+mod rutas_espacio;
 mod rutas_notas;
 mod rutas_oportunidades;
 mod rutas_personas;
@@ -76,6 +78,40 @@ async fn main() {
     // Protegidas: exigen JWT (ver Fase 3 del roadmap).
     let protegidas = Router::new()
         .route("/api/acceso/yo", get(auth::yo))
+        .route("/api/buscar", get(rutas_espacio::buscar))
+        .route("/api/favoritos", get(rutas_espacio::favoritos))
+        .route(
+            "/api/favoritos/alternar",
+            axum::routing::post(rutas_espacio::alternar_favorito),
+        )
+        .route(
+            "/api/vistas",
+            get(rutas_espacio::listar_vistas).post(rutas_espacio::crear_vista),
+        )
+        .route(
+            "/api/vistas/{id}",
+            axum::routing::patch(rutas_espacio::actualizar_vista)
+                .delete(rutas_espacio::eliminar_vista),
+        )
+        .route("/api/actividad", get(rutas_espacio::actividad))
+        .route(
+            "/api/automatizaciones",
+            get(rutas_automatizaciones::listar).post(rutas_automatizaciones::crear),
+        )
+        .route(
+            "/api/automatizaciones/{id}/activa",
+            axum::routing::patch(rutas_automatizaciones::alternar),
+        )
+        .route(
+            "/api/automatizaciones/{id}/ejecuciones",
+            get(rutas_automatizaciones::ejecuciones),
+        )
+        .route(
+            "/api/automatizaciones/{id}",
+            get(rutas_automatizaciones::obtener)
+                .patch(rutas_automatizaciones::actualizar)
+                .delete(rutas_automatizaciones::eliminar),
+        )
         .route("/api/miembros", get(auth::miembros))
         .route(
             "/api/miembros/{id}/rol",

@@ -296,6 +296,79 @@ pub struct CrearCorreo {
     pub oportunidad_id: Option<Uuid>,
 }
 
+/// Resultado de la búsqueda global (el identificador del colegio es RBD).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ResultadoBusqueda {
+    pub tipo: String,
+    pub id: String,
+    pub titulo: String,
+    pub detalle: String,
+    pub puntaje: f32,
+}
+
+/// Registro marcado por el usuario para acceso rápido.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Favorito {
+    pub tipo: String,
+    pub id: Uuid,
+    pub titulo: String,
+    pub detalle: String,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Vista guardada personal para una lista.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VistaGuardada {
+    pub id: Uuid,
+    pub objeto: String,
+    pub nombre: String,
+    pub tipo: String,
+    pub filtros: serde_json::Value,
+    pub orden: serde_json::Value,
+    pub creado_en: DateTime<Utc>,
+    pub actualizado_en: DateTime<Utc>,
+}
+
+/// Entrada de actividad con autor resuelto para timeline.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Actividad {
+    pub id: Uuid,
+    pub tipo: String,
+    pub referencia_id: Uuid,
+    pub accion: String,
+    pub detalle: serde_json::Value,
+    pub usuario_id: Option<Uuid>,
+    pub autor: String,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Regla ejecutable sobre altas o cambios de postulaciones.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Automatizacion {
+    pub id: Uuid,
+    pub nombre: String,
+    pub activa: bool,
+    pub disparador: String,
+    pub objeto: String,
+    pub condiciones: serde_json::Value,
+    pub acciones: serde_json::Value,
+    pub creado_en: DateTime<Utc>,
+    pub actualizado_en: DateTime<Utc>,
+}
+
+/// Resultado de una regla disparada; los errores no revierten el registro origen.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Ejecucion {
+    pub id: Uuid,
+    pub automatizacion_id: Uuid,
+    pub registro_id: Option<Uuid>,
+    pub disparador: String,
+    pub ok: bool,
+    pub detalle: serde_json::Value,
+    pub usuario_id: Option<Uuid>,
+    pub creado_en: DateTime<Utc>,
+}
+
 /// Persona de contacto.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Persona {
