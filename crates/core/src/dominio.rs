@@ -242,6 +242,60 @@ pub struct CrearNota {
     pub oportunidad_id: Option<Uuid>,
 }
 
+/// Evento de la agenda escolar (reunión, evaluación, entrevista).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Evento {
+    pub id: Uuid,
+    pub titulo: String,
+    pub inicio: DateTime<Utc>,
+    pub fin: DateTime<Utc>,
+    pub lugar: String,
+    pub descripcion: String,
+    pub alumno_id: Option<Uuid>,
+    pub apoderado_id: Option<Uuid>,
+    pub oportunidad_id: Option<Uuid>,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Datos para crear un evento.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CrearEvento {
+    pub titulo: String,
+    pub inicio: DateTime<Utc>,
+    pub fin: DateTime<Utc>,
+    pub lugar: String,
+    pub descripcion: String,
+    pub alumno_id: Option<Uuid>,
+    pub apoderado_id: Option<Uuid>,
+    pub oportunidad_id: Option<Uuid>,
+}
+
+/// Correo de la bandeja vinculada a la vida escolar.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Correo {
+    pub id: Uuid,
+    pub asunto: String,
+    pub cuerpo: String,
+    pub remitente: String,
+    pub alumno_id: Option<Uuid>,
+    pub apoderado_id: Option<Uuid>,
+    pub oportunidad_id: Option<Uuid>,
+    pub leido: bool,
+    pub recibido_en: DateTime<Utc>,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Datos para registrar un correo.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CrearCorreo {
+    pub asunto: String,
+    pub cuerpo: String,
+    pub remitente: String,
+    pub alumno_id: Option<Uuid>,
+    pub apoderado_id: Option<Uuid>,
+    pub oportunidad_id: Option<Uuid>,
+}
+
 /// Persona de contacto.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Persona {

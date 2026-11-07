@@ -186,32 +186,38 @@ Objetivo: multiusuario de verdad; base para permisos por usuario.
 - ✅ Hecho cuando: E2E 40/40, sin secretos en logs ni respuestas, clippy limpio.
 - ⬜ Hecho cuando: E2E 20/20, sin secretos en logs ni respuestas, `down -v` limpio.
 
-### ⬜ Fase 4 — Calendario + Correos
+### ✅ Fase 4 — Calendario + Correos
 Objetivo: agenda y bandeja vinculadas a los registros.
 
-- ⬜ Base de datos (migración 015):
-  - ⬜ Tabla `eventos`: `id`, `titulo` obligatorio, `inicio`/`fin` (fin ≥ inicio),
-    `lugar`, `descripcion`, `persona_id`, `empresa_id`, `oportunidad_id`
-    (anulables), `creado_en`. Índice por rango de fechas. RLS.
-  - ⬜ Tabla `correos`: `id`, `asunto`, `cuerpo`, `remitente` (formato correo),
-    `persona_id` (anulable), `leido` (por defecto falso), `recibido_en`,
-    `creado_en`. RLS.
-  - ⬜ Funciones CRUD completas + `listar_eventos_mes(año, mes)` +
+- ✅ Base de datos (migraciones 016 + 017):
+  - ✅ Tabla `eventos`: `id`, `titulo` (1–200), `inicio`/`fin` (`fin ≥ inicio`),
+    `lugar`, `descripcion`, `alumno_id`, `apoderado_id`, `oportunidad_id`
+    (anulables, en cascada), `creado_en`. Índices por rango de fechas. RLS.
+    (Adaptación escolar: sin `empresa_id`; `persona_id` se abrió en
+    alumno/apoderado.)
+  - ✅ Tabla `correos`: `id`, `asunto`, `cuerpo` obligatorio, `remitente`
+    (formato correo), mismos tres vínculos, `leido` (falso por defecto),
+    `recibido_en`, `creado_en`. RLS.
+  - ✅ Funciones CRUD completas + `listar_eventos_mes(año, mes)` +
     `marcar_correo_leido`. Todo `SECURITY DEFINER` en español.
+  - ✅ 017 corrige el regex de remitente de 016 (doble barra excluía la "s").
 - ✅ API:
-  - ⬜ `GET/POST /api/eventos`, `GET/PATCH/DELETE /api/eventos/{id}`,
-    `GET /api/eventos/mes?año=&mes=`.
-  - ⬜ `GET/POST /api/correos`, `GET /api/correos/{id}`,
-    `PATCH /api/correos/{id}/leido`.
+  - ✅ `GET/POST /api/eventos`, `GET /api/eventos/mes?año=&mes=`,
+    `GET/PATCH/DELETE /api/eventos/{id}`.
+  - ✅ `GET/POST /api/correos` (filtro `no_leidos`), `GET /api/correos/{id}`,
+    `PATCH /api/correos/{id}/leido`, `DELETE /api/correos/{id}` (extra para
+    higiene de filas E2E).
 - ✅ Frontal:
-  - ⬜ Ruta `/calendario`: rejilla mensual navegable, día seleccionado con sus
-    eventos, alta/edición/baja de eventos, puntos en días con eventos.
-  - ⬜ Ruta `/correos`: lista con no-leídos destacados, lector, marcar leído,
-    redacción vinculada a persona, contador en el menú.
-  - ⬜ Fichas muestran eventos y correos relacionados.
-- ⬜ E2E: crear evento por UI aparece en su día; crear correo vinculado aparece en
-  la ficha de la persona; leído persiste.
-- ⬜ Hecho cuando: E2E 24/24 y mes con eventos límite (31 días) renderiza sin errores.
+  - ✅ Ruta `/calendario`: rejilla mensual navegable (lunes primero), día
+    seleccionado con sus eventos, alta/edición/baja, puntos en días con
+    eventos. Horas en UTC de ida y vuelta (un solo huso).
+  - ✅ Ruta `/correos`: lista con no-leídos destacados, lector, marcar
+    leído/no-leído, redacción vinculada a alumno/apoderado/postulación,
+    contador en el menú (se abre marcando leído).
+  - ✅ Fichas de alumno y apoderado muestran eventos y correos relacionados.
+- ✅ E2E: evento por UI aparece en su día; correo vinculado aparece en la
+  ficha del apoderado; leído persiste; contador en menú; validaciones.
+- ✅ Hecho cuando: E2E 55/55, clippy limpio, mes de 31 días renderiza bien.
 
 ### ⬜ Fase 5 — Búsqueda global + Favoritos + Vistas + Timeline
 Objetivo: moverse por el espacio como en un CRM grande.
@@ -336,8 +342,8 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Notas | ✅ Funcional | 2 |
 | Usuarios y acceso | ✅ Funcional (JWT + rotación) | 3 |
 | Miembros y roles | ✅ Funcional (solo admin cambia rol) | 3 |
-| Calendario | [] Pendiente | 4 |
-| Correos | [] Pendiente | 4 |
+| Calendario | ✅ Funcional | 4 |
+| Correos | ✅ Funcional | 4 |
 | Búsqueda global | [] Pendiente | 5 |
 | Favoritos | 🚧 Solo visual (funcional en 5) | 5 |
 | Vistas guardadas | [] Pendiente | 5 |

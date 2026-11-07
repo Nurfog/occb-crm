@@ -273,6 +273,23 @@ select.input { appearance: auto; }
   color: #b42318; background: #fdeceb; border: 1px solid #f5c6c0;
   border-radius: 8px; padding: 8px 10px; font-size: 13px;
 }
+.cal-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cal-bar .input { max-width: 260px; }
+.cal-titulo { font-weight: 600; font-size: 15px; text-transform: capitalize; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-nombre { font-size: 11px; text-transform: uppercase; color: #888; text-align: center; }
+.cal-dia {
+  min-height: 62px; border: 1px solid #e5e2da; border-radius: 8px;
+  padding: 4px 6px; font-size: 12px; cursor: pointer; background: #fff;
+}
+.cal-dia.vacio { background: transparent; border: 0; cursor: default; }
+.cal-dia.sel { border-color: #4f46e5; box-shadow: 0 0 0 1px #4f46e5; }
+.cal-num { font-weight: 600; }
+.cal-punto {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: #4f46e5; font-size: 11px;
+}
+.mini-row.unread .mini-name { font-weight: 700; }
 .center { text-align: center !important; }
 @media (max-width: 1000px) {
   .cards { grid-template-columns: repeat(2, 1fr); }

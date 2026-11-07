@@ -8,8 +8,9 @@
 
 use dioxus::prelude::{GlobalSignal, Signal};
 use occb_core::{
-    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearColegio, CrearNota, CrearOportunidad,
-    CrearPersona, CrearTarea, Nota, Oportunidad, Persona, ResumenPanel, Tarea, Traslado,
+    Alumno, Apoderado, Colegio, Correo, CrearAlumno, CrearApoderado, CrearColegio, CrearCorreo,
+    CrearEvento, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, Evento, Nota, Oportunidad,
+    Persona, ResumenPanel, Tarea, Traslado,
 };
 use uuid::Uuid;
 
@@ -549,4 +550,112 @@ pub async fn eliminar_nota(id: Uuid) -> Result<(), String> {
 pub async fn notas_de_alumno(alumno_id: Uuid) -> Result<Vec<Nota>, String> {
     let todas = listar_notas("").await?;
     Ok(todas.into_iter().filter(|n| n.alumno_id == Some(alumno_id)).collect())
+}
+
+/// No leídos global (contador del menú; lo actualizan correos y barra).
+pub static NO_LEIDOS: GlobalSignal<i64> = Signal::global(|| 0);
+
+/// Recalcula el contador de no leídos desde la API.
+pub async fn refrescar_no_leidos() {
+    if let Ok(lista) = listar_correos("", true).await {
+        *NO_LEIDOS.write() = lista.len() as i64;
+    }
+}
+
+/// Lista eventos con búsqueda opcional.
+pub async fn listar_eventos(busqueda: &str) -> Result<Vec<Evento>, String> {
+    let ruta = if busqueda.trim().is_empty() {
+        "/api/eventos?limite=100".to_string()
+    } else {
+        format!("/api/eventos?busqueda={}&limite=100", busqueda.trim())
+    };
+    obtener_json(&ruta).await
+}
+
+/// Eventos que tocan el mes indicado (para la rejilla del calendario).
+pub async fn eventos_mes(ano: i32, mes: u32) -> Result<Vec<Evento>, String> {
+    obtener_json(&format!("/api/eventos/mes?ano={ano}&mes={mes}")).await
+}
+
+/// Crea un evento vía `crear_evento()`.
+pub async fn crear_evento(datos: &CrearEvento) -> Result<Evento, String> {
+    enviar_json("POST", "/api/eventos", datos).await
+}
+
+/// Actualiza un evento.
+pub async fn actualizar_evento(id: Uuid, datos: &CrearEvento) -> Result<Evento, String> {
+    enviar_json("PATCH", &format!("/api/eventos/{id}"), datos).await
+}
+
+/// Elimina un evento.
+pub async fn eliminar_evento(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/eventos/{id}")).await
+}
+
+/// Eventos vinculados a un alumno (para su ficha).
+pub async fn eventos_de_alumno(alumno_id: Uuid) -> Result<Vec<Evento>, String> {
+    let todos = listar_eventos("").await?;
+    Ok(todos.into_iter().filter(|e| e.alumno_id == Some(alumno_id)).collect())
+}
+
+/// Eventos vinculados a un apoderado (para su ficha).
+pub async fn eventos_de_apoderado(apoderado_id: Uuid) -> Result<Vec<Evento>, String> {
+    let todos = listar_eventos("").await?;
+    Ok(todos
+        .into_iter()
+        .filter(|e| e.apoderado_id == Some(apoderado_id))
+        .collect())
+}
+
+/// Lista correos con búsqueda y filtro de no leídos opcionales.
+pub async fn listar_correos(busqueda: &str, no_leidos: bool) -> Result<Vec<Correo>, String> {
+    let mut ruta = String::from("/api/correos?limite=100");
+    if no_leidos {
+        ruta.push_str("&no_leidos=true");
+    }
+    if !busqueda.trim().is_empty() {
+        ruta.push_str(&format!("&busqueda={}", busqueda.trim()));
+    }
+    obtener_json(&ruta).await
+}
+
+/// Registra un correo vía `crear_correo()`.
+pub async fn crear_correo(datos: &CrearCorreo) -> Result<Correo, String> {
+    let creado: Correo = enviar_json("POST", "/api/correos", datos).await?;
+    *NO_LEIDOS.write() = NO_LEIDOS() + 1;
+    Ok(creado)
+}
+
+/// Marca un correo como leído (o no leído) y ajusta el contador.
+pub async fn marcar_correo(id: Uuid, leido: bool) -> Result<Correo, String> {
+    let marcado: Correo = enviar_json(
+        "PATCH",
+        &format!("/api/correos/{id}/leido"),
+        &serde_json::json!({ "leido": leido }),
+    )
+    .await?;
+    refrescar_no_leidos().await;
+    Ok(marcado)
+}
+
+/// Elimina un correo.
+pub async fn eliminar_correo(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/correos/{id}")).await?;
+    refrescar_no_leidos().await;
+    Ok(())
+}
+
+/// Correos vinculados a un alumno (para su ficha).
+pub async fn correos_de_alumno(alumno_id: Uuid) -> Result<Vec<Correo>, String> {
+    let todos = listar_correos("", false).await?;
+    Ok(todos.into_iter().filter(|c| c.alumno_id == Some(alumno_id)).collect())
+}
+
+/// Correos vinculados a un apoderado (para su ficha).
+pub async fn correos_de_apoderado(apoderado_id: Uuid) -> Result<Vec<Correo>, String> {
+    let todos = listar_correos("", false).await?;
+    Ok(todos
+        .into_iter()
+        .filter(|c| c.apoderado_id == Some(apoderado_id))
+        .collect())
 }

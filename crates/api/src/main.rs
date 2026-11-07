@@ -14,6 +14,8 @@ mod errores;
 mod rutas_alumnos;
 mod rutas_apoderados;
 mod rutas_colegios;
+mod rutas_correos;
+mod rutas_eventos;
 mod rutas_notas;
 mod rutas_oportunidades;
 mod rutas_personas;
@@ -161,6 +163,32 @@ async fn main() {
             get(rutas_notas::obtener)
                 .patch(rutas_notas::actualizar)
                 .delete(rutas_notas::eliminar),
+        )
+        .route(
+            "/api/eventos",
+            get(rutas_eventos::listar).post(rutas_eventos::crear),
+        )
+        .route(
+            "/api/eventos/mes",
+            get(rutas_eventos::listar_mes),
+        )
+        .route(
+            "/api/eventos/{id}",
+            get(rutas_eventos::obtener)
+                .patch(rutas_eventos::actualizar)
+                .delete(rutas_eventos::eliminar),
+        )
+        .route(
+            "/api/correos",
+            get(rutas_correos::listar).post(rutas_correos::crear),
+        )
+        .route(
+            "/api/correos/{id}",
+            get(rutas_correos::obtener).delete(rutas_correos::eliminar),
+        )
+        .route(
+            "/api/correos/{id}/leido",
+            axum::routing::patch(rutas_correos::marcar),
         )
         // Alias en inglés (protegidos igual que sus pares).
         .route("/api/people", get(rutas_personas::listar))

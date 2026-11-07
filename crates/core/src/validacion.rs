@@ -1,7 +1,7 @@
 //! Validación pura del dominio con mensajes en español.
 //! Se usa tanto en la API (antes de llamar a PostgreSQL) como en el frontal.
 
-use super::dominio::{CrearAlumno, CrearApoderado, CrearColegio, CrearNota, CrearOportunidad, CrearPersona, CrearTarea};
+use super::dominio::{CrearAlumno, CrearApoderado, CrearColegio, CrearCorreo, CrearEvento, CrearNota, CrearOportunidad, CrearPersona, CrearTarea};
 use thiserror::Error;
 
 /// Error de dominio con mensaje listo para mostrar al usuario.
@@ -199,6 +199,32 @@ pub fn validar_nota(mut entrada: CrearNota) -> Result<CrearNota, ErrorDominio> {
     Ok(entrada)
 }
 
+/// Valida un evento completo (título y fin posterior al inicio).
+pub fn validar_evento(mut entrada: CrearEvento) -> Result<CrearEvento, ErrorDominio> {
+    entrada.titulo = exigir_texto(&entrada.titulo, "título", 200)?;
+    entrada.lugar = limpio(&entrada.lugar);
+    entrada.descripcion = limpio(&entrada.descripcion);
+    if entrada.fin < entrada.inicio {
+        return Err(ErrorDominio::Validacion(
+            "El fin no puede ser anterior al inicio.".into(),
+        ));
+    }
+    Ok(entrada)
+}
+
+/// Valida un correo completo (remitente válido y contenido obligatorio).
+pub fn validar_correo(mut entrada: CrearCorreo) -> Result<CrearCorreo, ErrorDominio> {
+    entrada.asunto = limpio(&entrada.asunto);
+    entrada.cuerpo = exigir_texto(&entrada.cuerpo, "contenido", 5000)?;
+    entrada.remitente = limpio(&entrada.remitente).to_lowercase();
+    if !correo_valido(&entrada.remitente) {
+        return Err(ErrorDominio::Validacion(
+            "El remitente no es un correo válido.".into(),
+        ));
+    }
+    Ok(entrada)
+}
+
 /// Valida una oportunidad completa.
 pub fn validar_oportunidad(mut entrada: CrearOportunidad) -> Result<CrearOportunidad, ErrorDominio> {
     entrada.nombre = exigir_texto(&entrada.nombre, "nombre", 200)?;
@@ -302,6 +328,45 @@ mod pruebas {
             oportunidad_id: None,
         };
         assert!(validar_nota(nota).is_ok());
+    }
+
+    #[test]
+    fn valida_evento_y_correo() {
+        let ahora = chrono::Utc::now();
+        let evento = CrearEvento {
+            titulo: "Entrevista familiar".into(),
+            inicio: ahora,
+            fin: ahora + chrono::Duration::hours(1),
+            lugar: "Oficina".into(),
+            descripcion: "".into(),
+            alumno_id: None,
+            apoderado_id: None,
+            oportunidad_id: None,
+        };
+        assert!(validar_evento(evento.clone()).is_ok());
+        let invertido = CrearEvento {
+            fin: ahora - chrono::Duration::hours(1),
+            ..evento
+        };
+        assert!(validar_evento(invertido).is_err());
+        let correo = CrearCorreo {
+            asunto: "Bienvenida".into(),
+            cuerpo: "Hola.".into(),
+            remitente: "colegio@test.cl".into(),
+            alumno_id: None,
+            apoderado_id: None,
+            oportunidad_id: None,
+        };
+        assert!(validar_correo(correo).is_ok());
+        let malo = CrearCorreo {
+            asunto: "".into(),
+            cuerpo: "Hola.".into(),
+            remitente: "no-es-correo".into(),
+            alumno_id: None,
+            apoderado_id: None,
+            oportunidad_id: None,
+        };
+        assert!(validar_correo(malo).is_err());
     }
 
     #[test]

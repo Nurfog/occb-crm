@@ -146,3 +146,35 @@ pub fn fila_a_nota(fila: &sqlx::postgres::PgRow) -> occb_core::Nota {
         creado_en: fila.get("creado_en"),
     }
 }
+
+/// Fila de evento; inicio y fin se leen como timestamptz.
+pub fn fila_a_evento(fila: &sqlx::postgres::PgRow) -> occb_core::Evento {
+    occb_core::Evento {
+        id: fila.get("id"),
+        titulo: fila.get("titulo"),
+        inicio: fila.get("inicio"),
+        fin: fila.get("fin"),
+        lugar: fila.get::<String, _>("lugar"),
+        descripcion: fila.get::<String, _>("descripcion"),
+        alumno_id: fila.get::<Option<uuid::Uuid>, _>("alumno_id"),
+        apoderado_id: fila.get::<Option<uuid::Uuid>, _>("apoderado_id"),
+        oportunidad_id: fila.get::<Option<uuid::Uuid>, _>("oportunidad_id"),
+        creado_en: fila.get("creado_en"),
+    }
+}
+
+/// Fila de correo de la bandeja.
+pub fn fila_a_correo(fila: &sqlx::postgres::PgRow) -> occb_core::Correo {
+    occb_core::Correo {
+        id: fila.get("id"),
+        asunto: fila.get::<String, _>("asunto"),
+        cuerpo: fila.get("cuerpo"),
+        remitente: fila.get("remitente"),
+        alumno_id: fila.get::<Option<uuid::Uuid>, _>("alumno_id"),
+        apoderado_id: fila.get::<Option<uuid::Uuid>, _>("apoderado_id"),
+        oportunidad_id: fila.get::<Option<uuid::Uuid>, _>("oportunidad_id"),
+        leido: fila.get("leido"),
+        recibido_en: fila.get("recibido_en"),
+        creado_en: fila.get("creado_en"),
+    }
+}

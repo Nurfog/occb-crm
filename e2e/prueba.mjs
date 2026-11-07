@@ -701,6 +701,138 @@ t = await texto();
 afirma(t.includes(E2E_CORREO_MIN), 'miembros muestra la lista del espacio');
 afirma(!t.includes('Hacer admin') && !t.includes('Quitar admin'), 'miembro no ve botones de rol');
 
+// --- 19. Eventos y correos por API: validaciones y mes ---
+const EV_TIT = `Evento ${SELLO}`;
+const evCreado = await (await api(`${API}/api/eventos`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ titulo: EV_TIT, inicio: '2026-11-20T15:00:00Z', fin: '2026-11-20T16:00:00Z', lugar: 'Oficina' }),
+})).json();
+afirma(!!evCreado.id, 'evento se crea por API');
+const evMal = await (await api(`${API}/api/eventos`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ titulo: 'X', inicio: '2026-11-20T16:00:00Z', fin: '2026-11-20T15:00:00Z' }),
+})).json();
+afirma(evMal.codigo === 'datos_invalidos', 'evento con fin anterior se rechaza');
+const evMes = await (await api(`${API}/api/eventos/mes?ano=2026&mes=11`)).json();
+afirma(evMes.some((e) => e.id === evCreado.id), 'evento aparece en su mes');
+const evMesMal = await (await api(`${API}/api/eventos/mes?ano=2026&mes=13`)).json();
+afirma(evMesMal.codigo === 'datos_invalidos', 'mes 13 se rechaza');
+const COR_ASUNTO = `Correo ${SELLO}`;
+const corCreado = await (await api(`${API}/api/correos`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ asunto: COR_ASUNTO, cuerpo: 'Hola', remitente: 'colegio@test.cl' }),
+})).json();
+afirma(!!corCreado.id && corCreado.leido === false, 'correo nace no leído');
+const corMal = await (await api(`${API}/api/correos`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ cuerpo: 'x', remitente: 'mal' }),
+})).json();
+afirma(corMal.codigo === 'datos_invalidos', 'remitente inválido se rechaza');
+const corLeido = await (await api(`${API}/api/correos/${corCreado.id}/leido`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({}),
+})).json();
+afirma(corLeido.leido === true, 'marcar leído persiste');
+const soloLeidos = await (await api(`${API}/api/correos?no_leidos=true`)).json();
+afirma(!soloLeidos.some((c) => c.id === corCreado.id), 'leído sale del filtro no leídos');
+await api(`${API}/api/eventos/${evCreado.id}`, { method: 'DELETE' });
+await api(`${API}/api/correos/${corCreado.id}`, { method: 'DELETE' });
+
+// --- 20. Evento por UI aparece en su día ---
+const TIT_EV = `UI Evento ${SELLO}`;
+const ahora = new Date();
+const YM = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-15`;
+await ir('/calendario');
+await esperarCondicion(`!!document.querySelector('.cal-grid')`);
+await evaluar(`[...document.querySelectorAll('.cal-bar button')].find(b => b.textContent.includes('Nuevo evento')).click()`);
+await dormir(800);
+await evaluar(`
+  (() => {
+    const inputs = document.querySelectorAll('.panel.form input');
+    const set = (el, v) => { el.focus(); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    set(inputs[0], ${JSON.stringify(TIT_EV)});
+    set(inputs[1], ${JSON.stringify(`${YM}T10:00`)});
+    set(inputs[2], ${JSON.stringify(`${YM}T11:00`)});
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Guardar')).click()`);
+const evEnDia = await esperarCondicion(`(() => {
+  const celda = document.querySelector(${JSON.stringify(`[data-dia="${YM}"]`)});
+  return celda && celda.textContent.includes(${JSON.stringify(TIT_EV)});
+})()`);
+afirma(evEnDia, 'evento creado por UI aparece en su día');
+const evUi = await (await api(`${API}/api/eventos?busqueda=${encodeURIComponent(TIT_EV)}`)).json();
+afirma(evUi.length === 1, 'evento de UI persiste en PG');
+
+// --- 21. Correo vinculado por UI aparece en ficha de apoderado + leído ---
+const RUT_APO4 = '22222222-2';
+const apo4 = await (await api(`${API}/api/apoderados`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: RUT_APO4, nombres: 'Correo', apellidos: `E2E ${SELLO}` }),
+})).json();
+const ASUNTO_UI = `UI Asunto ${SELLO}`;
+await ir('/correos');
+await esperarCondicion(`!!document.querySelector('.cal-bar button')`);
+await evaluar(`[...document.querySelectorAll('.cal-bar button')].find(b => b.textContent.includes('Redactar')).click()`);
+await dormir(800);
+await evaluar(`
+  (() => {
+    const inputs = document.querySelectorAll('.panel.form input');
+    const set = (el, v) => { el.focus(); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    set(inputs[0], ${JSON.stringify(ASUNTO_UI)});
+    set(inputs[1], 'apoderado@test.cl');
+    set(inputs[2], 'Reunión el viernes');
+    const sels = document.querySelectorAll('.panel.form select');
+    sels[1].value = ${JSON.stringify(apo4.id)};
+    sels[1].dispatchEvent(new Event('change', { bubbles: true }));
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Guardar')).click()`);
+const corEnBandeja = await esperarCondicion(`(() => [...document.querySelectorAll('[data-correo]')].some(f => f.textContent.includes(${JSON.stringify(ASUNTO_UI)})))`);
+afirma(corEnBandeja, 'correo redactado aparece en la bandeja');
+// Abrirlo lo marca leído (reintenta el clic si el lector tarda).
+let lectorOk = false;
+for (let i = 0; i < 3 && !lectorOk; i++) {
+  await evaluar(`[...document.querySelectorAll('[data-correo]')].find(f => f.textContent.includes(${JSON.stringify(ASUNTO_UI)})).click()`);
+  lectorOk = await esperarCondicion(`document.body.textContent.includes('Reunión el viernes')`, 8000);
+}
+afirma(lectorOk, 'abrir correo muestra el lector');
+let corUi = [];
+for (let i = 0; i < 12; i++) {
+  await dormir(1000);
+  corUi = await (await api(`${API}/api/correos?busqueda=${encodeURIComponent(ASUNTO_UI)}`)).json();
+  if (corUi.length === 1 && corUi[0].leido === true) break;
+}
+afirma(corUi.length === 1 && corUi[0].leido === true, 'abrir correo lo marca leído en PG');
+// Vinculado: se ve en la ficha del apoderado.
+await ir(`/apoderados/${apo4.id}`);
+await esperarCondicion(`document.body.textContent.includes(${JSON.stringify(ASUNTO_UI)})`);
+t = await texto();
+afirma(t.includes(ASUNTO_UI), 'correo vinculado aparece en ficha de apoderado');
+await api(`${API}/api/correos/${corUi[0].id}`, { method: 'DELETE' });
+await api(`${API}/api/apoderados/${apo4.id}`, { method: 'DELETE' });
+await api(`${API}/api/eventos/${evUi[0].id}`, { method: 'DELETE' });
+
+// --- 22. Contador de no leídos en el menú ---
+const corBadge = await (await api(`${API}/api/correos`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ asunto: `Badge ${SELLO}`, cuerpo: 'x', remitente: 'colegio@test.cl' }),
+})).json();
+await ir('/correos');
+const badge = await esperarCondicion(`(() => {
+  const link = [...document.querySelectorAll('.side-item')].find(e => e.textContent.includes('Correos'));
+  return link && /[1-9]/.test(link.textContent);
+})()`);
+afirma(badge, 'menú muestra contador de no leídos');
+await api(`${API}/api/correos/${corBadge.id}`, { method: 'DELETE' });
+
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();
 try {

@@ -9,10 +9,12 @@ mod cliente;
 
 use dioxus::prelude::*;
 use uuid::Uuid;
+use chrono::Datelike;
 use occb_core::{
-    Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearNota, CrearOportunidad,
-    CrearPersona, CrearTarea, EstadoAlumno, EstadoTarea, EtapaOportunidad, Idioma, Nota,
-    Oportunidad, Persona, Tarea, Traslado, calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
+    Alumno, Apoderado, Colegio, Correo, CrearAlumno, CrearApoderado, CrearCorreo, CrearEvento,
+    CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno, EstadoTarea,
+    EtapaOportunidad, Evento, Idioma, Nota, Oportunidad, Persona, Tarea, Traslado,
+    calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
     datos_semilla_colegios, datos_semilla_notas, datos_semilla_oportunidades,
     datos_semilla_personas, datos_semilla_tareas, textos,
 };
@@ -76,6 +78,10 @@ enum Ruta {
         VistaOportunidades {},
         #[route("/miembros")]
         VistaMiembros {},
+        #[route("/calendario")]
+        VistaCalendario {},
+        #[route("/correos")]
+        VistaCorreos {},
         #[route("/ajustes")]
         VistaAjustes {},
     #[route("/:..segmentos")]
@@ -154,6 +160,13 @@ fn BarraLateral() -> Element {
     let t = textos(IDIOMA());
     let nav = use_navigator();
     let sesion = cliente::SESION();
+    use_effect(move || {
+        if cliente::SESION().is_some() {
+            spawn(async move {
+                cliente::refrescar_no_leidos().await;
+            });
+        }
+    });
     let salir = move |_| {
         spawn(async move {
             let _ = cliente::cerrar_sesion().await;
@@ -215,6 +228,17 @@ fn BarraLateral() -> Element {
                 Link { to: Ruta::VistaMiembros {}, class: "side-item",
                     span { class: "ico ico-personas", "👥" }
                     span { "{t.miembros}" }
+                }
+                Link { to: Ruta::VistaCalendario {}, class: "side-item",
+                    span { class: "ico ico-notas", "📅" }
+                    span { "{t.calendario}" }
+                }
+                Link { to: Ruta::VistaCorreos {}, class: "side-item",
+                    span { class: "ico ico-notas", "✉" }
+                    span { "{t.correos}" }
+                    if cliente::NO_LEIDOS() > 0 {
+                        span { class: "count", "{cliente::NO_LEIDOS()}" }
+                    }
                 }
                 div { class: "side-item dim",
                     span { class: "ico", "⚙" }
@@ -1494,6 +1518,8 @@ fn DetalleAlumno(id: Uuid) -> Element {
     let mut colegio_nombre = use_signal(String::new);
     let mut rel_tareas = use_signal(Vec::<Tarea>::new);
     let mut rel_notas = use_signal(Vec::<Nota>::new);
+    let mut rel_eventos = use_signal(Vec::<Evento>::new);
+    let mut rel_correos = use_signal(Vec::<Correo>::new);
 
     // Sigue al id de la ruta: si cambia, recarga.
     let mut id_actual = use_signal(|| id);
@@ -1536,6 +1562,12 @@ fn DetalleAlumno(id: Uuid) -> Element {
                         }
                         if let Ok(lista) = cliente::notas_de_alumno(pid).await {
                             rel_notas.set(lista);
+                        }
+                        if let Ok(lista) = cliente::eventos_de_alumno(pid).await {
+                            rel_eventos.set(lista);
+                        }
+                        if let Ok(lista) = cliente::correos_de_alumno(pid).await {
+                            rel_correos.set(lista);
                         }
                     });
                     if let Some(rbd) = a.colegio_rbd.clone() {
@@ -1874,6 +1906,36 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
             }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{rel_eventos.read().len()} · {t.calendario}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for e in rel_eventos.read().iter() {
+                    div { class: "mini-row", key: "{e.id}",
+                        span { class: "mini-name", "{e.titulo}" }
+                        span { class: "mini-amt", "{fmt_dia_hora(e.inicio)}" }
+                    }
+                }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{rel_correos.read().len()} · {t.correos}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for c in rel_correos.read().iter() {
+                    div { class: "mini-row", key: "{c.id}",
+                        span { class: "mini-name",
+                            if c.asunto.is_empty() { "(sin asunto)" } else { "{c.asunto}" }
+                        }
+                        span { class: "mini-amt", "{c.remitente}" }
+                    }
+                }
+            }
         }
         }
     }
@@ -2071,6 +2133,8 @@ fn DetalleApoderado(id: Uuid) -> Element {
     let t = textos(idioma);
     let mut apoderado = use_signal(|| None::<Apoderado>);
     let mut vinculados = use_signal(Vec::<cliente::AlumnoVinculado>::new);
+    let mut rel_eventos = use_signal(Vec::<Evento>::new);
+    let mut rel_correos = use_signal(Vec::<Correo>::new);
     let mut aviso = use_signal(String::new);
     let mut listo = use_signal(|| false);
     let mut editando = use_signal(|| false);
@@ -2091,6 +2155,12 @@ fn DetalleApoderado(id: Uuid) -> Element {
         spawn(async move {
             if let Ok(lista) = cliente::alumnos_de_apoderado(pid).await {
                 vinculados.set(lista);
+            }
+            if let Ok(lista) = cliente::eventos_de_apoderado(pid).await {
+                rel_eventos.set(lista);
+            }
+            if let Ok(lista) = cliente::correos_de_apoderado(pid).await {
+                rel_correos.set(lista);
             }
         });
     };
@@ -2213,6 +2283,36 @@ fn DetalleApoderado(id: Uuid) -> Element {
                             }
                         }
                         span { class: "mini-amt", "{v.rut} · {v.curso} · {v.vinculo}" }
+                    }
+                }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{rel_eventos.read().len()} · {t.calendario}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for e in rel_eventos.read().iter() {
+                    div { class: "mini-row", key: "{e.id}",
+                        span { class: "mini-name", "{e.titulo}" }
+                        span { class: "mini-amt", "{fmt_dia_hora(e.inicio)}" }
+                    }
+                }
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{rel_correos.read().len()} · {t.correos}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for c in rel_correos.read().iter() {
+                    div { class: "mini-row", key: "{c.id}",
+                        span { class: "mini-name",
+                            if c.asunto.is_empty() { "(sin asunto)" } else { "{c.asunto}" }
+                        }
+                        span { class: "mini-amt", "{c.remitente}" }
                     }
                 }
             }
@@ -2844,6 +2944,688 @@ fn VistaMiembros() -> Element {
                             },
                             "{t.quitar_admin}"
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Convención horaria del frontal: los `datetime-local` se guardan y muestran
+/// en UTC (van y vuelven idénticos; el colegio opera en un solo huso).
+fn a_campo_local(fecha: chrono::DateTime<chrono::Utc>) -> String {
+    fecha.format("%Y-%m-%dT%H:%M").to_string()
+}
+
+/// Hora corta (`15:04`) para eventos y correos.
+fn fmt_hora(fecha: chrono::DateTime<chrono::Utc>) -> String {
+    fecha.format("%H:%M").to_string()
+}
+
+/// Día y hora (`20/11 15:04`) para relacionados y listas.
+fn fmt_dia_hora(fecha: chrono::DateTime<chrono::Utc>) -> String {
+    fecha.format("%d/%m %H:%M").to_string()
+}
+
+/// Fecha completa (`20/11/2026`) para el día seleccionado.
+fn fmt_fecha(fecha: chrono::NaiveDate) -> String {
+    fecha.format("%d/%m/%Y").to_string()
+}
+
+/// Lee un `datetime-local` (`YYYY-MM-DDTHH:MM`) como UTC.
+fn desde_campo_local(valor: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::NaiveDateTime::parse_from_str(&format!("{valor}:00"), "%Y-%m-%dT%H:%M:%S")
+        .ok()
+        .map(|ingenuo| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(ingenuo, chrono::Utc))
+}
+
+/// Recarga los eventos del mes indicado en las señales dadas.
+fn recargar_mes(
+    ano: Signal<i32>,
+    mes: Signal<u32>,
+    mut eventos: Signal<Vec<Evento>>,
+    mut aviso: Signal<String>,
+) {
+    let (a, m) = (ano(), mes());
+    spawn(async move {
+        match cliente::eventos_mes(a, m).await {
+            Ok(lista) => {
+                aviso.set(String::new());
+                eventos.set(lista);
+            }
+            Err(mensaje) => aviso.set(mensaje),
+        }
+    });
+}
+
+/// Mueve el mes visible y deja el día 1 seleccionado.
+fn mover_mes(
+    delta: i32,
+    mut ano: Signal<i32>,
+    mut mes: Signal<u32>,
+    mut dia_sel: Signal<chrono::NaiveDate>,
+    hoy: chrono::NaiveDate,
+) {
+    let (mut a, mut m) = (ano(), mes());
+    if delta < 0 {
+        if m == 1 {
+            a -= 1;
+            m = 12;
+        } else {
+            m -= 1;
+        }
+    } else if m == 12 {
+        a += 1;
+        m = 1;
+    } else {
+        m += 1;
+    }
+    ano.set(a);
+    mes.set(m);
+    dia_sel.set(chrono::NaiveDate::from_ymd_opt(a, m, 1).unwrap_or(hoy));
+}
+
+/// Nombres de mes según idioma.
+fn nombre_mes(mes: u32, idioma: Idioma) -> &'static str {
+    match (mes, idioma) {
+        (1, Idioma::Es) => "enero",
+        (2, Idioma::Es) => "febrero",
+        (3, Idioma::Es) => "marzo",
+        (4, Idioma::Es) => "abril",
+        (5, Idioma::Es) => "mayo",
+        (6, Idioma::Es) => "junio",
+        (7, Idioma::Es) => "julio",
+        (8, Idioma::Es) => "agosto",
+        (9, Idioma::Es) => "septiembre",
+        (10, Idioma::Es) => "octubre",
+        (11, Idioma::Es) => "noviembre",
+        (12, Idioma::Es) => "diciembre",
+        (1, Idioma::En) => "January",
+        (2, Idioma::En) => "February",
+        (3, Idioma::En) => "March",
+        (4, Idioma::En) => "April",
+        (5, Idioma::En) => "May",
+        (6, Idioma::En) => "June",
+        (7, Idioma::En) => "July",
+        (8, Idioma::En) => "August",
+        (9, Idioma::En) => "September",
+        (10, Idioma::En) => "October",
+        (11, Idioma::En) => "November",
+        (12, Idioma::En) => "December",
+        _ => "?",
+    }
+}
+
+/// Vista de calendario: rejilla mensual navegable con alta/edición/baja.
+#[component]
+fn VistaCalendario() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let hoy = chrono::Utc::now().date_naive();
+    let ano = use_signal(|| hoy.year());
+    let mes = use_signal(|| hoy.month());
+    let eventos = use_signal(Vec::<Evento>::new);
+    let mut aviso = use_signal(String::new);
+    let mut dia_sel = use_signal(|| hoy);
+    let mut mostrar_form = use_signal(|| false);
+    let mut editando = use_signal(|| None::<Uuid>);
+    let mut f_titulo = use_signal(String::new);
+    let mut f_inicio = use_signal(String::new);
+    let mut f_fin = use_signal(String::new);
+    let mut f_lugar = use_signal(String::new);
+    let mut f_descripcion = use_signal(String::new);
+    let mut f_alumno = use_signal(String::new);
+    let mut f_apoderado = use_signal(String::new);
+    let mut f_oportunidad = use_signal(String::new);
+    let mut alumnos = use_signal(Vec::<Alumno>::new);
+    let mut apoderados = use_signal(Vec::<Apoderado>::new);
+    let mut oportunidades = use_signal(Vec::<Oportunidad>::new);
+
+    let recargar = move || recargar_mes(ano, mes, eventos, aviso);
+    use_effect(move || {
+        recargar();
+    });
+    use_effect(move || {
+        spawn(async move {
+            if let Ok(l) = cliente::listar_alumnos("", "").await {
+                alumnos.set(l);
+            }
+            if let Ok(l) = cliente::listar_apoderados("").await {
+                apoderados.set(l);
+            }
+            if let Ok(l) = cliente::listar_oportunidades().await {
+                oportunidades.set(l);
+            }
+        });
+    });
+
+    let nuevo = move |_| {
+        editando.set(None);
+        f_titulo.set(String::new());
+        let base = dia_sel().and_hms_opt(9, 0, 0).unwrap_or(
+            hoy.and_hms_opt(9, 0, 0)
+                .unwrap_or(chrono::NaiveDateTime::MIN),
+        );
+        let inicio_utc =
+            chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(base, chrono::Utc);
+        f_inicio.set(a_campo_local(inicio_utc));
+        f_fin.set(a_campo_local(
+            inicio_utc + chrono::Duration::hours(1),
+        ));
+        f_lugar.set(String::new());
+        f_descripcion.set(String::new());
+        f_alumno.set(String::new());
+        f_apoderado.set(String::new());
+        f_oportunidad.set(String::new());
+        aviso.set(String::new());
+        mostrar_form.set(true);
+    };
+
+    let guardar = move |_| {
+        let (inicio, fin) = (
+            desde_campo_local(&f_inicio.read()),
+            desde_campo_local(&f_fin.read()),
+        );
+        let (Some(i), Some(f)) = (inicio, fin) else {
+            aviso.set(if idioma == Idioma::Es {
+                "Fecha no válida.".into()
+            } else {
+                "Invalid date.".into()
+            });
+            return;
+        };
+        let datos = CrearEvento {
+            titulo: f_titulo.read().clone(),
+            inicio: i,
+            fin: f,
+            lugar: f_lugar.read().clone(),
+            descripcion: f_descripcion.read().clone(),
+            alumno_id: uuid::Uuid::parse_str(&f_alumno.read()).ok(),
+            apoderado_id: uuid::Uuid::parse_str(&f_apoderado.read()).ok(),
+            oportunidad_id: uuid::Uuid::parse_str(&f_oportunidad.read()).ok(),
+        };
+        let eid = *editando.read();
+        spawn(async move {
+            let resultado: Result<Evento, String> = if let Some(id) = eid {
+                cliente::actualizar_evento(id, &datos).await
+            } else {
+                cliente::crear_evento(&datos).await
+            };
+            match resultado {
+                Ok(_) => {
+                    mostrar_form.set(false);
+                    recargar();
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    // Rejilla: lunes primero; celdas vacías antes del día 1.
+    let primero = chrono::NaiveDate::from_ymd_opt(ano(), mes(), 1).unwrap_or(hoy);
+    let (siguiente_ano, siguiente_mes) = if mes() == 12 {
+        (ano() + 1, 1)
+    } else {
+        (ano(), mes() + 1)
+    };
+    let dias_mes = chrono::NaiveDate::from_ymd_opt(siguiente_ano, siguiente_mes, 1)
+        .unwrap_or(primero)
+        .pred_opt()
+        .unwrap_or(primero)
+        .day();
+    let desplazamiento = primero.weekday().num_days_from_monday() as usize;
+    let dias_semana = if idioma == Idioma::Es {
+        ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
+    } else {
+        ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    };
+
+    let eventos_del_dia: Vec<Evento> = eventos
+        .read()
+        .iter()
+        .filter(|e| e.inicio.date_naive() <= dia_sel() && e.fin.date_naive() >= dia_sel())
+        .cloned()
+        .collect();
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.calendario.to_string(),
+            subtitulo: format!("{} {}", nombre_mes(mes(), idioma), ano()),
+        }
+        if !aviso.read().is_empty() {
+            p { class: "form-error", "{aviso}" }
+        }
+        div { class: "panel",
+            div { class: "cal-bar",
+                button { class: "btn-mini", onclick: move |_| mover_mes(-1, ano, mes, dia_sel, hoy), "←" }
+                span { class: "cal-titulo", "{nombre_mes(mes(), idioma)} {ano()}" }
+                button { class: "btn-mini", onclick: move |_| mover_mes(1, ano, mes, dia_sel, hoy), "→" }
+                button { class: "btn-mini", onclick: nuevo, "{t.nuevo_evento}" }
+            }
+            div { class: "cal-grid",
+                for d in dias_semana {
+                    div { class: "cal-nombre", "{d}" }
+                }
+                for i in 0..(desplazamiento + dias_mes as usize) {
+                    if i < desplazamiento {
+                        div { class: "cal-dia vacio" }
+                    } else {
+                        {
+                            let dia = chrono::NaiveDate::from_ymd_opt(ano(), mes(), (i - desplazamiento + 1) as u32).unwrap_or(hoy);
+                            let del_dia: Vec<(Uuid, String)> = eventos.read().iter().filter(|e| e.inicio.date_naive() <= dia && e.fin.date_naive() >= dia).take(3).map(|e| (e.id, e.titulo.clone())).collect();
+                            let clase = if dia == dia_sel() { "cal-dia sel" } else { "cal-dia" };
+                            rsx! {
+                                div {
+                                    class: "{clase}",
+                                    key: "{dia}",
+                                    "data-dia": "{dia}",
+                                    onclick: move |_| dia_sel.set(dia),
+                                    span { class: "cal-num", "{dia.day()}" }
+                                    for (eid, titulo) in del_dia.iter() {
+                                        div { class: "cal-punto", key: "{eid}", "{titulo}" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        div { class: "panel",
+            div { class: "panel-head",
+                span { class: "panel-title",
+                    "{fmt_fecha(dia_sel())} · {eventos_del_dia.len()}"
+                }
+            }
+            if eventos_del_dia.is_empty() {
+                p { class: "muted", "{t.sin_eventos_dia}" }
+            }
+            for e in eventos_del_dia {
+                div { class: "mini-row", key: "{e.id}",
+                    span { class: "mini-name",
+                        "{fmt_hora(e.inicio)}-{fmt_hora(e.fin)} {e.titulo}"
+                    }
+                    span { class: "mini-amt", "{e.lugar}" }
+                    button {
+                        class: "btn-mini",
+                        onclick: {
+                            let ev = e.clone();
+                            move |_| {
+                                editando.set(Some(ev.id));
+                                f_titulo.set(ev.titulo.clone());
+                                f_inicio.set(a_campo_local(ev.inicio));
+                                f_fin.set(a_campo_local(ev.fin));
+                                f_lugar.set(ev.lugar.clone());
+                                f_descripcion.set(ev.descripcion.clone());
+                                f_alumno.set(ev.alumno_id.map(|v| v.to_string()).unwrap_or_default());
+                                f_apoderado.set(ev.apoderado_id.map(|v| v.to_string()).unwrap_or_default());
+                                f_oportunidad.set(ev.oportunidad_id.map(|v| v.to_string()).unwrap_or_default());
+                                mostrar_form.set(true);
+                            }
+                        },
+                        "✎"
+                    }
+                    button {
+                        class: "btn-mini",
+                        onclick: {
+                            let id = e.id;
+                            move |_| {
+                                spawn(async move {
+                                    match cliente::eliminar_evento(id).await {
+                                        Ok(()) => recargar(),
+                                        Err(mensaje) => aviso.set(mensaje),
+                                    }
+                                });
+                            }
+                        },
+                        "✕"
+                    }
+                }
+            }
+        }
+        if *mostrar_form.read() {
+            div { class: "panel form",
+                div { class: "campo",
+                    label { "{t.nuevo_evento}" }
+                    input {
+                        class: "input",
+                        value: "{f_titulo}",
+                        oninput: move |e| f_titulo.set(e.value()),
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.inicio}" }
+                    input {
+                        class: "input",
+                        r#type: "datetime-local",
+                        value: "{f_inicio}",
+                        oninput: move |e| f_inicio.set(e.value()),
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.fin}" }
+                    input {
+                        class: "input",
+                        r#type: "datetime-local",
+                        value: "{f_fin}",
+                        oninput: move |e| f_fin.set(e.value()),
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.lugar}" }
+                    input {
+                        class: "input",
+                        value: "{f_lugar}",
+                        oninput: move |e| f_lugar.set(e.value()),
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.descripcion}" }
+                    input {
+                        class: "input",
+                        value: "{f_descripcion}",
+                        oninput: move |e| f_descripcion.set(e.value()),
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.alumnos}" }
+                    select {
+                        class: "input",
+                        value: "{f_alumno}",
+                        onchange: move |e| f_alumno.set(e.value()),
+                        option { value: "", "—" }
+                        for a in alumnos.read().iter() {
+                            option { value: "{a.id}", "{a.nombres} {a.apellidos}" }
+                        }
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.apoderados}" }
+                    select {
+                        class: "input",
+                        value: "{f_apoderado}",
+                        onchange: move |e| f_apoderado.set(e.value()),
+                        option { value: "", "—" }
+                        for a in apoderados.read().iter() {
+                            option { value: "{a.id}", "{a.nombres} {a.apellidos}" }
+                        }
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.oportunidades}" }
+                    select {
+                        class: "input",
+                        value: "{f_oportunidad}",
+                        onchange: move |e| f_oportunidad.set(e.value()),
+                        option { value: "", "—" }
+                        for o in oportunidades.read().iter() {
+                            option { value: "{o.id}", "{o.nombre}" }
+                        }
+                    }
+                }
+                div { class: "campo campo-btn",
+                    button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
+                    button {
+                        class: "btn-mini",
+                        onclick: move |_| mostrar_form.set(false),
+                        "✕"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Vista de correos: bandeja con no leídos, lector y redacción vinculada.
+#[component]
+fn VistaCorreos() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut correos = use_signal(Vec::<Correo>::new);
+    let mut busqueda = use_signal(String::new);
+    let mut solo_no_leidos = use_signal(|| false);
+    let mut seleccionado = use_signal(|| None::<Uuid>);
+    let mut aviso = use_signal(String::new);
+    let mut mostrar_form = use_signal(|| false);
+    let mut c_asunto = use_signal(String::new);
+    let mut c_cuerpo = use_signal(String::new);
+    let mut c_remitente = use_signal(String::new);
+    let mut c_alumno = use_signal(String::new);
+    let mut c_apoderado = use_signal(String::new);
+    let mut c_oportunidad = use_signal(String::new);
+    let mut alumnos = use_signal(Vec::<Alumno>::new);
+    let mut apoderados = use_signal(Vec::<Apoderado>::new);
+    let mut oportunidades = use_signal(Vec::<Oportunidad>::new);
+
+    let recargar = move || {
+        let (b, nl) = (busqueda.peek().clone(), solo_no_leidos());
+        spawn(async move {
+            match cliente::listar_correos(&b, nl).await {
+                Ok(lista) => {
+                    aviso.set(String::new());
+                    correos.set(lista);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+    use_effect(move || {
+        solo_no_leidos();
+        recargar();
+    });
+    use_effect(move || {
+        spawn(async move {
+            if let Ok(l) = cliente::listar_alumnos("", "").await {
+                alumnos.set(l);
+            }
+            if let Ok(l) = cliente::listar_apoderados("").await {
+                apoderados.set(l);
+            }
+            if let Ok(l) = cliente::listar_oportunidades().await {
+                oportunidades.set(l);
+            }
+        });
+    });
+
+    let mut abrir = move |id: Uuid| {
+        seleccionado.set(Some(id));
+        spawn(async move {
+            match cliente::marcar_correo(id, true).await {
+                Ok(marcado) => {
+                    if let Some(f) = correos.write().iter_mut().find(|x| x.id == id) {
+                        f.leido = marcado.leido;
+                    }
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let alternar_leido = move |_| {
+        let Some(id) = *seleccionado.read() else {
+            return;
+        };
+        let actual = correos
+            .read()
+            .iter()
+            .find(|x| x.id == id)
+            .map(|x| x.leido)
+            .unwrap_or(true);
+        spawn(async move {
+            match cliente::marcar_correo(id, !actual).await {
+                Ok(marcado) => {
+                    if let Some(f) = correos.write().iter_mut().find(|x| x.id == id) {
+                        f.leido = marcado.leido;
+                    }
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let eliminar = move |_| {
+        let Some(id) = *seleccionado.read() else {
+            return;
+        };
+        spawn(async move {
+            match cliente::eliminar_correo(id).await {
+                Ok(()) => {
+                    seleccionado.set(None);
+                    recargar();
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let enviar = move |_| {
+        let datos = CrearCorreo {
+            asunto: c_asunto.read().clone(),
+            cuerpo: c_cuerpo.read().clone(),
+            remitente: c_remitente.read().clone(),
+            alumno_id: uuid::Uuid::parse_str(&c_alumno.read()).ok(),
+            apoderado_id: uuid::Uuid::parse_str(&c_apoderado.read()).ok(),
+            oportunidad_id: uuid::Uuid::parse_str(&c_oportunidad.read()).ok(),
+        };
+        spawn(async move {
+            match cliente::crear_correo(&datos).await {
+                Ok(_) => {
+                    c_asunto.set(String::new());
+                    c_cuerpo.set(String::new());
+                    c_remitente.set(String::new());
+                    c_alumno.set(String::new());
+                    c_apoderado.set(String::new());
+                    c_oportunidad.set(String::new());
+                    mostrar_form.set(false);
+                    recargar();
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
+    let en_lector: Option<Correo> = seleccionado()
+        .and_then(|id| correos.read().iter().find(|x| x.id == id).cloned());
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.correos.to_string(),
+            subtitulo: format!("{} · {}", correos.read().len(), t.correos),
+        }
+        if !aviso.read().is_empty() {
+            p { class: "form-error", "{aviso}" }
+        }
+        div { class: "panel",
+            div { class: "cal-bar",
+                input {
+                    class: "input",
+                    value: "{busqueda}",
+                    oninput: move |e| busqueda.set(e.value()),
+                }
+                button { class: "btn-mini", onclick: move |_| recargar(), "{t.filtrar}" }
+                button {
+                    class: if solo_no_leidos() { "btn-mini active" } else { "btn-mini" },
+                    onclick: move |_| solo_no_leidos.set(!solo_no_leidos()),
+                    "{t.solo_no_leidos}"
+                }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| mostrar_form.set(true),
+                    "{t.redactar}"
+                }
+            }
+            for c in correos.read().iter() {
+                div {
+                    class: if c.leido { "mini-row" } else { "mini-row unread" },
+                    key: "{c.id}",
+                    "data-correo": "{c.id}",
+                    onclick: {
+                        let id = c.id;
+                        move |_| abrir(id)
+                    },
+                    span { class: "avatar", "{c.remitente.chars().next().unwrap_or('·')}" }
+                    span { class: "mini-name",
+                        if c.asunto.is_empty() { "(sin asunto)" } else { "{c.asunto}" }
+                    }
+                    span { class: "mini-amt", "{c.remitente} · {fmt_dia_hora(c.recibido_en)}" }
+                }
+            }
+        }
+        if let Some(lector) = en_lector {
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title", "{lector.asunto}" }
+                    span { class: "mini-amt", "{lector.remitente}" }
+                }
+                p { "{lector.cuerpo}" }
+                p { class: "muted",
+                    "{fmt_dia_hora(lector.recibido_en)}"
+                }
+                div { class: "cal-bar",
+                    button { class: "btn-mini", onclick: alternar_leido,
+                        if lector.leido { "{t.marcar_no_leido}" } else { "{t.marcar_leido}" }
+                    }
+                    button { class: "btn-mini", onclick: eliminar, "✕" }
+                }
+            }
+        }
+        if *mostrar_form.read() {
+            div { class: "panel form",
+                div { class: "campo",
+                    label { "{t.asunto}" }
+                    input {
+                        class: "input",
+                        value: "{c_asunto}",
+                        oninput: move |e| c_asunto.set(e.value()),
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.remitente}" }
+                    input {
+                        class: "input",
+                        r#type: "email",
+                        value: "{c_remitente}",
+                        oninput: move |e| c_remitente.set(e.value()),
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.descripcion}" }
+                    input {
+                        class: "input",
+                        value: "{c_cuerpo}",
+                        oninput: move |e| c_cuerpo.set(e.value()),
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.alumnos}" }
+                    select {
+                        class: "input",
+                        value: "{c_alumno}",
+                        onchange: move |e| c_alumno.set(e.value()),
+                        option { value: "", "—" }
+                        for a in alumnos.read().iter() {
+                            option { value: "{a.id}", "{a.nombres} {a.apellidos}" }
+                        }
+                    }
+                }
+                div { class: "campo",
+                    label { "{t.apoderados}" }
+                    select {
+                        class: "input",
+                        value: "{c_apoderado}",
+                        onchange: move |e| c_apoderado.set(e.value()),
+                        option { value: "", "—" }
+                        for a in apoderados.read().iter() {
+                            option { value: "{a.id}", "{a.nombres} {a.apellidos}" }
+                        }
+                    }
+                }
+                div { class: "campo campo-btn",
+                    button { class: "btn-primary", onclick: enviar, "{t.guardar}" }
+                    button {
+                        class: "btn-mini",
+                        onclick: move |_| mostrar_form.set(false),
+                        "✕"
                     }
                 }
             }
