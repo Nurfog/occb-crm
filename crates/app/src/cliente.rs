@@ -1,12 +1,150 @@
 //! Cliente HTTP del frontal hacia la API OCCB.
 //! Todas las operaciones devuelven `Result<_, String>` con mensajes en español.
 //! La API es la única que habla con PostgreSQL (vía funciones seguras).
+//!
+//! Sesión solo en memoria (`SESION`, nunca se persiste): al recargar la página
+//! hay que entrar de nuevo. Cada petición lleva `Bearer`; ante un 401 se
+//! renueva una vez y se reintenta.
 
+use dioxus::prelude::{GlobalSignal, Signal};
 use occb_core::{
     Alumno, Apoderado, Colegio, CrearAlumno, CrearApoderado, CrearColegio, CrearNota, CrearOportunidad,
     CrearPersona, CrearTarea, Nota, Oportunidad, Persona, ResumenPanel, Tarea, Traslado,
 };
 use uuid::Uuid;
+
+/// Sesión en memoria: acceso corto + renovación opaca + identidad.
+#[derive(Debug, Clone)]
+pub struct Sesion {
+    pub acceso: String,
+    pub sesion_id: Uuid,
+    pub renovacion: String,
+    pub nombre: String,
+    #[allow(dead_code)]
+    pub correo: String,
+    pub rol: String,
+}
+
+/// Sesión global (opcional): `None` = sin entrar.
+pub static SESION: GlobalSignal<Option<Sesion>> = Signal::global(|| None);
+
+/// Miembro del espacio (lista y cambio de rol).
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Miembro {
+    pub id: Uuid,
+    pub nombre: String,
+    pub correo: String,
+    pub rol: String,
+}
+
+/// Respuesta de registro/login/renovación.
+#[derive(Debug, serde::Deserialize)]
+struct RespuestaSesion {
+    acceso: String,
+    sesion_id: Uuid,
+    renovacion: String,
+    usuario: UsuarioSesion,
+}
+
+/// Usuario que trae la respuesta de sesión.
+#[derive(Debug, serde::Deserialize)]
+struct UsuarioSesion {
+    nombre: String,
+    correo: String,
+    rol: String,
+}
+
+/// Crea una cuenta (el primero del espacio nace admin) y guarda la sesión.
+pub async fn registrar(nombre: &str, correo: &str, clave: &str) -> Result<(), String> {
+    let respuesta: RespuestaSesion = enviar_json(
+        "POST",
+        "/api/acceso/registro",
+        &serde_json::json!({ "nombre": nombre, "correo": correo, "clave": clave }),
+    )
+    .await?;
+    guardar_sesion(respuesta);
+    Ok(())
+}
+
+/// Entra con correo y clave y guarda la sesión.
+pub async fn iniciar_sesion(correo: &str, clave: &str) -> Result<(), String> {
+    let respuesta: RespuestaSesion = enviar_json(
+        "POST",
+        "/api/acceso/login",
+        &serde_json::json!({ "correo": correo, "clave": clave }),
+    )
+    .await?;
+    guardar_sesion(respuesta);
+    Ok(())
+}
+
+/// Cierra la sesión en la API y la olvida en memoria (siempre limpia).
+pub async fn cerrar_sesion() -> Result<(), String> {
+    if let Some(s) = SESION() {
+        let _: serde_json::Value = enviar_json(
+            "POST",
+            "/api/acceso/salir",
+            &serde_json::json!({ "sesion_id": s.sesion_id }),
+        )
+        .await
+        .unwrap_or(serde_json::Value::Null);
+    }
+    *SESION.write() = None;
+    Ok(())
+}
+
+/// Lista los miembros del espacio (exige sesión).
+pub async fn listar_miembros() -> Result<Vec<Miembro>, String> {
+    obtener_json("/api/miembros").await
+}
+
+/// Cambia el rol de un miembro (solo admin; 403 si no lo es).
+pub async fn cambiar_rol(id: Uuid, rol: &str) -> Result<Miembro, String> {
+    enviar_json(
+        "PATCH",
+        &format!("/api/miembros/{id}/rol"),
+        &serde_json::json!({ "rol": rol }),
+    )
+    .await
+}
+
+/// Guarda la sesión de una respuesta de acceso.
+fn guardar_sesion(respuesta: RespuestaSesion) {
+    *SESION.write() = Some(Sesion {
+        acceso: respuesta.acceso,
+        sesion_id: respuesta.sesion_id,
+        renovacion: respuesta.renovacion,
+        nombre: respuesta.usuario.nombre,
+        correo: respuesta.usuario.correo,
+        rol: respuesta.usuario.rol,
+    });
+}
+
+/// Renueva el acceso con la renovación guardada; si falla, olvida la sesión.
+async fn renovar_sesion() -> Result<(), String> {
+    let (sid, ren) = SESION()
+        .map(|s| (s.sesion_id, s.renovacion))
+        .ok_or_else(|| "Accede de nuevo para continuar.".to_string())?;
+    let respuesta = reqwest::Client::new()
+        .post(format!("{}{}", base(), "/api/acceso/renovar"))
+        .json(&serde_json::json!({ "sesion_id": sid, "renovacion": ren }))
+        .send()
+        .await
+        .map_err(|_| "No se pudo conectar con la API. ¿Está en marcha?".to_string())?;
+    if !respuesta.status().is_success() {
+        *SESION.write() = None;
+        return Err("Tu sesión expiró. Accede de nuevo.".to_string());
+    }
+    let renovada: RespuestaSesion = respuesta
+        .json()
+        .await
+        .map_err(|_| "La API devolvió una respuesta inesperada.".to_string())?;
+    if let Some(s) = SESION.write().as_mut() {
+        s.acceso = renovada.acceso;
+        s.renovacion = renovada.renovacion;
+    }
+    Ok(())
+}
 
 /// URL base de la API, inyectada en compilación (`API_BASE_URL`).
 /// Por defecto apunta al desarrollo local.
@@ -16,15 +154,48 @@ fn base() -> String {
         .to_string()
 }
 
+/// Ejecuta una petición con `Bearer` si hay sesión; ante un 401 renueva
+/// una vez y reintenta. Sin sesión, la API responde 401 en rutas protegidas.
+async fn ejecutar(
+    metodo: &str,
+    ruta: &str,
+    cuerpo: Option<serde_json::Value>,
+) -> Result<reqwest::Response, String> {
+    for intento in 0..2 {
+        let cliente = reqwest::Client::new();
+        let url = format!("{}{ruta}", base());
+        let mut peticion = match metodo {
+            "GET" => cliente.get(&url),
+            "POST" => cliente.post(&url),
+            "PATCH" => cliente.patch(&url),
+            "DELETE" => cliente.delete(&url),
+            _ => return Err("Método no soportado por el cliente.".to_string()),
+        };
+        if let Some(token) = SESION().map(|s| s.acceso) {
+            peticion = peticion.header("Authorization", format!("Bearer {token}"));
+        }
+        if let Some(c) = cuerpo.clone() {
+            peticion = peticion.json(&c);
+        }
+        let respuesta = peticion
+            .send()
+            .await
+            .map_err(|_| "No se pudo conectar con la API. ¿Está en marcha?".to_string())?;
+        if respuesta.status() == reqwest::StatusCode::UNAUTHORIZED && intento == 0 {
+            renovar_sesion().await?;
+            continue;
+        }
+        return Ok(respuesta);
+    }
+    Err("No se pudo completar la petición.".to_string())
+}
+
 /// GET que espera JSON; traduce errores HTTP al mensaje en español de la API.
 async fn obtener_json<T>(ruta: &str) -> Result<T, String>
 where
     T: serde::de::DeserializeOwned,
 {
-    let respuesta = reqwest::get(format!("{}{ruta}", base()))
-        .await
-        .map_err(|_| "No se pudo conectar con la API. ¿Está en marcha?".to_string())?;
-    leer_cuerpo(respuesta).await
+    leer_cuerpo(ejecutar("GET", ruta, None).await?).await
 }
 
 /// Lee el cuerpo esperando éxito; si la API responde error, usa su `mensaje`.
@@ -52,28 +223,14 @@ async fn enviar_json<T>(metodo: &str, ruta: &str, cuerpo: &impl serde::Serialize
 where
     T: serde::de::DeserializeOwned,
 {
-    let cliente = reqwest::Client::new();
-    let url = format!("{}{ruta}", base());
-    let peticion = match metodo {
-        "POST" => cliente.post(&url),
-        "PATCH" => cliente.patch(&url),
-        _ => return Err("Método no soportado por el cliente.".to_string()),
-    };
-    let respuesta = peticion
-        .json(cuerpo)
-        .send()
-        .await
-        .map_err(|_| "No se pudo conectar con la API. ¿Está en marcha?".to_string())?;
-    leer_cuerpo(respuesta).await
+    let valor =
+        serde_json::to_value(cuerpo).map_err(|_| "No se pudo armar la petición.".to_string())?;
+    leer_cuerpo(ejecutar(metodo, ruta, Some(valor)).await?).await
 }
 
 /// DELETE que solo exige éxito (el 204 no trae cuerpo; el mensaje solo se lee si falla).
 async fn borrar(ruta: &str) -> Result<(), String> {
-    let respuesta = reqwest::Client::new()
-        .delete(format!("{}{ruta}", base()))
-        .send()
-        .await
-        .map_err(|_| "No se pudo conectar con la API. ¿Está en marcha?".to_string())?;
+    let respuesta = ejecutar("DELETE", ruta, None).await?;
     if respuesta.status().is_success() {
         Ok(())
     } else {

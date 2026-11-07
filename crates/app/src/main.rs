@@ -23,6 +23,9 @@ const CSS: Asset = asset!("/assets/main.css");
 /// Idioma global de la interfaz (español por defecto, conmutable a inglés).
 static IDIOMA: GlobalSignal<Idioma> = Signal::global(|| Idioma::Es);
 
+/// Destino pendiente tras entrar (el guardia lo fija antes de mandar a acceso).
+static VOLVER: GlobalSignal<Option<Ruta>> = Signal::global(|| None);
+
 fn main() {
     dioxus::launch(Aplicacion);
 }
@@ -71,6 +74,8 @@ enum Ruta {
         DetalleColegio { rbd: String },
         #[route("/oportunidades")]
         VistaOportunidades {},
+        #[route("/miembros")]
+        VistaMiembros {},
         #[route("/ajustes")]
         VistaAjustes {},
     #[route("/:..segmentos")]
@@ -118,8 +123,21 @@ fn etiqueta_etapa(etapa: EtapaOportunidad, idioma: Idioma) -> &'static str {
 }
 
 /// Disposición con barra lateral.
+/// El panel es público; el resto exige sesión (sin ella, vuelve a acceso
+/// recordando el destino para volver tras entrar).
 #[component]
 fn DisposicionApp() -> Element {
+    let nav = use_navigator();
+    let ruta_actual: Ruta = use_route();
+    if cliente::SESION().is_none() && !matches!(ruta_actual, Ruta::Panel {}) {
+        *VOLVER.write() = Some(ruta_actual);
+        nav.replace(Ruta::VistaAcceso {});
+        return rsx! {
+            div { class: "login-wrap",
+                p { class: "muted", "…" }
+            }
+        };
+    }
     rsx! {
         div { class: "shell",
             BarraLateral {}
@@ -134,6 +152,14 @@ fn DisposicionApp() -> Element {
 #[component]
 fn BarraLateral() -> Element {
     let t = textos(IDIOMA());
+    let nav = use_navigator();
+    let sesion = cliente::SESION();
+    let salir = move |_| {
+        spawn(async move {
+            let _ = cliente::cerrar_sesion().await;
+            nav.push(Ruta::VistaAcceso {});
+        });
+    };
     rsx! {
         aside { class: "sidebar",
             div { class: "brand",
@@ -186,6 +212,10 @@ fn BarraLateral() -> Element {
                     span { class: "ico ico-notas", "☰" }
                     span { "{t.notas}" }
                 }
+                Link { to: Ruta::VistaMiembros {}, class: "side-item",
+                    span { class: "ico ico-personas", "👥" }
+                    span { "{t.miembros}" }
+                }
                 div { class: "side-item dim",
                     span { class: "ico", "⚙" }
                     span { "{t.automatizaciones}" }
@@ -209,9 +239,20 @@ fn BarraLateral() -> Element {
                     span { class: "ico", "⚙" }
                     span { "{t.ajustes}" }
                 }
-                Link { to: Ruta::VistaAcceso {}, class: "side-item dim",
-                    span { class: "ico", "→" }
-                    span { "{t.salir}" }
+                if let Some(s) = sesion {
+                    div { class: "side-item",
+                        span { class: "avatar", "{s.nombre.chars().next().unwrap_or('·')}" }
+                        span { "{s.nombre} · {s.rol}" }
+                    }
+                    button { class: "side-item dim", onclick: salir,
+                        span { class: "ico", "→" }
+                        span { "{t.salir}" }
+                    }
+                } else {
+                    Link { to: Ruta::VistaAcceso {}, class: "side-item dim",
+                        span { class: "ico", "→" }
+                        span { "{t.salir}" }
+                    }
                 }
             }
             div { class: "invite",
@@ -2601,11 +2642,67 @@ fn VistaAjustes() -> Element {
     }
 }
 
-/// Pantalla de acceso (demo sin autenticación real en esta fase).
+/// Pantalla de acceso con login y registro reales (sesión solo en memoria).
+/// Al entrar, vuelve al destino pendiente (`VOLVER`) o al panel.
 #[component]
 fn VistaAcceso() -> Element {
     let t = textos(IDIOMA());
-    let mut correo = use_signal(|| "admin@occb.local".to_string());
+    let nav = use_navigator();
+    if cliente::SESION().is_some() {
+        nav.replace(Ruta::Panel {});
+        return rsx! {
+            div { class: "login-wrap",
+                p { class: "muted", "…" }
+            }
+        };
+    }
+    let mut es_registro = use_signal(|| false);
+    let mut nombre = use_signal(String::new);
+    let mut correo = use_signal(String::new);
+    let mut clave = use_signal(String::new);
+    let mut aviso = use_signal(String::new);
+    let mut ocupado = use_signal(|| false);
+
+    let enviar = move |_| {
+        let n = nombre.read().clone();
+        let c = correo.read().trim().to_string();
+        let k = clave.read().clone();
+        let registro = *es_registro.read();
+        if registro && n.trim().is_empty() {
+            aviso.set(if IDIOMA() == Idioma::Es {
+                "El nombre es obligatorio.".into()
+            } else {
+                "Name is required.".into()
+            });
+            return;
+        }
+        if c.is_empty() || k.is_empty() {
+            aviso.set(if IDIOMA() == Idioma::Es {
+                "Escribe tu correo y tu clave.".into()
+            } else {
+                "Type your email and password.".into()
+            });
+            return;
+        }
+        ocupado.set(true);
+        aviso.set(String::new());
+        spawn(async move {
+            let resultado = if registro {
+                cliente::registrar(n.trim(), c.trim(), &k).await
+            } else {
+                cliente::iniciar_sesion(c.trim(), &k).await
+            };
+            ocupado.set(false);
+            match resultado {
+                Ok(()) => {
+                    let destino = VOLVER.write().take().unwrap_or(Ruta::Panel {});
+                    nav.replace(destino);
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
+
     rsx! {
         div { class: "login-wrap",
             div { class: "login-card",
@@ -2624,15 +2721,131 @@ fn VistaAcceso() -> Element {
                         "EN"
                     }
                 }
+                if *es_registro.read() {
+                    label { "{t.nombre}" }
+                    input {
+                        class: "input",
+                        r#type: "text",
+                        value: "{nombre}",
+                        oninput: move |e| nombre.set(e.value()),
+                    }
+                }
                 label { "{t.correo}" }
                 input {
                     class: "input",
+                    r#type: "email",
                     value: "{correo}",
                     oninput: move |e| correo.set(e.value()),
                 }
                 label { "{t.contrasena}" }
-                input { class: "input", r#type: "password", value: "password" }
-                Link { to: Ruta::Panel {}, class: "btn-primary block", "{t.continuar}" }
+                input {
+                    class: "input",
+                    r#type: "password",
+                    value: "{clave}",
+                    oninput: move |e| clave.set(e.value()),
+                }
+                if *es_registro.read() {
+                    p { class: "muted", "{t.clave_min}" }
+                }
+                if !aviso.read().is_empty() {
+                    p { class: "form-error", "{aviso}" }
+                }
+                button {
+                    class: "btn-primary block",
+                    disabled: ocupado(),
+                    onclick: enviar,
+                    if *es_registro.read() { "{t.crear_cuenta}" } else { "{t.acceder}" }
+                }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| {
+                        es_registro.set(!es_registro());
+                        aviso.set(String::new());
+                    },
+                    if *es_registro.read() { "{t.tengo_cuenta}" } else { "{t.sin_cuenta}" }
+                }
+            }
+        }
+    }
+}
+
+/// Vista de miembros: lista del espacio; el admin puede cambiar roles.
+/// Sin sesión no se llega aquí (el guardia redirige a acceso).
+#[component]
+fn VistaMiembros() -> Element {
+    let t = textos(IDIOMA());
+    let mut miembros = use_signal(Vec::<cliente::Miembro>::new);
+    let mut aviso = use_signal(String::new);
+    let es_admin = cliente::SESION().map(|s| s.rol == "admin").unwrap_or(false);
+
+    use_effect(move || {
+        spawn(async move {
+            match cliente::listar_miembros().await {
+                Ok(lista) => miembros.set(lista),
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    });
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.miembros.to_string(),
+            subtitulo: t.miembros_sub.to_string(),
+        }
+        if !aviso.read().is_empty() {
+            p { class: "form-error", "{aviso}" }
+        }
+        div { class: "panel",
+            for m in miembros.read().iter() {
+                div { class: "mini-row", key: "{m.id}",
+                    span { class: "avatar", "{m.nombre.chars().next().unwrap_or('·')}" }
+                    span { class: "mini-name", "{m.nombre}" }
+                    span { class: "mini-amt", "{m.correo} · {m.rol}" }
+                    if es_admin && m.rol == "miembro" {
+                        button {
+                            class: "btn-mini",
+                            onclick: {
+                                let id = m.id;
+                                move |_| {
+                                    spawn(async move {
+                                        match cliente::cambiar_rol(id, "admin").await {
+                                            Ok(cambiado) => {
+                                                aviso.set(String::new());
+                                                if let Some(f) = miembros.write().iter_mut().find(|x| x.id == id) {
+                                                    f.rol = cambiado.rol;
+                                                }
+                                            }
+                                            Err(mensaje) => aviso.set(mensaje),
+                                        }
+                                    });
+                                }
+                            },
+                            "{t.hacer_admin}"
+                        }
+                    }
+                    if es_admin && m.rol == "admin" {
+                        button {
+                            class: "btn-mini",
+                            onclick: {
+                                let id = m.id;
+                                move |_| {
+                                    spawn(async move {
+                                        match cliente::cambiar_rol(id, "miembro").await {
+                                            Ok(cambiado) => {
+                                                aviso.set(String::new());
+                                                if let Some(f) = miembros.write().iter_mut().find(|x| x.id == id) {
+                                                    f.rol = cambiado.rol;
+                                                }
+                                            }
+                                            Err(mensaje) => aviso.set(mensaje),
+                                        }
+                                    });
+                                }
+                            },
+                            "{t.quitar_admin}"
+                        }
+                    }
+                }
             }
         }
     }

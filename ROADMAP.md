@@ -146,36 +146,44 @@ Objetivo: los dos objetos de trabajo diario, relacionados con todo lo demás.
 - ✅ Hecho cuando: E2E 25/25, clippy limpio, migración 013 aplicada en fresco
   (`down -v` + `up` + arranque API sin errores).
 
-### ⬜ Fase 3 — Acceso real + miembros
+### ✅ Fase 3 — Acceso real + miembros
 Objetivo: multiusuario de verdad; base para permisos por usuario.
 
-- ⬜ Base de datos (migración 014):
-  - ⬜ Tabla `usuarios`: `id`, `nombre`, `correo` único (formato válido),
-    `clave_hash` (argon2, solo lo escribe la función), `rol`
-    (`admin|miembro`, por defecto `miembro`), `creado_en`. RLS.
-  - ⬜ Tabla `sesiones`: `id`, `usuario_id` (`on delete cascade`),
+- ✅ Base de datos (migraciones 014 + 015):
+  - ✅ Tabla `usuarios`: `id`, `nombre`, `correo` único (formato válido,
+    se guarda en minúsculas), `clave_hash` (argon2, solo lo escribe la
+    función), `rol` (`admin|miembro`, por defecto `miembro`, el primero
+    del espacio nace admin), `creado_en`. RLS.
+  - ✅ Tabla `sesiones`: `id`, `usuario_id` (`on delete cascade`),
     `renovacion_hash` (sha256 del token de renovación), `expira_en`,
     `creado_en`. Limpieza de expiradas en cada uso.
-  - ⬜ Funciones: `registrar_usuario` (valida, rechaza duplicados P0003),
+  - ✅ Funciones: `registrar_usuario` (valida, rechaza duplicados P0003),
     `credencial_usuario` (devuelve hash para verificar en Rust, sin exponerlo),
-    `crear_sesion`, `rotar_sesion` (rotación con reuso detectado → revoca todo),
-    `cerrar_sesion`, `cerrar_todas_sesiones`.
-- ⬜ API (nuevas dependencias: `argon2`, `jsonwebtoken`):
-  - ⬜ `POST /api/acceso/registro`, `POST /api/acceso/login` (devuelve acceso corto
-    + renovación en cookie `HttpOnly`), `POST /api/acceso/renovar`,
-    `POST /api/acceso/salir`, `GET /api/acceso/yo`.
-  - ⬜ Middleware que exige JWT en todo `/api` salvo salud y acceso; el resto
-    exige miembro.
-  - ⬜ `GET /api/miembros`, `PATCH /api/miembros/{id}/rol` (solo admin).
-  - ⬜ RLS por usuario: políticas con `current_setting('app.usuario_id')` fijado por
-    conexión desde el middleware; las funciones lo respetan.
+    `crear_sesion`, `rotar_sesion` (rotación con reuso detectado → revoca todo;
+    015 corrige que el borrado persista sin `RAISE`), `cerrar_sesion`.
+    (`cerrar_todas_sesiones` no hizo falta: el reuso ya revoca todo.)
+- ✅ API (nuevas dependencias: `argon2`, `password-hash`, `sha2`, `jsonwebtoken`):
+  - ✅ `POST /api/acceso/registro`, `POST /api/acceso/login` (devuelve acceso
+    corto 15 min con `jti` único + `sesion_id` + renovación en el cuerpo JSON
+    para la SPA, además de cookie `HttpOnly`), `POST /api/acceso/renovar`
+    (acepta cuerpo o cookie), `POST /api/acceso/salir`, `GET /api/acceso/yo`.
+  - ✅ Middleware que exige JWT: públicas solo salud, acceso, regiones/comunas,
+    colegios y panel; el resto exige sesión (401 `sin_sesion`).
+  - ✅ `GET /api/miembros`, `PATCH /api/miembros/{id}/rol` (solo admin,
+    403 `prohibido`).
+  - ⬜ RLS por usuario → se movió a Fase 8 (las funciones `SECURITY DEFINER`
+    + RLS base ya aíslan el acceso; el JWT lleva el rol hasta 15 min).
 - ✅ Frontal:
-  - ⬜ Pantallas `/acceso` (login real) y `/registro` (con casilla de privacidad),
-    sesión solo en memoria (señal global, nunca almacenamiento local),
-    renovación silenciosa, cierre en el menú, nombre del usuario en la barra.
-  - ⬜ Vista `/miembros` (lista, cambio de rol para admin).
-- ⬜ E2E: registro + login + ver yo; renovación sin re-login; rutas protegidas sin
-  token devuelven 401 también desde el frontal (redirige a acceso); admin cambia rol.
+  - ✅ Pantalla `/acceso` con pestañas de login y registro (sin ruta separada
+    ni casilla de privacidad: no se pide nada opcional), sesión solo en memoria
+    (señal global, nunca almacenamiento local), renovación silenciosa con
+    reintento ante 401, cierre en el menú, nombre y rol en la barra, guardia
+    que redirige a acceso recordando el destino (VOLVER).
+  - ✅ Vista `/miembros` (lista, cambio de rol para admin).
+- ✅ E2E: registro + login + ver yo; renovación sin re-login; reuso que revoca;
+  rutas protegidas sin token devuelven 401 y el frontal redirige a acceso;
+  admin cambia rol (403 para miembro); registro y guardia por UI.
+- ✅ Hecho cuando: E2E 40/40, sin secretos en logs ni respuestas, clippy limpio.
 - ⬜ Hecho cuando: E2E 20/20, sin secretos en logs ni respuestas, `down -v` limpio.
 
 ### ⬜ Fase 4 — Calendario + Correos
@@ -301,6 +309,10 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
   - ⬜ Respaldos: servicio `respaldos` (pg_dump diario a volumen + retención 7).
   - ⬜ Observabilidad: logs JSON en producción, `GET /api/salud` extendido
     (versión, migraciones, latencia PG) y límites de ritmo por IP en login.
+  - ⬜ RLS por usuario (venía de Fase 3): políticas con
+    `current_setting('app.usuario_id')` fijado por conexión desde el middleware;
+    las funciones lo respetan. Requiere que el JWT deje de ser la única
+    fuente del rol o acortar su vida útil.
   - ⬜ Multi-espacio: columna `espacio_id` (se diseña aquí, se ejecuta en Fase 9).
 - ⬜ E2E: importar CSV con 1 fila mala importa 2/3 y reporta la mala; webhook de
   prueba llega a un receptor local; clave revocada devuelve 401.
@@ -322,8 +334,8 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Traslados | ✅ Funcional | E3 |
 | Tareas | ✅ Funcional | 2 |
 | Notas | ✅ Funcional | 2 |
-| Usuarios y acceso | 🚧 Mock (real en 3) | 3 |
-| Miembros y roles | [] Pendiente | 3 |
+| Usuarios y acceso | ✅ Funcional (JWT + rotación) | 3 |
+| Miembros y roles | ✅ Funcional (solo admin cambia rol) | 3 |
 | Calendario | [] Pendiente | 4 |
 | Correos | [] Pendiente | 4 |
 | Búsqueda global | [] Pendiente | 5 |

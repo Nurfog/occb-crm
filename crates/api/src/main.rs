@@ -7,6 +7,7 @@
 //! - Respuestas de error unificadas en español.
 //! - `tracing` estructurado y tiempos de espera.
 
+mod auth;
 mod bd;
 mod configuracion;
 mod errores;
@@ -48,9 +49,16 @@ async fn main() {
         .await
         .expect("No se pudieron aplicar las migraciones.");
 
-    let app = Router::new()
+    // Públicas: salud, acceso y directorio de referencia.
+    let publicas = Router::new()
         .route("/api/salud", get(salud))
-        // Rutas en español (se mantienen alias en inglés para compatibilidad).
+        .route("/api/health", get(salud))
+        .route("/api/acceso/registro", axum::routing::post(auth::registro))
+        .route("/api/acceso/login", axum::routing::post(auth::login))
+        .route("/api/acceso/renovar", axum::routing::post(auth::renovar))
+        .route("/api/acceso/salir", axum::routing::post(auth::salir))
+        .route("/api/regiones", get(rutas_territorio::listar_regiones))
+        .route("/api/comunas", get(rutas_territorio::listar_comunas))
         .route(
             "/api/colegios",
             get(rutas_colegios::listar).post(rutas_colegios::crear),
@@ -58,6 +66,18 @@ async fn main() {
         .route(
             "/api/colegios/{rbd}",
             get(rutas_colegios::obtener).delete(rutas_colegios::eliminar),
+        )
+        .route("/api/schools", get(rutas_colegios::listar))
+        .route("/api/panel", get(rutas_oportunidades::panel))
+        .route("/api/dashboard", get(rutas_oportunidades::panel));
+
+    // Protegidas: exigen JWT (ver Fase 3 del roadmap).
+    let protegidas = Router::new()
+        .route("/api/acceso/yo", get(auth::yo))
+        .route("/api/miembros", get(auth::miembros))
+        .route(
+            "/api/miembros/{id}/rol",
+            axum::routing::patch(auth::cambiar_rol),
         )
         .route(
             "/api/personas",
@@ -82,7 +102,6 @@ async fn main() {
             axum::routing::patch(rutas_oportunidades::actualizar)
                 .delete(rutas_oportunidades::eliminar),
         )
-        .route("/api/panel", get(rutas_oportunidades::panel))
         .route(
             "/api/alumnos",
             get(rutas_alumnos::listar).post(rutas_alumnos::crear),
@@ -143,14 +162,13 @@ async fn main() {
                 .patch(rutas_notas::actualizar)
                 .delete(rutas_notas::eliminar),
         )
-        .route("/api/regiones", get(rutas_territorio::listar_regiones))
-        .route("/api/comunas", get(rutas_territorio::listar_comunas))
-        // Alias en inglés.
-        .route("/api/health", get(salud))
-        .route("/api/schools", get(rutas_colegios::listar))
+        // Alias en inglés (protegidos igual que sus pares).
         .route("/api/people", get(rutas_personas::listar))
         .route("/api/opportunities", get(rutas_oportunidades::listar))
-        .route("/api/dashboard", get(rutas_oportunidades::panel))
+        .route_layer(axum::middleware::from_fn(auth::exigir_sesion));
+
+    let app = publicas
+        .merge(protegidas)
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

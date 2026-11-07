@@ -14,6 +14,9 @@ pub enum ErrorApi {
     /// Datos de entrada inválidos (400).
     #[error("Datos inválidos: {0}")]
     Validacion(String),
+    /// Operación prohibida para el rol actual (403).
+    #[error("Prohibido: {0}")]
+    Prohibido(String),
     /// Error de base de datos (400 si es regla de negocio, 500 si es interno).
     #[error("Error de base de datos: {0}")]
     BaseDatos(#[from] sqlx::Error),
@@ -30,6 +33,11 @@ impl IntoResponse for ErrorApi {
             Self::Validacion(detalle) => (
                 StatusCode::BAD_REQUEST,
                 Json(json!({"codigo": "datos_invalidos", "mensaje": detalle})),
+            )
+                .into_response(),
+            Self::Prohibido(detalle) => (
+                StatusCode::FORBIDDEN,
+                Json(json!({"codigo": "prohibido", "mensaje": detalle})),
             )
                 .into_response(),
             Self::BaseDatos(error) => respuesta_bd(error),
