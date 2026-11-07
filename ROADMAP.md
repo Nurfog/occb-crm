@@ -265,28 +265,23 @@ Objetivo: reglas sencillas sin programar.
   sin revertir la postulación.
 - ✅ Hecho cuando: E2E 75/75, clippy limpio y fallo aislado por regla.
 
-### ⬜ Fase 7 — Agentes IA + chat
+### ✅ Fase 7 — Agentes IA + chat
 Objetivo: pedirle cosas al CRM conversando.
 
-- ⬜ Base de datos (migración 021):
-  - ⬜ Tabla `conversaciones`: `id`, `usuario_id`, `titulo`, `creado_en`.
-  - ⬜ Tabla `mensajes`: `id`, `conversacion_id` (`on delete cascade`), `rol`
-    (`usuario|agente`), `contenido`, `creado_en`.
-  - ⬜ CRUD + `listar_mensajes(conversacion)`. RLS por usuario.
-- ⬜ API (cliente LLM configurable por `LLM_URL`, `LLM_CLAVE`, `LLM_MODELO`;
-  sin claves no arranca el módulo, el resto sigue igual):
-  - ⬜ `GET/POST /api/conversaciones`, `GET /api/conversaciones/{id}/mensajes`,
-    `POST /api/conversaciones/{id}/preguntar`.
-  - ⬜ Herramientas del agente (solo vía funciones seguras existentes): buscar,
-    listar y crear registros, resumen del panel. Cada llamada queda citada en la
-    respuesta.
-- ✅ Frontal:
-  - ⬜ Panel de chat lateral persistente (ruta `/agentes` + acceso rápido),
-    historial por conversación, indicador de escritura, citas a registros con enlace.
-- ⬜ E2E (con proveedor simulado en local): preguntar el total de la tubería
-  responde con la cifra real; pedir crear una nota la crea y enlaza.
-- ⬜ Hecho cuando: E2E 32/32 y sin `LLM_CLAVE` el módulo responde «no configurado»
-  sin afectar al resto.
+- ✅ Base de datos (migración 021): `conversaciones` y `mensajes`, aislamiento
+  por usuario en todas las funciones `SECURITY DEFINER`, límites de historial.
+- ✅ API: CRUD/listado personal y `POST /api/conversaciones/{id}/preguntar`.
+  Cliente OpenAI-compatible configurable por `LLM_URL`, `LLM_CLAVE`, `LLM_MODELO`;
+  sin configuración responde 503 `no_configurado` sin interrumpir el API.
+  Herramientas cerradas y seguras: buscar registros, resumen real del panel,
+  crear nota y crear tarea; conserva fuentes citables y las devuelve con enlaces.
+  Proveedor `mock://occb-e2e` disponible solo en builds de desarrollo para pruebas.
+- ✅ Frontal: ruta `/agentes`, historial por conversación, creación/baja,
+  indicador de espera, manejo ES/EN y fuentes navegables.
+- ✅ E2E: proveedor simulado consulta la cifra real de tubería y crea/cita nota;
+  sin LLM configurado presenta el mensaje esperado y el resto del espacio sigue
+  operativo; conversaciones aisladas por usuario.
+- ✅ Hecho cuando: E2E total 82/82 y clippy limpio.
 
 ### ⬜ Fase 8 — Plataforma y producción
 Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
@@ -342,7 +337,7 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Vistas guardadas | ✅ Filtros por usuario | 5 |
 | Timeline | ✅ Autoría y trazabilidad | 5 |
 | Automatizaciones | ✅ Reglas de admisión con historial | 6 |
-| Agentes IA y chat | [] Pendiente | 7 |
+| Agentes IA y chat | ✅ Chat escolar con herramientas seguras | 7 |
 | Claves API y webhooks | [] Pendiente | 8 |
 | Importación CSV | [] Pendiente | 8 |
 | Respaldos y operación | 🚧 Básico (completo en 8) | 8 |

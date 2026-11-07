@@ -88,6 +88,8 @@ enum Ruta {
         VistaCorreos {},
         #[route("/automatizaciones")]
         VistaAutomatizaciones {},
+        #[route("/agentes")]
+        VistaAgentes {},
         #[route("/ajustes")]
         VistaAjustes {},
     #[route("/:..segmentos")]
@@ -358,6 +360,10 @@ fn BarraLateral() -> Element {
                 Link { to: Ruta::VistaAutomatizaciones {}, class: "side-item",
                     span { class: "ico", "⚙" }
                     span { "{t.automatizaciones}" }
+                }
+                Link { to: Ruta::VistaAgentes {}, class: "side-item",
+                    span { class: "ico", "✦" }
+                    span { "{t.agentes}" }
                 }
             }
             div { class: "side-spacer" }
@@ -1720,6 +1726,175 @@ fn VistaAutomatizaciones() -> Element {
                             span { class: "mini-amt", "{fmt_dia_hora(ejecucion.creado_en)}" }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/// Chat del espacio: conversaciones personales y herramientas seguras.
+#[component]
+fn VistaAgentes() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let mut conversaciones = use_signal(Vec::<occb_core::Conversacion>::new);
+    let mut actual = use_signal(|| None::<Uuid>);
+    let mut mensajes = use_signal(Vec::<occb_core::Mensaje>::new);
+    let mut fuentes = use_signal(Vec::<occb_core::ResultadoBusqueda>::new);
+    let mut pregunta = use_signal(String::new);
+    let mut aviso = use_signal(String::new);
+    let mut ocupado = use_signal(|| false);
+
+    use_effect(move || {
+        spawn(async move {
+            match cliente::listar_conversaciones().await {
+                Ok(lista) => {
+                    if actual().is_none()
+                        && let Some(c) = lista.first()
+                    {
+                        actual.set(Some(c.id));
+                        if let Ok(ms) = cliente::listar_mensajes(c.id).await { mensajes.set(ms); }
+                    }
+                    conversaciones.set(lista);
+                }
+                Err(m) => aviso.set(m),
+            }
+        });
+    });
+
+    let crear = move |_| {
+        spawn(async move {
+            match cliente::crear_conversacion("").await {
+                Ok(c) => {
+                    actual.set(Some(c.id));
+                    mensajes.set(Vec::new());
+                    fuentes.set(Vec::new());
+                    conversaciones.write().insert(0, c);
+                    aviso.set(String::new());
+                }
+                Err(m) => aviso.set(m),
+            }
+        });
+    };
+
+    let mut enviar = move || {
+        let texto = pregunta.read().trim().to_string();
+        if texto.is_empty() || ocupado() { return; }
+        ocupado.set(true);
+        aviso.set(String::new());
+        spawn(async move {
+            let id = match actual() {
+                Some(id) => id,
+                None => match cliente::crear_conversacion("").await {
+                    Ok(c) => {
+                        let id = c.id;
+                        actual.set(Some(id));
+                        conversaciones.write().insert(0, c);
+                        id
+                    }
+                    Err(m) => { aviso.set(m); ocupado.set(false); return; }
+                },
+            };
+            match cliente::preguntar(id, &texto).await {
+                Ok(respuesta) => {
+                    if respuesta.conversacion_id != id {
+                        aviso.set(if idioma == Idioma::Es { "La respuesta llegó a otra conversación.".into() } else { "The response belongs to another conversation.".into() });
+                        ocupado.set(false);
+                        return;
+                    }
+                    pregunta.set(String::new());
+                    fuentes.set(respuesta.fuentes);
+                    match cliente::listar_mensajes(id).await {
+                        Ok(lista) => mensajes.set(lista),
+                        Err(m) => {
+                            aviso.set(m);
+                            mensajes.write().push(occb_core::Mensaje {
+                                id: Uuid::new_v4(), conversacion_id: id, rol: "agente".into(),
+                                contenido: respuesta.respuesta, creado_en: chrono::Utc::now(),
+                            });
+                        }
+                    }
+                    if let Ok(lista) = cliente::listar_conversaciones().await { conversaciones.set(lista); }
+                }
+                Err(m) => aviso.set(m),
+            }
+            ocupado.set(false);
+        });
+    };
+
+    rsx! {
+        BarraSuperior {
+            titulo: t.agentes.to_string(),
+            subtitulo: if idioma == Idioma::Es { "Consulta y actúa sobre los registros escolares".to_string() } else { "Ask and act on school records".to_string() },
+        }
+        if !aviso.read().is_empty() { p { class: "form-error", "{aviso}" } }
+        div { class: "chat-layout",
+            div { class: "panel chat-history",
+                button { class: "btn-primary block", onclick: crear, "{t.nueva_conversacion}" }
+                if conversaciones.read().is_empty() {
+                    p { class: "muted", "{t.sin_conversaciones}" }
+                }
+                for c in conversaciones.read().iter() {
+                    div { class: if actual() == Some(c.id) { "chat-conversation selected" } else { "chat-conversation" }, key: "{c.id}",
+                        button { class: "chat-conversation-title", onclick: {
+                            let id = c.id;
+                            move |_| { spawn(async move {
+                                actual.set(Some(id));
+                                match cliente::listar_mensajes(id).await {
+                                    Ok(lista) => mensajes.set(lista),
+                                    Err(m) => aviso.set(m),
+                                }
+                                fuentes.set(Vec::new());
+                            }); }
+                        }, "{c.titulo}" }
+                        button { class: "btn-mini", title: "✕", onclick: {
+                            let id = c.id;
+                            move |_| { spawn(async move {
+                                match cliente::eliminar_conversacion(id).await {
+                                    Ok(()) => {
+                                        conversaciones.write().retain(|x| x.id != id);
+                                        if actual() == Some(id) { actual.set(None); mensajes.set(Vec::new()); }
+                                    }
+                                    Err(m) => aviso.set(m),
+                                }
+                            }); }
+                        }, "✕" }
+                    }
+                }
+            }
+            div { class: "panel chat-main",
+                div { class: "chat-messages",
+                    if mensajes.read().is_empty() {
+                        p { class: "muted", if idioma == Idioma::Es { "Pregunta por alumnos, apoderados, colegios o admisión." } else { "Ask about students, guardians, schools or admissions." } }
+                    }
+                    for m in mensajes.read().iter() {
+                        div { class: if m.rol == "usuario" { "chat-message user-message" } else { "chat-message agent-message" }, key: "{m.id}",
+                            div { class: "chat-role", if m.rol == "usuario" { if idioma == Idioma::Es { "Tú" } else { "You" } } else { "{t.agentes}" } }
+                            p { "{m.contenido}" }
+                        }
+                    }
+                    if ocupado() { p { class: "muted", "{t.pensando}" } }
+                    if !fuentes.read().is_empty() {
+                        div { class: "chat-sources",
+                            div { class: "panel-title", if idioma == Idioma::Es { "Fuentes" } else { "Sources" } }
+                            for f in fuentes.read().iter() {
+                                Link { class: "search-result", key: "{f.tipo}-{f.id}", to: ruta_busqueda(&f.tipo, &f.id),
+                                    span { class: "search-result-type", "{etiqueta_tipo_busqueda(&f.tipo, idioma)}" }
+                                    span { class: "mini-name", "{f.titulo}" }
+                                    span { class: "mini-amt", "{f.detalle}" }
+                                }
+                            }
+                        }
+                    }
+                }
+                div { class: "chat-compose",
+                    textarea {
+                        class: "input",
+                        placeholder: "{t.pregunta}",
+                        value: "{pregunta}",
+                        oninput: move |e| pregunta.set(e.value()),
+                    }
+                    button { class: "btn-primary", disabled: ocupado(), onclick: move |_| enviar(), "{t.enviar}" }
                 }
             }
         }

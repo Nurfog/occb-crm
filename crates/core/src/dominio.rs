@@ -369,6 +369,26 @@ pub struct Ejecucion {
     pub creado_en: DateTime<Utc>,
 }
 
+/// Conversación personal con el asistente del espacio escolar.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Conversacion {
+    pub id: Uuid,
+    pub usuario_id: Uuid,
+    pub titulo: String,
+    pub creado_en: DateTime<Utc>,
+    pub actualizado_en: DateTime<Utc>,
+}
+
+/// Mensaje de una conversación.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Mensaje {
+    pub id: Uuid,
+    pub conversacion_id: Uuid,
+    pub rol: String,
+    pub contenido: String,
+    pub creado_en: DateTime<Utc>,
+}
+
 /// Persona de contacto.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Persona {

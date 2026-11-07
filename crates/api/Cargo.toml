@@ -26,3 +26,4 @@ argon2.workspace = true
 password-hash.workspace = true
 sha2.workspace = true
 jsonwebtoken.workspace = true
+reqwest = { workspace = true, features = ["rustls-tls"] }

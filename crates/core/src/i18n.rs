@@ -120,6 +120,12 @@ pub struct Textos {
     pub historial: &'static str,
     pub desactivar: &'static str,
     pub activar: &'static str,
+    pub agentes: &'static str,
+    pub nueva_conversacion: &'static str,
+    pub pregunta: &'static str,
+    pub enviar: &'static str,
+    pub pensando: &'static str,
+    pub sin_conversaciones: &'static str,
 }
 
 /// Devuelve los textos para el idioma pedido.
@@ -213,6 +219,12 @@ pub fn textos(idioma: Idioma) -> Textos {
             historial: "Historial de ejecuciones",
             desactivar: "Desactivar",
             activar: "Activar",
+            agentes: "Asistente",
+            nueva_conversacion: "Nueva conversación",
+            pregunta: "Pregunta al espacio…",
+            enviar: "Enviar",
+            pensando: "Pensando…",
+            sin_conversaciones: "Aún no hay conversaciones",
         },
         Idioma::En => Textos {
             nombre_app: "OCCB CRM",
@@ -302,6 +314,12 @@ pub fn textos(idioma: Idioma) -> Textos {
             historial: "Execution history",
             desactivar: "Disable",
             activar: "Enable",
+            agentes: "Assistant",
+            nueva_conversacion: "New conversation",
+            pregunta: "Ask your workspace…",
+            enviar: "Send",
+            pensando: "Thinking…",
+            sin_conversaciones: "No conversations yet",
         },
     }
 }

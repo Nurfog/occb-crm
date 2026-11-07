@@ -14,9 +14,9 @@ pub mod territorio;
 pub mod validacion;
 
 pub use dominio::{
-    Actividad, Alumno, Apoderado, Automatizacion, Colegio, Correo, CrearAlumno, CrearApoderado, CrearColegio,
+    Actividad, Alumno, Apoderado, Automatizacion, Colegio, Conversacion, Correo, CrearAlumno, CrearApoderado, CrearColegio,
     CrearCorreo, CrearEvento, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno,
-    Ejecucion, EstadoTarea, EtapaOportunidad, Evento, Favorito, Nota, Oportunidad, Persona,
+    Ejecucion, EstadoTarea, EtapaOportunidad, Evento, Favorito, Mensaje, Nota, Oportunidad, Persona,
     ResultadoBusqueda, ResumenPanel, Tarea, Traslado, VistaGuardada, VinculoApoderado,
     calcular_resumen,
 };

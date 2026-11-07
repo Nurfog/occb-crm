@@ -1015,6 +1015,80 @@ for (const tarea of tareasAuto) await api(`${API}/api/tareas/${tarea.id}`, { met
 await api(`${API}/api/automatizaciones/${regla.id}`, { method: 'DELETE' });
 await api(`${API}/api/automatizaciones/${reglaMala.id}`, { method: 'DELETE' });
 
+// --- 25. Agente: conversación privada y modo no configurado seguro ---
+const conv = await (await api(`${API}/api/conversaciones`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({}),
+})).json();
+afirma(!!conv.id && conv.usuario_id === e2eIni.usuario.id, 'conversación queda asociada al usuario autenticado');
+const sinLlm = await api(`${API}/api/conversaciones/${conv.id}/preguntar`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ pregunta: '¿Cuántas postulaciones hay?' }),
+});
+const sinLlmJson = await sinLlm.json();
+afirma(sinLlm.status === 503 && sinLlmJson.codigo === 'no_configurado', 'LLM sin configurar no afecta ni expone errores al resto');
+const conversacionAjena = await apiAdmin(`${API}/api/conversaciones/${conv.id}/mensajes`);
+afirma(conversacionAjena.status === 404, 'conversaciones y mensajes se aíslan por usuario');
+await api(`${API}/api/conversaciones/${conv.id}`, { method: 'DELETE' });
+
+// El chat sigue disponible aunque falte la configuración del proveedor.
+const convAntesUi = await (await api(`${API}/api/conversaciones`)).json();
+await ir('/agentes');
+await esperarCondicion(`!!document.querySelector('.chat-layout')`);
+await evaluar(`[...document.querySelectorAll('.chat-history button')].find(b => b.textContent.includes('Nueva conversación')).click()`);
+await dormir(500);
+await evaluar(`(() => {
+  const area = document.querySelector('.chat-compose textarea');
+  area.focus(); area.value = '¿Cuántas postulaciones hay?';
+  area.dispatchEvent(new Event('input', { bubbles: true }));
+  [...document.querySelectorAll('.chat-compose button')].find(b => b.textContent.includes('Enviar')).click();
+})()`);
+const avisoSinLlm = await esperarCondicion(`document.body.textContent.includes('El asistente no está configurado')`);
+afirma(avisoSinLlm, 'chat indica configuración ausente sin afectar el espacio');
+const convDespuesUi = await (await api(`${API}/api/conversaciones`)).json();
+const convUi = convDespuesUi.find((c) => !convAntesUi.some((x) => x.id === c.id));
+afirma(!!convUi, 'chat UI crea y persiste conversación personal');
+if (convUi) await api(`${API}/api/conversaciones/${convUi.id}`, { method: 'DELETE' });
+
+// Opcional en el compose local: API de prueba en otro puerto con
+// LLM_URL=mock://occb-e2e, misma base y APP_SECRETO.
+if (process.env.LLM_MOCK_API_URL) {
+  const API_MOCK = process.env.LLM_MOCK_API_URL;
+  const apiMock = async (ruta, opciones = {}) => {
+    let r = await fetch(`${API_MOCK}${ruta}`, {
+      ...opciones,
+      headers: { ...(opciones.headers || {}), Authorization: `Bearer ${SES.acceso}` },
+    });
+    if (r.status === 401) {
+      await renovarSesion(SES);
+      r = await fetch(`${API_MOCK}${ruta}`, {
+        ...opciones,
+        headers: { ...(opciones.headers || {}), Authorization: `Bearer ${SES.acceso}` },
+      });
+    }
+    return r;
+  };
+  const convMock = await (await apiMock('/api/conversaciones', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo: 'Mock E2E' }),
+  })).json();
+  const panelReal = await (await api(`${API}/api/panel`)).json();
+  const totalMock = await (await apiMock(`/api/conversaciones/${convMock.id}/preguntar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pregunta: '¿Cuál es el total real de la tubería?' }),
+  })).json();
+  afirma(totalMock.respuesta.includes(String(panelReal.valor_tuberia)), 'proveedor simulado usa el total real del panel');
+  const notaMock = await (await apiMock(`/api/conversaciones/${convMock.id}/preguntar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pregunta: 'Crear una nota de prueba' }),
+  })).json();
+  const notasMock = await (await api(`${API}/api/notas?busqueda=Nota%20creada%20por%20asistente`)).json();
+  afirma(notasMock.some((n) => notaMock.fuentes.some((f) => f.id === n.id)), 'asistente simulado crea nota por función segura y la cita');
+  for (const n of notasMock) await api(`${API}/api/notas/${n.id}`, { method: 'DELETE' });
+  await apiMock(`/api/conversaciones/${convMock.id}`, { method: 'DELETE' });
+} else {
+  console.log('SKIP — proveedor LLM simulado (define LLM_MOCK_API_URL para ejecutarlo)');
+}
+
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();
 try {

@@ -12,6 +12,7 @@ mod bd;
 mod configuracion;
 mod errores;
 mod rutas_alumnos;
+mod rutas_agentes;
 mod rutas_automatizaciones;
 mod rutas_apoderados;
 mod rutas_colegios;
@@ -94,6 +95,22 @@ async fn main() {
                 .delete(rutas_espacio::eliminar_vista),
         )
         .route("/api/actividad", get(rutas_espacio::actividad))
+        .route(
+            "/api/conversaciones",
+            get(rutas_agentes::listar).post(rutas_agentes::crear),
+        )
+        .route(
+            "/api/conversaciones/{id}/mensajes",
+            get(rutas_agentes::mensajes),
+        )
+        .route(
+            "/api/conversaciones/{id}/preguntar",
+            axum::routing::post(rutas_agentes::preguntar),
+        )
+        .route(
+            "/api/conversaciones/{id}",
+            axum::routing::delete(rutas_agentes::eliminar),
+        )
         .route(
             "/api/automatizaciones",
             get(rutas_automatizaciones::listar).post(rutas_automatizaciones::crear),

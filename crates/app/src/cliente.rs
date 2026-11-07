@@ -9,9 +9,9 @@
 use dioxus::prelude::{GlobalSignal, Signal};
 use occb_core::{
     Alumno, Apoderado, Colegio, Correo, CrearAlumno, CrearApoderado, CrearColegio, CrearCorreo,
-    Actividad, Automatizacion, CrearEvento, CrearNota, CrearOportunidad, CrearPersona,
-    CrearTarea, Ejecucion, Evento, Favorito, Nota, Oportunidad, Persona, ResumenPanel,
-    ResultadoBusqueda, Tarea, Traslado, VistaGuardada,
+    Actividad, Automatizacion, Conversacion, CrearEvento, CrearNota, CrearOportunidad,
+    CrearPersona, CrearTarea, Ejecucion, Evento, Favorito, Mensaje, Nota, Oportunidad, Persona,
+    ResumenPanel, ResultadoBusqueda, Tarea, Traslado, VistaGuardada,
 };
 use uuid::Uuid;
 
@@ -764,4 +764,36 @@ pub async fn eliminar_automatizacion(id: Uuid) -> Result<(), String> {
 /// Historial de ejecuciones, éxitos y fallas.
 pub async fn ejecuciones_automatizacion(id: Uuid) -> Result<Vec<Ejecucion>, String> {
     obtener_json(&format!("/api/automatizaciones/{id}/ejecuciones")).await
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct RespuestaAgente {
+    pub conversacion_id: Uuid,
+    pub respuesta: String,
+    pub fuentes: Vec<ResultadoBusqueda>,
+}
+
+pub async fn listar_conversaciones() -> Result<Vec<Conversacion>, String> {
+    obtener_json("/api/conversaciones").await
+}
+
+pub async fn crear_conversacion(titulo: &str) -> Result<Conversacion, String> {
+    enviar_json("POST", "/api/conversaciones", &serde_json::json!({"titulo": titulo})).await
+}
+
+pub async fn eliminar_conversacion(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/conversaciones/{id}")).await
+}
+
+pub async fn listar_mensajes(id: Uuid) -> Result<Vec<Mensaje>, String> {
+    obtener_json(&format!("/api/conversaciones/{id}/mensajes")).await
+}
+
+pub async fn preguntar(id: Uuid, pregunta: &str) -> Result<RespuestaAgente, String> {
+    enviar_json(
+        "POST",
+        &format!("/api/conversaciones/{id}/preguntar"),
+        &serde_json::json!({"pregunta": pregunta}),
+    )
+    .await
 }
