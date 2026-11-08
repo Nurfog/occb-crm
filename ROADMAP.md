@@ -184,7 +184,8 @@ Objetivo: multiusuario de verdad; base para permisos por usuario.
   rutas protegidas sin token devuelven 401 y el frontal redirige a acceso;
   admin cambia rol (403 para miembro); registro y guardia por UI.
 - ✅ Hecho cuando: E2E 40/40, sin secretos en logs ni respuestas, clippy limpio.
-- ⬜ Hecho cuando: E2E 20/20, sin secretos en logs ni respuestas, `down -v` limpio.
+- ⬜ Verificación `down -v` en máquina limpia: pendiente (borra los datos de
+  desarrollo; hacerla con respaldo previo).
 
 ### ✅ Fase 4 — Calendario + Correos
 Objetivo: agenda y bandeja vinculadas a los registros.
@@ -346,7 +347,7 @@ vive aquí.
 |---|---|---|
 | Panel | ✅ Funcional | 1 |
 | Personas | ✅ Funcional (CRUD + ficha) | 1 + 1.5 |
-| Empresas | ✅ Funcional (CRUD + ficha) | 1 + 1.5 |
+| Empresas | ❌ Retirada en E1 (track escolar) | — |
 | Oportunidades | ✅ Funcional (CRUD + kanban + inline) | 1 + 1.5 |
 | Fichas y relacionados | ✅ Funcional | 1.5 |
 | Regiones y comunas | ✅ Funcional | 1.6 |
