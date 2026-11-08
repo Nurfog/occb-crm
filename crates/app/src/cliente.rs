@@ -797,3 +797,51 @@ pub async fn preguntar(id: Uuid, pregunta: &str) -> Result<RespuestaAgente, Stri
     )
     .await
 }
+
+pub async fn listar_claves_api() -> Result<Vec<serde_json::Value>, String> {
+    obtener_json("/api/claves").await
+}
+
+pub async fn crear_clave_api(nombre: &str) -> Result<serde_json::Value, String> {
+    enviar_json("POST", "/api/claves", &serde_json::json!({"nombre":nombre,"alcances":["*"]})).await
+}
+
+pub async fn revocar_clave_api(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/claves/{id}")).await
+}
+
+pub async fn listar_webhooks() -> Result<Vec<serde_json::Value>, String> {
+    obtener_json("/api/webhooks").await
+}
+
+pub async fn crear_webhook(nombre: &str, url: &str, eventos: Vec<String>) -> Result<serde_json::Value,String> {
+    enviar_json("POST","/api/webhooks",&serde_json::json!({"nombre":nombre,"url":url,"eventos":eventos})).await
+}
+
+pub async fn alternar_webhook(id:Uuid,activa:bool)->Result<serde_json::Value,String>{
+    enviar_json("PATCH",&format!("/api/webhooks/{id}"),&serde_json::json!({"activa":activa})).await
+}
+
+pub async fn eliminar_webhook(id:Uuid)->Result<(),String>{borrar(&format!("/api/webhooks/{id}")).await}
+
+pub async fn probar_webhook(id:Uuid)->Result<serde_json::Value,String>{
+    enviar_json("POST",&format!("/api/webhooks/{id}/probar"),&serde_json::json!({})).await
+}
+
+pub async fn entregas_webhook(id:Uuid)->Result<Vec<serde_json::Value>,String>{
+    obtener_json(&format!("/api/webhooks/{id}/entregas")).await
+}
+
+/// Envía un CSV como multipart/form-data y permite previsualizar o aplicar.
+pub async fn importar_csv(objeto:&str,contenido:&str,aplicar:bool)->Result<serde_json::Value,String>{
+    for intento in 0..2 {
+        let cliente=reqwest::Client::new();
+        let mut peticion=cliente.post(format!("{}/api/importar/{objeto}?aplicar={aplicar}",base()));
+        if let Some(token)=SESION().map(|s|s.acceso){peticion=peticion.header("Authorization",format!("Bearer {token}"));}
+        let form=reqwest::multipart::Form::new().part("archivo",reqwest::multipart::Part::text(contenido.to_string()).file_name("importacion.csv"));
+        let respuesta=peticion.multipart(form).send().await.map_err(|_|"No se pudo conectar con la API.".to_string())?;
+        if respuesta.status()==reqwest::StatusCode::UNAUTHORIZED && intento==0 { renovar_sesion().await?; continue; }
+        return leer_cuerpo(respuesta).await;
+    }
+    Err("No se pudo completar la importación.".into())
+}

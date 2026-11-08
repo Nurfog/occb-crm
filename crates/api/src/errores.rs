@@ -17,6 +17,9 @@ pub enum ErrorApi {
     /// Operación prohibida para el rol actual (403).
     #[error("Prohibido: {0}")]
     Prohibido(String),
+    /// Se superó el ritmo permitido para una operación (429).
+    #[error("Demasiadas solicitudes: {0}")]
+    DemasiadasSolicitudes(String),
     /// Error de base de datos (400 si es regla de negocio, 500 si es interno).
     #[error("Error de base de datos: {0}")]
     BaseDatos(#[from] sqlx::Error),
@@ -38,6 +41,11 @@ impl IntoResponse for ErrorApi {
             Self::Prohibido(detalle) => (
                 StatusCode::FORBIDDEN,
                 Json(json!({"codigo": "prohibido", "mensaje": detalle})),
+            )
+                .into_response(),
+            Self::DemasiadasSolicitudes(detalle) => (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({"codigo": "demasiadas_solicitudes", "mensaje": detalle})),
             )
                 .into_response(),
             Self::BaseDatos(error) => respuesta_bd(error),

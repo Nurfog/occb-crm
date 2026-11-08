@@ -19,27 +19,30 @@ mod rutas_colegios;
 mod rutas_correos;
 mod rutas_eventos;
 mod rutas_espacio;
+mod rutas_integraciones;
+mod rutas_importacion;
 mod rutas_notas;
 mod rutas_oportunidades;
 mod rutas_personas;
 mod rutas_tareas;
 mod rutas_territorio;
 
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, time::{Duration,Instant}};
 
-use axum::{Json, Router, http::StatusCode, routing::get};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
 use configuracion::Configuracion;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, timeout::TimeoutLayer, trace::TraceLayer};
 
 /// Punto de entrada: conecta, migra, siembra y sirve.
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "occb_api=info,tower_http=info".into()),
-        )
-        .init();
+    let filtro=tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_|"occb_api=info,tower_http=info".into());
+    if std::env::var("LOG_FORMAT").is_ok_and(|v|v.eq_ignore_ascii_case("json")) {
+        tracing_subscriber::fmt().json().with_env_filter(filtro).init();
+    } else {
+        tracing_subscriber::fmt().with_env_filter(filtro).init();
+    }
 
     let configuracion = Configuracion::desde_entorno();
     tracing::info!(
@@ -53,6 +56,7 @@ async fn main() {
     bd::migrar_y_sembrar(&pool)
         .await
         .expect("No se pudieron aplicar las migraciones.");
+    tokio::spawn(rutas_integraciones::ejecutar_worker_webhooks(pool.clone()));
 
     // Públicas: salud, acceso y directorio de referencia.
     let publicas = Router::new()
@@ -95,6 +99,35 @@ async fn main() {
                 .delete(rutas_espacio::eliminar_vista),
         )
         .route("/api/actividad", get(rutas_espacio::actividad))
+        .route(
+            "/api/importar/{objeto}",
+            axum::routing::post(rutas_importacion::importar),
+        )
+        .route(
+            "/api/claves",
+            get(rutas_integraciones::listar_claves).post(rutas_integraciones::crear_clave),
+        )
+        .route(
+            "/api/claves/{id}",
+            axum::routing::delete(rutas_integraciones::revocar_clave),
+        )
+        .route(
+            "/api/webhooks",
+            get(rutas_integraciones::listar_webhooks).post(rutas_integraciones::crear_webhook),
+        )
+        .route(
+            "/api/webhooks/{id}/probar",
+            axum::routing::post(rutas_integraciones::probar_webhook),
+        )
+        .route(
+            "/api/webhooks/{id}/entregas",
+            get(rutas_integraciones::entregas),
+        )
+        .route(
+            "/api/webhooks/{id}",
+            axum::routing::patch(rutas_integraciones::alternar_webhook)
+                .delete(rutas_integraciones::eliminar_webhook),
+        )
         .route(
             "/api/conversaciones",
             get(rutas_agentes::listar).post(rutas_agentes::crear),
@@ -246,7 +279,7 @@ async fn main() {
         // Alias en inglés (protegidos igual que sus pares).
         .route("/api/people", get(rutas_personas::listar))
         .route("/api/opportunities", get(rutas_oportunidades::listar))
-        .route_layer(axum::middleware::from_fn(auth::exigir_sesion));
+        .route_layer(axum::middleware::from_fn_with_state(pool.clone(), auth::exigir_sesion));
 
     let app = publicas
         .merge(protegidas)
@@ -264,16 +297,25 @@ async fn main() {
     let oyente = tokio::net::TcpListener::bind(direccion)
         .await
         .expect("No se pudo abrir el puerto");
-    axum::serve(oyente, app).await.expect("Error sirviendo la API");
+    axum::serve(oyente, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await.expect("Error sirviendo la API");
 }
 
 /// GET /api/salud — comprobación rápida en español.
-async fn salud() -> Json<serde_json::Value> {
+async fn salud(State(pool): State<sqlx::PgPool>) -> Json<serde_json::Value> {
+    let inicio=Instant::now();
+    let bd_ok=sqlx::query_scalar::<_,i32>("select 1").fetch_one(&pool).await.is_ok();
+    let migracion=sqlx::query_scalar::<_,i64>("select coalesce(max(version),0)::bigint from _sqlx_migrations where success")
+        .fetch_one(&pool).await.unwrap_or_default();
+    let latencia_ms=inicio.elapsed().as_millis() as u64;
     Json(serde_json::json!({
-        "estado": "correcto",
+        "estado": if bd_ok { "correcto" } else { "degradado" },
         "servicio": "occb-api",
+        "version": env!("CARGO_PKG_VERSION"),
         "producto": "occb-crm",
         "idioma": "es",
-        "bd": "postgres:18 con funciones seguras + RLS"
+        "bd": if bd_ok { "postgres:18 conectado" } else { "no disponible" },
+        "migracion": migracion,
+        "latencia_bd_ms": latencia_ms
     }))
 }

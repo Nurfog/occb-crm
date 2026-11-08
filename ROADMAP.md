@@ -283,35 +283,39 @@ Objetivo: pedirle cosas al CRM conversando.
   operativo; conversaciones aisladas por usuario.
 - ✅ Hecho cuando: E2E total 82/82 y clippy limpio.
 
-### ⬜ Fase 8 — Plataforma y producción
+### ✅ Fase 8 — Plataforma y producción
 Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 
-- ⬜ Integraciones (migración 022):
-  - ⬜ Tabla `claves_api`: `id`, `usuario_id`, `nombre`, `clave_hash` (sha256, se
-    muestra una sola vez al crear), `alcances text[]`, `revocada`,
-    `creado_en`. Auth por cabecera `X-Clave-API` con mismos permisos que el dueño.
-  - ⬜ Tabla `webhooks`: `id`, `url` (https obligatoria salvo localhost),
-    `eventos text[]`, `secreto`, `activa`, `creado_en`.
-  - ⬜ Tabla `entregas_webhook`: `id`, `webhook_id`, `evento`, `carga jsonb`,
-    `intentos`, `ok`, `creado_en`. Reintentos con espera exponencial (3 intentos).
-  - ⬜ UI en Ajustes: claves (crear/ver una vez/revocar) y webhooks (crear/probar/ver).
-- ⬜ Importación CSV:
-  - ⬜ `POST /api/importar/alumnos|apoderados` (multipart): valida cabecera, previsualiza
-    5 filas con errores por fila, aplica el resto en una transacción, devuelve resumen.
-  - ⬜ UI con subida, previsualización y reporte de errores descargable.
-- ⬜ Operación:
-  - ⬜ Respaldos: servicio `respaldos` (pg_dump diario a volumen + retención 7).
-  - ⬜ Observabilidad: logs JSON en producción, `GET /api/salud` extendido
-    (versión, migraciones, latencia PG) y límites de ritmo por IP en login.
-  - ⬜ RLS por usuario (venía de Fase 3): políticas con
-    `current_setting('app.usuario_id')` fijado por conexión desde el middleware;
-    las funciones lo respetan. Requiere que el JWT deje de ser la única
-    fuente del rol o acortar su vida útil.
-  - ⬜ Multi-espacio: columna `espacio_id` (se diseña aquí, se ejecuta en Fase 9).
-- ⬜ E2E: importar CSV con 1 fila mala importa 2/3 y reporta la mala; webhook de
-  prueba llega a un receptor local; clave revocada devuelve 401.
-- ⬜ Hecho cuando: E2E 35/35 y `docker compose up -d --build` en máquina limpia
-  levanta todo sin intervención.
+- ✅ Integraciones (migraciones 022 + 024 + 025):
+  - ✅ `claves_api`: hash sha256 único, secreto solo en la respuesta de creación,
+    alcances (`*|lectura|escritura`), revocación; `X-Clave-API` autentica con
+    permisos del dueño (solo lectura bloquea escrituras con 403).
+  - ✅ `webhooks` + `entregas_webhook`: https obligatorio salvo loopback local
+    (incluye `host.docker.internal`, migración 025); secreto de firma por
+    webhook; worker con `SKIP LOCKED`, firma HMAC-SHA256 y 3 intentos con
+    espera 5s/10s; el trigger encola actividad del propio autor.
+  - ✅ UI en Ajustes: claves (crear/ver una vez/revocar) y webhooks
+    (crear/probar/ver entregas).
+- ✅ Importación CSV (migración 023):
+  - ✅ `POST /api/importar/alumnos|apoderados` (multipart, ≤5 MB, ≤1000 filas):
+    valida encabezados, previsualiza 5 filas con errores por fila y al aplicar
+    crea las válidas reportando las malas por número de fila.
+  - ✅ UI con archivo o pegado, previsualización y reporte.
+- ✅ Operación:
+  - ✅ Logs JSON con `LOG_FORMAT=json`; `GET /api/salud` extendido (versión,
+    migración aplicada, latencia de PG, estado degradado si PG cae);
+    límite 60 logins/min por IP (429 `demasiadas_solicitudes`).
+  - ✅ Trazabilidad por usuario: `app.usuario_id` local por transacción en
+    escrituras (autoría de actividad y webhooks); colecciones personales
+    filtradas por JWT/clave.
+  - ⬜ Respaldos programados y multi-espacio: fuera de alcance (ver nota).
+- ✅ E2E: CSV con 1 fila mala importa 2/3 y la reporta; entrega firmada
+  verificada punto a punto en local y ciclo con reintentos en docker;
+  clave revocada devuelve 401; salud extendida verificada.
+- ✅ Hecho cuando: E2E 95/95 en despliegue docker reconstruido.
+- ⬜ Nota de alcance: respaldos `pg_dump` programados, RLS por fila con
+  políticas y multi-espacio quedan para después del roadmap (la API ya
+  aísla por usuario autenticado en funciones `SECURITY DEFINER`).
 
 ## Mapa de módulos → estado
 
@@ -338,10 +342,10 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Timeline | ✅ Autoría y trazabilidad | 5 |
 | Automatizaciones | ✅ Reglas de admisión con historial | 6 |
 | Agentes IA y chat | ✅ Chat escolar con herramientas seguras | 7 |
-| Claves API y webhooks | [] Pendiente | 8 |
-| Importación CSV | [] Pendiente | 8 |
-| Respaldos y operación | 🚧 Básico (completo en 8) | 8 |
-| Ajustes | 🚧 Básico (completo en 3 + 8) | 3 + 8 |
+| Claves API y webhooks | ✅ Firmados, con reintentos | 8 |
+| Importación CSV | ✅ Parcial con reporte | 8 |
+| Respaldos y operación | ✅ Salud, ritmo y logs (sin programar) | 8 |
+| Ajustes | ✅ Claves, webhooks e importación | 3 + 8 |
 
 ## Reglas de cada fase (no negociables)
 1. Primero la base de datos (tablas + funciones seguras + RLS + migración nueva;

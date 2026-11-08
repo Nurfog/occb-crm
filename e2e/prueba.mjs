@@ -1074,20 +1074,139 @@ if (process.env.LLM_MOCK_API_URL) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo: 'Mock E2E' }),
   })).json();
   const panelReal = await (await api(`${API}/api/panel`)).json();
-  const totalMock = await (await apiMock(`/api/conversaciones/${convMock.id}/preguntar`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pregunta: '¿Cuál es el total real de la tubería?' }),
-  })).json();
-  afirma(totalMock.respuesta.includes(String(panelReal.valor_tuberia)), 'proveedor simulado usa el total real del panel');
-  const notaMock = await (await apiMock(`/api/conversaciones/${convMock.id}/preguntar`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pregunta: 'Crear una nota de prueba' }),
-  })).json();
+  async function preguntarMock(id, pregunta) {
+    for (let i = 0; i < 2; i++) {
+      const r = await (await apiMock(`/api/conversaciones/${id}/preguntar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pregunta }),
+      })).json();
+      if (typeof r.respuesta === 'string') return r;
+      await dormir(2000);
+    }
+    return {};
+  }
+  const totalMock = await preguntarMock(convMock.id, '¿Cuál es el total real de la tubería?');
+  afirma(typeof totalMock.respuesta === 'string' && totalMock.respuesta.includes(String(panelReal.valor_tuberia)), 'proveedor simulado usa el total real del panel');
+  const notaMock = await preguntarMock(convMock.id, 'Crear una nota de prueba');
   const notasMock = await (await api(`${API}/api/notas?busqueda=Nota%20creada%20por%20asistente`)).json();
-  afirma(notasMock.some((n) => notaMock.fuentes.some((f) => f.id === n.id)), 'asistente simulado crea nota por función segura y la cita');
+  afirma(Array.isArray(notaMock.fuentes) && notasMock.some((n) => notaMock.fuentes.some((f) => f.id === n.id)), 'asistente simulado crea nota por función segura y la cita');
   for (const n of notasMock) await api(`${API}/api/notas/${n.id}`, { method: 'DELETE' });
   await apiMock(`/api/conversaciones/${convMock.id}`, { method: 'DELETE' });
 } else {
   console.log('SKIP — proveedor LLM simulado (define LLM_MOCK_API_URL para ejecutarlo)');
 }
+
+// --- 26. Plataforma: salud, claves, importación CSV y webhooks ---
+const salud = await (await fetch(`${API}/api/salud`)).json();
+afirma(salud.estado === 'correcto' && typeof salud.version === 'string' && salud.migracion >= 24 && typeof salud.latencia_bd_ms === 'number', 'salud extendida con versión, migración y latencia');
+
+const NOMBRE_CLAVE = `Clave E2E ${SELLO}`;
+const claveCreada = await (await api(`${API}/api/claves`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: NOMBRE_CLAVE }),
+})).json();
+afirma(typeof claveCreada.clave === 'string' && claveCreada.clave.startsWith('occb_'), 'clave API se muestra una sola vez al crear');
+const conClave = await fetch(`${API}/api/personas?limite=1`, { headers: { 'X-Clave-API': claveCreada.clave } });
+afirma(conClave.status === 200, 'clave API autentica con permisos del dueño');
+await api(`${API}/api/claves/${claveCreada.id}`, { method: 'DELETE' });
+const listaClaves = await (await api(`${API}/api/claves`)).json();
+afirma(listaClaves.some((k) => k.id === claveCreada.id && k.revocada === true) && !('clave' in listaClaves.find((k) => k.id === claveCreada.id)), 'listado no expone el secreto y marca revocada');
+const revocada = await fetch(`${API}/api/personas?limite=1`, { headers: { 'X-Clave-API': claveCreada.clave } });
+afirma(revocada.status === 401, 'clave revocada devuelve 401');
+
+const CSV_F8 = 'rut,nombres,apellidos\n33333333-3,Importa,Uno\n44444444-4,Importa,Dos\nno-rut,X,Y\n';
+async function importarCsv(objeto, csv, aplicar) {
+  const forma = new FormData();
+  forma.set('archivo', new Blob([csv], { type: 'text/csv' }), 'importacion.csv');
+  return (await (await api(`${API}/api/importar/${objeto}?aplicar=${aplicar}`, { method: 'POST', body: forma })).json());
+}
+const previo = await importarCsv('alumnos', CSV_F8, false);
+afirma(previo.aplicado === false && previo.total === 3 && previo.previsualizacion.some((f) => f.fila === 4 && f.error), 'preview CSV reporta fila mala sin aplicar');
+const aplicado = await importarCsv('alumnos', CSV_F8, true);
+afirma(aplicado.resultado.creados === 2 && aplicado.resultado.errores.length === 1 && aplicado.resultado.errores[0].fila === 4, 'importar CSV aplica 2/3 y reporta la mala');
+for (const rut of ['33333333-3', '44444444-4']) {
+  const filas = await (await api(`${API}/api/alumnos?busqueda=${encodeURIComponent(rut)}`)).json();
+  for (const a of filas) await api(`${API}/api/alumnos/${a.id}`, { method: 'DELETE' });
+}
+
+// Receptor local para el webhook (el worker entrega con firma HMAC).
+const { createServer } = await import('node:http');
+const RECEPTOR_PUERTO = 18766;
+let cuerpoHook = null;
+let cabecerasHook = null;
+const receptor = createServer((req, res) => {
+  const partes = [];
+  req.on('data', (c) => partes.push(c));
+  req.on('end', () => {
+    cuerpoHook = Buffer.concat(partes);
+    cabecerasHook = { evento: req.headers['x-occb-evento'], firma: req.headers['x-occb-firma'] };
+    res.writeHead(200); res.end();
+  });
+});
+await new Promise((res) => receptor.listen(RECEPTOR_PUERTO, '0.0.0.0', res));
+const WH_HOST = process.env.WEBHOOK_HOST || '127.0.0.1';
+const NOMBRE_HOOK = `Hook E2E ${SELLO}`;
+const hookCreado = await (await api(`${API}/api/webhooks`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: NOMBRE_HOOK, url: `http://${WH_HOST}:${RECEPTOR_PUERTO}/occb`, eventos: ['prueba'] }),
+})).json();
+afirma(typeof hookCreado.secreto === 'string' && hookCreado.secreto.length >= 16, 'secreto de webhook se muestra una vez al crear');
+await api(`${API}/api/webhooks/${hookCreado.id}/probar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+// El worker reclama con SKIP LOCKED y reintenta con espera (5s, 10s): como
+// máximo 3 intentos. Si el receptor es alcanzable se exige éxito + firma;
+// si no (p. ej. API dockerizada sin ruta al host), se exige el registro
+// del fallo tras agotar los reintentos.
+const esLoopback = ['127.0.0.1', 'localhost', '::1'].includes(WH_HOST);
+let entregaFinal = null;
+for (let i = 0; i < 60; i++) {
+  await dormir(1000);
+  const ent = await (await api(`${API}/api/webhooks/${hookCreado.id}/entregas`)).json();
+  if (ent.length && ent[0].ok !== null) { entregaFinal = ent[0]; break; }
+}
+afirma(!!entregaFinal, 'worker procesa la entrega hasta estado final');
+if (esLoopback) {
+  afirma(entregaFinal?.ok === true && !!cuerpoHook, 'webhook de prueba llega al receptor local');
+  const { createHmac } = await import('node:crypto');
+  const firmaEsperada = 'sha256=' + createHmac('sha256', hookCreado.secreto).update(cuerpoHook).digest('hex');
+  afirma(cabecerasHook?.firma === firmaEsperada && cabecerasHook?.evento === 'prueba', 'entrega firmada con HMAC verificable');
+} else {
+  afirma(entregaFinal?.ok === false && entregaFinal?.intentos === 3 && /conectar|receptor|HTTP/.test(entregaFinal?.ultimo_error || ''), 'fallo de entrega queda registrado tras 3 intentos');
+}
+await api(`${API}/api/webhooks/${hookCreado.id}`, { method: 'DELETE' });
+await new Promise((res) => receptor.close(res));
+
+// --- 27. Ajustes por UI: clave visible una vez e importación con reporte ---
+await ir('/ajustes');
+await esperarCondicion(`document.body.textContent.includes('Claves API')`);
+const NOMBRE_CLAVE_UI = `Clave UI ${SELLO}`;
+await evaluar(`(() => {
+  const paneles = [...document.querySelectorAll('.integration-panel')];
+  const inp = paneles[0].querySelector('input');
+  inp.focus(); inp.value = ${JSON.stringify(NOMBRE_CLAVE_UI)};
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  [...paneles[0].querySelectorAll('button')].find(b => b.textContent.includes('Nueva clave')).click();
+})()`);
+const secretoUi = await esperarCondicion(`(() => {
+  const codigo = document.querySelector('.secret-once code');
+  return codigo && codigo.textContent.startsWith('occb_');
+})()`);
+afirma(secretoUi, 'crear clave por UI muestra el secreto una vez');
+const clavesUi = await (await api(`${API}/api/claves`)).json();
+const claveUi = clavesUi.find((k) => k.nombre === NOMBRE_CLAVE_UI);
+afirma(!!claveUi, 'clave creada por UI persiste');
+if (claveUi) await api(`${API}/api/claves/${claveUi.id}`, { method: 'DELETE' });
+await evaluar(`(() => {
+  const paneles = [...document.querySelectorAll('.integration-panel')];
+  const imp = paneles[paneles.length - 1];
+  const area = imp.querySelector('textarea');
+  area.focus(); area.value = ${JSON.stringify(CSV_F8)};
+  area.dispatchEvent(new Event('input', { bubbles: true }));
+  [...imp.querySelectorAll('button')].find(b => b.textContent.includes('Previsualizar')).click();
+})()`);
+const reporteUi = await esperarCondicion(`(() => {
+  const pre = document.querySelector('.csv-result');
+  return pre && pre.textContent.includes('no-rut');
+})()`);
+afirma(reporteUi, 'importación por UI previsualiza y reporta fila mala');
 
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();

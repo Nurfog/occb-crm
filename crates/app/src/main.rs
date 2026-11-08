@@ -3515,6 +3515,61 @@ fn VistaNotas() -> Element {
 #[component]
 fn VistaAjustes() -> Element {
     let t = textos(IDIOMA());
+    let mut claves = use_signal(Vec::<serde_json::Value>::new);
+    let mut webhooks = use_signal(Vec::<serde_json::Value>::new);
+    let mut nombre_clave = use_signal(String::new);
+    let mut clave_nueva = use_signal(String::new);
+    let mut nombre_webhook = use_signal(String::new);
+    let mut url_webhook = use_signal(String::new);
+    let mut evento_webhook = use_signal(|| "registro.creado".to_string());
+    let mut entregas_hook = use_signal(Vec::<serde_json::Value>::new);
+    let mut csv_objeto = use_signal(|| "alumnos".to_string());
+    let mut csv_texto = use_signal(String::new);
+    let mut csv_resultado = use_signal(|| serde_json::Value::Null);
+    let mut aviso = use_signal(String::new);
+    let recargar_integraciones = move || {
+        spawn(async move {
+            if let Ok(lista) = cliente::listar_claves_api().await { claves.set(lista); }
+            if let Ok(lista) = cliente::listar_webhooks().await { webhooks.set(lista); }
+        });
+    };
+    use_effect(move || {
+        spawn(async move {
+            if let Ok(lista) = cliente::listar_claves_api().await { claves.set(lista); }
+            if let Ok(lista) = cliente::listar_webhooks().await { webhooks.set(lista); }
+        });
+    });
+    let crear_clave = move |_| {
+        let nombre = nombre_clave.read().trim().to_string();
+        spawn(async move {
+            match cliente::crear_clave_api(&nombre).await {
+                Ok(c) => {
+                    clave_nueva.set(c.get("clave").and_then(|x|x.as_str()).unwrap_or("").to_string());
+                    nombre_clave.set(String::new());
+                    recargar_integraciones();
+                    aviso.set(String::new());
+                }
+                Err(m) => aviso.set(m),
+            }
+        });
+    };
+    let crear_webhook_btn = move |_| {
+        let (nombre,url,eventos) = (nombre_webhook.read().trim().to_string(),url_webhook.read().trim().to_string(),vec![evento_webhook.read().clone()]);
+        spawn(async move {
+            match cliente::crear_webhook(&nombre,&url,eventos).await {
+                Ok(_) => { nombre_webhook.set(String::new()); url_webhook.set(String::new()); recargar_integraciones(); aviso.set(String::new()); }
+                Err(m) => aviso.set(m),
+            }
+        });
+    };
+    let previsualizar = move |_| {
+        let (obj,contenido) = (csv_objeto.read().clone(),csv_texto.read().clone());
+        spawn(async move { match cliente::importar_csv(&obj,&contenido,false).await { Ok(r)=>{csv_resultado.set(r);aviso.set(String::new());},Err(m)=>aviso.set(m) } });
+    };
+    let aplicar_csv = move |_| {
+        let (obj,contenido) = (csv_objeto.read().clone(),csv_texto.read().clone());
+        spawn(async move { match cliente::importar_csv(&obj,&contenido,true).await { Ok(r)=>{csv_resultado.set(r);aviso.set(String::new());},Err(m)=>aviso.set(m) } });
+    };
     rsx! {
         BarraSuperior {
             titulo: t.ajustes.to_string(),
@@ -3549,6 +3604,82 @@ fn VistaAjustes() -> Element {
             div { class: "row",
                 button { class: "btn-primary", "{t.guardar}" }
             }
+        }
+        if !aviso.read().is_empty() { p { class: "form-error", "{aviso}" } }
+        div { class: "panel integration-panel",
+            div { class: "panel-head", span { class: "panel-title", "{t.claves_api}" } }
+            div { class: "row",
+                input { class: "input", placeholder: "{t.nombre}", value: "{nombre_clave}", oninput: move |e| nombre_clave.set(e.value()) }
+                button { class: "btn-primary", onclick: crear_clave, "{t.nueva_clave}" }
+            }
+            if !clave_nueva.read().is_empty() {
+                p { class: "form-error secret-once", if IDIOMA() == Idioma::Es { "Copia esta clave ahora; no volverá a mostrarse:" } else { "Copy this key now; it will not be shown again:" }, code { "{clave_nueva}" } }
+            }
+            for k in claves.read().iter() {
+                div { class: "mini-row", key: "{k.get(\"id\").and_then(|x|x.as_str()).unwrap_or(\"\")}",
+                    span { class: "mini-name", "{k.get(\"nombre\").and_then(|x|x.as_str()).unwrap_or(\"API\")}" }
+                    span { class: "mini-amt", if k.get("revocada").and_then(|x|x.as_bool()).unwrap_or(false) { "Revocada" } else { "Activa" } }
+                    if !k.get("revocada").and_then(|x|x.as_bool()).unwrap_or(false) {
+                        button { class: "btn-mini", onclick: {
+                            let id=Uuid::parse_str(k.get("id").and_then(|x|x.as_str()).unwrap_or("")).ok();
+                            move |_| if let Some(id)=id { spawn(async move { if let Err(m)=cliente::revocar_clave_api(id).await { aviso.set(m); } else { recargar_integraciones(); } }); }
+                        }, "Revocar" }
+                    }
+                }
+            }
+        }
+        div { class: "panel integration-panel",
+            div { class: "panel-head", span { class: "panel-title", "{t.webhooks}" } }
+            div { class: "row",
+                input { class: "input", placeholder: "{t.nombre_webhook}", value: "{nombre_webhook}", oninput: move |e| nombre_webhook.set(e.value()) }
+                input { class: "input", placeholder: "https://…", value: "{url_webhook}", oninput: move |e| url_webhook.set(e.value()) }
+                select { class: "input", value: "{evento_webhook}", onchange: move |e| evento_webhook.set(e.value()),
+                    option { value: "registro.creado", if IDIOMA()==Idioma::Es { "Registros creados" } else { "Records created" } }
+                    option { value: "registro.actualizado", if IDIOMA()==Idioma::Es { "Registros actualizados" } else { "Records updated" } }
+                    option { value: "postulacion.creado", if IDIOMA()==Idioma::Es { "Postulación creada" } else { "Application created" } }
+                    option { value: "postulacion.actualizado", if IDIOMA()==Idioma::Es { "Postulación actualizada" } else { "Application updated" } }
+                }
+                button { class: "btn-primary", onclick: crear_webhook_btn, "{t.guardar}" }
+            }
+            for w in webhooks.read().iter() {
+                {
+                    let wid=Uuid::parse_str(w.get("id").and_then(|x|x.as_str()).unwrap_or("")).ok();
+                    rsx! { div { class: "mini-row", key: "{w.get(\"id\").and_then(|x|x.as_str()).unwrap_or(\"\")}",
+                        span { class: "mini-name", "{w.get(\"nombre\").and_then(|x|x.as_str()).unwrap_or(\"Webhook\")}" }
+                        span { class: "mini-amt", "{w.get(\"url\").and_then(|x|x.as_str()).unwrap_or(\"\")}" }
+                        if let Some(id)=wid {
+                            button { class: "btn-mini", onclick: move |_| { spawn(async move { match cliente::probar_webhook(id).await { Ok(_)=>{ if let Ok(e)=cliente::entregas_webhook(id).await {entregas_hook.set(e);} }, Err(m)=>aviso.set(m) } }); }, "{t.probar}" }
+                            button { class: "btn-mini", onclick: move |_| { spawn(async move { let _=cliente::alternar_webhook(id,false).await; recargar_integraciones(); }); }, "Desactivar" }
+                            button { class: "btn-mini", onclick: move |_| { spawn(async move { let _=cliente::eliminar_webhook(id).await; recargar_integraciones(); }); }, "✕" }
+                        }
+                    } }
+                }
+            }
+            for e in entregas_hook.read().iter() {
+                div { class: "mini-row", key: "{e.get(\"id\").and_then(|x|x.as_str()).unwrap_or(\"\")}",
+                    span { class: "mini-name", "{e.get(\"evento\").and_then(|x|x.as_str()).unwrap_or(\"entrega\")}" }
+                    span { class: "mini-amt", "{e.get(\"ultimo_error\").and_then(|x|x.as_str()).unwrap_or(\"Pendiente\")}" }
+                }
+            }
+        }
+        div { class: "panel integration-panel",
+            div { class: "panel-head", span { class: "panel-title", "{t.importar}" } }
+            select { class: "input", value: "{csv_objeto}", onchange: move |e| csv_objeto.set(e.value()),
+                option { value: "alumnos", "{t.alumnos}" }
+                option { value: "apoderados", "{t.apoderados}" }
+            }
+            label { "{t.csv_archivo}" }
+            input { class: "input", r#type: "file", accept: ".csv,text/csv", onchange: move |e| {
+                if let Some(archivo)=e.files().first().cloned() {
+                    spawn(async move { match archivo.read_string().await { Ok(s)=>csv_texto.set(s), Err(_)=>aviso.set(if IDIOMA()==Idioma::Es { "No se pudo leer el archivo.".into() } else { "Could not read file.".into() }) } });
+                }
+            } }
+            textarea { class: "input csv-preview", value: "{csv_texto}", oninput: move |e| csv_texto.set(e.value()), placeholder: "rut,nombres,apellidos…" }
+            div { class: "cal-bar",
+                button { class: "btn-mini", onclick: previsualizar, "{t.previsualizar}" }
+                button { class: "btn-primary", onclick: aplicar_csv, "{t.aplicar_importacion}" }
+            }
+            if !csv_resultado().is_null() { pre { class: "csv-result", "{csv_resultado}" } }
         }
     }
 }

@@ -4,7 +4,7 @@
 //! - Renovación opaca en cookie `HttpOnly` (sha256 en PG, rota en cada uso).
 //! - El secreto sale de `APP_SECRETO` (con valor de desarrollo si falta).
 
-use std::sync::OnceLock;
+use std::{collections::{HashMap,VecDeque},net::SocketAddr,sync::{Mutex,OnceLock}};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use argon2::{
@@ -13,7 +13,7 @@ use argon2::{
 };
 use axum::{
     Json,
-    extract::{Request, State},
+    extract::{ConnectInfo,Request, State},
     http::{StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -48,6 +48,8 @@ pub struct UsuarioActual {
     pub id: uuid::Uuid,
     pub nombre: String,
     pub rol: String,
+    /// `None` para JWT; una clave API lleva alcances explícitos.
+    pub alcances: Option<Vec<String>>,
 }
 
 fn ahora_segs() -> u64 {
@@ -95,6 +97,18 @@ fn huella(token: &str) -> String {
     format!("{:x}", Sha256::digest(token.as_bytes()))
 }
 
+/// Memoria local de intentos por IP: máximo 60 solicitudes de login por minuto.
+fn login_limitado(ip: std::net::IpAddr) -> bool {
+    static INTENTOS: OnceLock<Mutex<HashMap<std::net::IpAddr,VecDeque<SystemTime>>>> = OnceLock::new();
+    let ahora=SystemTime::now();
+    let mut mapa=INTENTOS.get_or_init(||Mutex::new(HashMap::new())).lock().unwrap_or_else(|e|e.into_inner());
+    let cola=mapa.entry(ip).or_default();
+    while cola.front().is_some_and(|t|ahora.duration_since(*t).unwrap_or_default().as_secs()>=60){cola.pop_front();}
+    if cola.len()>=60{return true;}
+    cola.push_back(ahora);
+    false
+}
+
 /// Emite un JWT de acceso para el usuario.
 fn emitir_acceso(id: &uuid::Uuid, nombre: &str, rol: &str) -> Result<String, ErrorApi> {
     let reclamos = Reclamos {
@@ -129,23 +143,58 @@ fn leer_acceso(token: &str) -> Result<UsuarioActual, ErrorApi> {
         id,
         nombre: datos.claims.nombre,
         rol: datos.claims.rol,
+        alcances: None,
     })
 }
 
 /// Middleware que exige `Authorization: Bearer <jwt>` válido.
-pub async fn exigir_sesion(request: Request, next: Next) -> Response {
+pub async fn exigir_sesion(
+    State(pool): State<sqlx::PgPool>,
+    request: Request,
+    next: Next,
+) -> Response {
     let (mut partes, cuerpo) = request.into_parts();
-    let token = partes
+    let bearer = partes
         .headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "));
-    let usuario = match token {
-        Some(t) => leer_acceso(t.trim()),
-        None => Err(ErrorApi::NoEncontrado("Falta autorización.".into())),
+    let usuario = if let Some(token) = bearer {
+        leer_acceso(token.trim())
+    } else if let Some(clave) = partes.headers.get("x-clave-api").and_then(|v| v.to_str().ok()) {
+        use sqlx::Row;
+        let hash = format!("{:x}", Sha256::digest(clave.trim().as_bytes()));
+        match sqlx::query("select * from validar_clave_api($1)")
+            .bind(hash)
+            .fetch_optional(&pool)
+            .await
+        {
+            Ok(Some(f)) => Ok(UsuarioActual {
+                id: f.get("usuario_id"),
+                nombre: f.get("nombre"),
+                rol: f.get("rol"),
+                alcances: Some(f.get("alcances")),
+            }),
+            Ok(None) => Err(ErrorApi::NoEncontrado("Clave API inválida o revocada.".into())),
+            Err(e) => {
+                tracing::error!(?e, "No se pudo validar clave API");
+                Err(ErrorApi::NoEncontrado("Clave API inválida.".into()))
+            }
+        }
+    } else {
+        Err(ErrorApi::NoEncontrado("Falta autorización.".into()))
     };
     match usuario {
         Ok(usuario) => {
+            if let Some(alcances) = &usuario.alcances
+                && !alcances.iter().any(|a| a == "*" || a == "escritura")
+                && !matches!(partes.method.clone(), axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS)
+            {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({"codigo":"prohibido","mensaje":"La clave API no tiene alcance de escritura."})),
+                ).into_response();
+            }
             partes.extensions.insert(usuario);
             next.run(Request::from_parts(partes, cuerpo)).await
         }
@@ -231,9 +280,13 @@ pub async fn registro(
 
 /// POST /api/acceso/login — verifica clave + sesión.
 pub async fn login(
+    ConnectInfo(direccion): ConnectInfo<SocketAddr>,
     State(pool): State<PgPool>,
     Json(cuerpo): Json<CuerpoAcceso>,
 ) -> Result<(StatusCode, axum::http::HeaderMap, Json<serde_json::Value>), ErrorApi> {
+    if login_limitado(direccion.ip()) {
+        return Err(ErrorApi::DemasiadasSolicitudes("Espere un minuto antes de volver a intentar.".into()));
+    }
     let fila = sqlx::query("select * from credencial_usuario($1)")
         .bind(cuerpo.correo.trim())
         .fetch_optional(&pool)
