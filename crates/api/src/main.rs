@@ -21,6 +21,7 @@ mod rutas_eventos;
 mod rutas_espacio;
 mod rutas_integraciones;
 mod rutas_importacion;
+mod rutas_ingresos;
 mod rutas_notas;
 mod rutas_oportunidades;
 mod rutas_personas;
@@ -102,6 +103,15 @@ async fn main() {
         .route(
             "/api/importar/{objeto}",
             axum::routing::post(rutas_importacion::importar),
+        )
+        .route(
+            "/api/ingresos",
+            get(rutas_ingresos::listar).post(rutas_ingresos::crear),
+        )
+        .route(
+            "/api/ingresos/{id}",
+            axum::routing::patch(rutas_ingresos::actualizar)
+                .delete(rutas_ingresos::eliminar),
         )
         .route(
             "/api/claves",

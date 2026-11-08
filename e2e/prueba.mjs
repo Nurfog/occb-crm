@@ -1263,6 +1263,65 @@ await api(`${API}/api/alumnos/${alumSalud.id}`, { method: 'DELETE' });
 await api(`${API}/api/alumnos/${filaSalud[0].id}`, { method: 'DELETE' });
 await api(`${API}/api/apoderados/${apoOcu.id}`, { method: 'DELETE' });
 
+// --- 29. Ingresos médicos 1:N en la ficha del alumno ---
+const RUT_ING = '12121212-9';
+const alumIng = await (await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: RUT_ING, nombres: 'Ing', apellidos: `E2E ${SELLO}` }),
+})).json();
+const MOTIVO_1 = `Control ${SELLO}`;
+const MOTIVO_2 = `Urgencia ${SELLO}`;
+for (const motivo of [MOTIVO_1, MOTIVO_2]) {
+  const ing = await (await api(`${API}/api/ingresos`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alumno_id: alumIng.id, motivo, profesional: 'Dra. Soto' }),
+  })).json();
+  afirma(!!ing.id, `ingreso médico ${motivo} se crea`);
+}
+const ings = await (await api(`${API}/api/ingresos?alumno_id=${alumIng.id}`)).json();
+afirma(ings.length === 2, 'alumno lista sus dos ingresos');
+const ingMal = await (await api(`${API}/api/ingresos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ alumno_id: alumIng.id, motivo: '' }),
+})).json();
+afirma(ingMal.codigo === 'datos_invalidos', 'ingreso sin motivo se rechaza');
+
+// Alta y baja por UI en la ficha.
+await ir(`/alumnos/${alumIng.id}`);
+await esperarCondicion(`document.body.textContent.includes('Ingresos médicos')`);
+const MOTIVO_UI = `Chequeo ${SELLO}`;
+await evaluar(`(() => {
+  const paneles = [...document.querySelectorAll('.panel')];
+  const panel = paneles.find(p => p.textContent.includes('Ingresos médicos'));
+  const inputs = panel.querySelectorAll('input');
+  const set = (el, v) => { el.focus(); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+  set(inputs[0], ${JSON.stringify(MOTIVO_UI)});
+  set(inputs[2], 'Dr. Ruiz');
+})()`);
+await evaluar(`(() => {
+  const panel = [...document.querySelectorAll('.panel')].find(p => p.textContent.includes('Ingresos médicos'));
+  [...panel.querySelectorAll('button')].find(b => b.textContent.includes('Crear')).click();
+})()`);
+const ingUi = await esperarCondicion(`(() => {
+  const panel = [...document.querySelectorAll('.panel')].find(p => p.textContent.includes('Ingresos médicos'));
+  return panel && panel.textContent.includes(${JSON.stringify(MOTIVO_UI)});
+})()`);
+afirma(ingUi, 'ingreso creado por UI aparece en la ficha');
+const ingsUi = await (await api(`${API}/api/ingresos?alumno_id=${alumIng.id}`)).json();
+afirma(ingsUi.length === 3, 'ingreso de UI persiste en PG');
+await evaluar(`(() => {
+  const panel = [...document.querySelectorAll('.panel')].find(p => p.textContent.includes('Ingresos médicos'));
+  const fila = [...panel.querySelectorAll('.mini-row')].find(f => f.textContent.includes(${JSON.stringify(MOTIVO_UI)}));
+  [...fila.querySelectorAll('button')].find(b => b.textContent === '✕').click();
+})()`);
+const ingFuera = await esperarCondicion(`(() => {
+  const panel = [...document.querySelectorAll('.panel')].find(p => p.textContent.includes('Ingresos médicos'));
+  return panel && !panel.textContent.includes(${JSON.stringify(MOTIVO_UI)});
+})()`);
+afirma(ingFuera, 'baja de ingreso por UI persiste en la ficha');
+for (const g of ingsUi) await api(`${API}/api/ingresos/${g.id}`, { method: 'DELETE' });
+await api(`${API}/api/alumnos/${alumIng.id}`, { method: 'DELETE' });
+
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();
 try {

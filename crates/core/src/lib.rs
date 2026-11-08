@@ -15,8 +15,8 @@ pub mod validacion;
 
 pub use dominio::{
     Actividad, Alumno, Apoderado, Automatizacion, Colegio, Conversacion, Correo, CrearAlumno, CrearApoderado, CrearColegio,
-    CrearCorreo, CrearEvento, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno,
-    Ejecucion, EstadoTarea, EtapaOportunidad, Evento, Favorito, Mensaje, Nota, Oportunidad, Persona,
+    CrearCorreo, CrearEvento, CrearIngreso, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno,
+    Ejecucion, EstadoTarea, EtapaOportunidad, Evento, Favorito, IngresoMedico, Mensaje, Nota, Oportunidad, Persona,
     ResultadoBusqueda, ResumenPanel, Tarea, Traslado, VistaGuardada, VinculoApoderado,
     calcular_resumen,
 };
@@ -28,6 +28,6 @@ pub use semilla::{
 pub use i18n::{Idioma, Textos, textos};
 pub use validacion::{
     ErrorDominio, correo_valido, normalizar_rut, validar_alumno, validar_apoderado, validar_colegio,
-    validar_correo, validar_evento, validar_nota, validar_oportunidad, validar_persona, validar_rut,
+    validar_correo, validar_evento, validar_ingreso, validar_nota, validar_oportunidad, validar_persona, validar_rut,
     validar_tarea,
 };

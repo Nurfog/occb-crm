@@ -9,8 +9,8 @@
 use dioxus::prelude::{GlobalSignal, Signal};
 use occb_core::{
     Alumno, Apoderado, Colegio, Correo, CrearAlumno, CrearApoderado, CrearColegio, CrearCorreo,
-    Actividad, Automatizacion, Conversacion, CrearEvento, CrearNota, CrearOportunidad,
-    CrearPersona, CrearTarea, Ejecucion, Evento, Favorito, Mensaje, Nota, Oportunidad, Persona,
+    Actividad, Automatizacion, Conversacion, CrearEvento, CrearIngreso, CrearNota, CrearOportunidad,
+    CrearPersona, CrearTarea, Ejecucion, Evento, Favorito, IngresoMedico, Mensaje, Nota, Oportunidad, Persona,
     ResumenPanel, ResultadoBusqueda, Tarea, Traslado, VistaGuardada,
 };
 use uuid::Uuid;
@@ -547,6 +547,21 @@ pub async fn actualizar_nota(id: Uuid, datos: &CrearNota) -> Result<Nota, String
 /// Elimina una nota.
 pub async fn eliminar_nota(id: Uuid) -> Result<(), String> {
     borrar(&format!("/api/notas/{id}")).await
+}
+
+/// Ingresos médicos de un alumno (historial 1:N de la ficha).
+pub async fn ingresos_de_alumno(alumno_id: Uuid) -> Result<Vec<IngresoMedico>, String> {
+    obtener_json(&format!("/api/ingresos?alumno_id={alumno_id}")).await
+}
+
+/// Registra un ingreso médico vía `crear_ingreso()`.
+pub async fn crear_ingreso(datos: &CrearIngreso) -> Result<IngresoMedico, String> {
+    enviar_json("POST", "/api/ingresos", datos).await
+}
+
+/// Elimina un ingreso médico.
+pub async fn eliminar_ingreso(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/ingresos/{id}")).await
 }
 
 /// Notas vinculadas a un alumno (para su ficha).

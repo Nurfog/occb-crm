@@ -1,7 +1,7 @@
 //! Validación pura del dominio con mensajes en español.
 //! Se usa tanto en la API (antes de llamar a PostgreSQL) como en el frontal.
 
-use super::dominio::{CrearAlumno, CrearApoderado, CrearColegio, CrearCorreo, CrearEvento, CrearNota, CrearOportunidad, CrearPersona, CrearTarea};
+use super::dominio::{CrearAlumno, CrearApoderado, CrearColegio, CrearCorreo, CrearEvento, CrearIngreso, CrearNota, CrearOportunidad, CrearPersona, CrearTarea};
 use thiserror::Error;
 
 /// Error de dominio con mensaje listo para mostrar al usuario.
@@ -194,6 +194,14 @@ pub fn validar_apoderado(mut entrada: CrearApoderado) -> Result<CrearApoderado, 
     }
     validar_territorio_entrada(&mut entrada.region_codigo, &mut entrada.comuna_codigo)?;
     entrada.ocupacion = exigir_largo(&entrada.ocupacion, "ocupación", 120)?;
+    Ok(entrada)
+}
+
+/// Valida un ingreso médico (motivo obligatorio, largos acotados).
+pub fn validar_ingreso(mut entrada: CrearIngreso) -> Result<CrearIngreso, ErrorDominio> {
+    entrada.motivo = exigir_texto(&entrada.motivo, "motivo", 200)?;
+    entrada.detalle = exigir_largo(&entrada.detalle, "detalle", 2000)?;
+    entrada.profesional = exigir_largo(&entrada.profesional, "profesional", 120)?;
     Ok(entrada)
 }
 
@@ -430,8 +438,27 @@ mod pruebas {
     }
 
     #[test]
-    fn rechaza_grupo_sanguineo_invalido() {
-        let entrada = CrearAlumno {
+    fn valida_ingreso_medico() {
+        let bueno = CrearIngreso {
+            alumno_id: uuid::Uuid::new_v4(),
+            fecha: None,
+            motivo: "Control".into(),
+            detalle: "".into(),
+            profesional: "Dra. Soto".into(),
+        };
+        assert!(validar_ingreso(bueno).is_ok());
+        let malo = CrearIngreso {
+            alumno_id: uuid::Uuid::new_v4(),
+            fecha: None,
+            motivo: "   ".into(),
+            detalle: "".into(),
+            profesional: "".into(),
+        };
+        assert!(validar_ingreso(malo).is_err());
+    }
+
+    #[test]
+    fn rechaza_grupo_sanguineo_invalido() {        let entrada = CrearAlumno {
             rut: "12345678-5".into(),
             nombres: "Ana".into(),
             apellidos: "Pérez".into(),

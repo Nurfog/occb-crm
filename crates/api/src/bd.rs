@@ -138,6 +138,19 @@ pub fn fila_a_traslado(fila: &sqlx::postgres::PgRow) -> occb_core::Traslado {
     }
 }
 
+/// Fila de ingreso médico leída desde una función.
+pub fn fila_a_ingreso(fila: &sqlx::postgres::PgRow) -> occb_core::IngresoMedico {
+    occb_core::IngresoMedico {
+        id: fila.get("id"),
+        alumno_id: fila.get("alumno_id"),
+        fecha: fila.get("fecha"),
+        motivo: fila.get("motivo"),
+        detalle: fila.get::<String, _>("detalle"),
+        profesional: fila.get::<String, _>("profesional"),
+        creado_en: fila.get("creado_en"),
+    }
+}
+
 /// Fila de tarea; estado y fecha se convierten a tipos Rust.
 pub fn fila_a_tarea(fila: &sqlx::postgres::PgRow) -> occb_core::Tarea {
     let estado_texto: String = fila.get("estado");

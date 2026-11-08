@@ -12,8 +12,8 @@ use uuid::Uuid;
 use chrono::Datelike;
 use occb_core::{
     Alumno, Apoderado, Colegio, Correo, CrearAlumno, CrearApoderado, CrearCorreo, CrearEvento,
-    CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno, EstadoTarea,
-    EtapaOportunidad, Evento, Idioma, Nota, Oportunidad, Persona, Tarea, Traslado,
+    CrearIngreso, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno, EstadoTarea,
+    EtapaOportunidad, Evento, Idioma, IngresoMedico, Nota, Oportunidad, Persona, Tarea, Traslado,
     calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
     datos_semilla_colegios, datos_semilla_notas, datos_semilla_oportunidades,
     datos_semilla_personas, datos_semilla_tareas, textos,
@@ -2406,6 +2406,11 @@ fn DetalleAlumno(id: Uuid) -> Element {
     let mut rel_notas = use_signal(Vec::<Nota>::new);
     let mut rel_eventos = use_signal(Vec::<Evento>::new);
     let mut rel_correos = use_signal(Vec::<Correo>::new);
+    let mut ingresos = use_signal(Vec::<IngresoMedico>::new);
+    let mut ing_motivo = use_signal(String::new);
+    let mut ing_detalle = use_signal(String::new);
+    let mut ing_profesional = use_signal(String::new);
+    let mut ing_fecha = use_signal(String::new);
 
     // Sigue al id de la ruta: si cambia, recarga.
     let mut id_actual = use_signal(|| id);
@@ -2460,6 +2465,9 @@ fn DetalleAlumno(id: Uuid) -> Element {
                         if let Ok(lista) = cliente::correos_de_alumno(pid).await {
                             rel_correos.set(lista);
                         }
+                        if let Ok(lista) = cliente::ingresos_de_alumno(pid).await {
+                            ingresos.set(lista);
+                        }
                     });
                     if let Some(rbd) = a.colegio_rbd.clone() {
                         let rbd_clon = rbd.clone();
@@ -2482,6 +2490,33 @@ fn DetalleAlumno(id: Uuid) -> Element {
             }
         });
     });
+
+    let agregar_ingreso = move |_| {
+        let pid = id_actual();
+        let fecha = chrono::NaiveDate::parse_from_str(ing_fecha.read().trim(), "%Y-%m-%d").ok();
+        let datos = CrearIngreso {
+            alumno_id: pid,
+            fecha,
+            motivo: ing_motivo.read().clone(),
+            detalle: ing_detalle.read().clone(),
+            profesional: ing_profesional.read().clone(),
+        };
+        spawn(async move {
+            match cliente::crear_ingreso(&datos).await {
+                Ok(_) => {
+                    aviso.set(String::new());
+                    ing_motivo.set(String::new());
+                    ing_detalle.set(String::new());
+                    ing_profesional.set(String::new());
+                    ing_fecha.set(String::new());
+                    if let Ok(lista) = cliente::ingresos_de_alumno(pid).await {
+                        ingresos.set(lista);
+                    }
+                }
+                Err(mensaje) => aviso.set(mensaje),
+            }
+        });
+    };
 
     let guardar = move |_| {
         let pid = id_actual();
@@ -2614,6 +2649,58 @@ fn DetalleAlumno(id: Uuid) -> Element {
                 )).unwrap_or_default();
                 let titulo_salud = if idioma == Idioma::Es { "Salud".to_string() } else { "Health".to_string() };
                 panel_salud(idioma, titulo_salud, gs, al, med, ant, em)
+            }
+            div { class: "panel",
+                div { class: "panel-head",
+                    span { class: "panel-title",
+                        "{ingresos.read().len()} · {t.ingresos_medicos}"
+                    }
+                    span { class: "link", "↗" }
+                }
+                for ing in ingresos.read().iter() {
+                    div { class: "mini-row", key: "{ing.id}",
+                        span { class: "mini-name", "{fmt_fecha(ing.fecha)} · {ing.motivo}" }
+                        span { class: "mini-amt", "{ing.profesional}" }
+                        button {
+                            class: "btn-mini",
+                            onclick: {
+                                let id = ing.id;
+                                let pid = id_actual();
+                                move |_| {
+                                    spawn(async move {
+                                        if cliente::eliminar_ingreso(id).await.is_ok()
+                                            && let Ok(lista) = cliente::ingresos_de_alumno(pid).await
+                                        {
+                                            ingresos.set(lista);
+                                        }
+                                    });
+                                }
+                            },
+                            "✕"
+                        }
+                    }
+                }
+                div { class: "row",
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Motivo *" } else { "Reason *" } }
+                        input { class: "input", value: "{ing_motivo}", oninput: move |e| ing_motivo.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Fecha" } else { "Date" } }
+                        input { class: "input", r#type: "date", value: "{ing_fecha}", oninput: move |e| ing_fecha.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Profesional" } else { "Professional" } }
+                        input { class: "input", value: "{ing_profesional}", oninput: move |e| ing_profesional.set(e.value()) }
+                    }
+                }
+                div { class: "campo",
+                    label { if idioma == Idioma::Es { "Detalle" } else { "Details" } }
+                    input { class: "input", value: "{ing_detalle}", oninput: move |e| ing_detalle.set(e.value()) }
+                }
+                div { class: "campo campo-btn",
+                    button { class: "btn-primary", onclick: agregar_ingreso, "{t.nueva}" }
+                }
             }
             if editando() {
             div { class: "panel form",

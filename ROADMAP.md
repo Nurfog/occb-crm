@@ -327,12 +327,18 @@ vive aquí.
   `alergias`, `medicamentos` (≤500), `antecedentes_medicos` (≤2000),
   `contacto_emergencia` (≤200); `apoderados.ocupacion` (≤120). Funciones
   `crear/actualizar` con una sola firma vigente (se retiran las anteriores).
+- ✅ Base de datos (migración 027): `ingresos_medicos` 1:N por alumno
+  (fecha, motivo obligatorio, detalle, profesional) con CRUD completo.
 - ✅ API: cuerpos y mapeos extendidos; validación espejo en Rust.
 - ✅ Frontal: sección Salud reutilizada en alta y edición de alumno, panel
   Salud en la ficha, ocupación en alta/ficha de apoderado (ES/EN).
+- ✅ Frontal: panel Ingresos médicos en la ficha (alta/baja, historial
+  ordenado por fecha).
 - ✅ E2E: alta con salud por API y UI, grupo inválido rechazado, lectura
   en ambas fichas, limpieza de filas propias.
-- ✅ Hecho cuando: E2E 101/101, clippy limpio.
+- ✅ E2E: dos ingresos por API, validación de motivo, alta/baja por UI,
+  persistencia verificada.
+- ✅ Hecho cuando: E2E 108/108, clippy limpio.
 
 ## Mapa de módulos → estado
 

@@ -112,6 +112,28 @@ pub struct CrearAlumno {
     pub contacto_emergencia: String,
 }
 
+/// Ingreso médico fechado de un alumno (1 a muchos).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IngresoMedico {
+    pub id: Uuid,
+    pub alumno_id: Uuid,
+    pub fecha: chrono::NaiveDate,
+    pub motivo: String,
+    pub detalle: String,
+    pub profesional: String,
+    pub creado_en: DateTime<Utc>,
+}
+
+/// Datos para registrar un ingreso médico.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CrearIngreso {
+    pub alumno_id: Uuid,
+    pub fecha: Option<chrono::NaiveDate>,
+    pub motivo: String,
+    pub detalle: String,
+    pub profesional: String,
+}
+
 /// Apoderado (madre, padre, tutor u otro) con RUT único.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Apoderado {
