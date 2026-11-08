@@ -354,6 +354,13 @@ input[readonly] { background: var(--bg-tertiary); color: var(--muted); }
 .csv-preview { min-height: 90px; width: 100%; font-family: monospace; font-size: 12px; }
 .csv-result { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--bg-tertiary); border-radius: 8px; padding: 8px 10px; }
 .secret-once code { word-break: break-all; }
+/* ---- Selección masiva en tablas ---- */
+.check-btn { border: 0; background: transparent; cursor: pointer; font-size: 14px; color: var(--muted); padding: 2px 6px; }
+.check-btn:hover { color: var(--text); }
+.tbl tbody tr.selected td { background: var(--accent-soft); }
+.bulk-bar { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 12px; background: var(--accent-soft); border-radius: var(--radius); font-size: 13px; }
+/* ---- Chip de usuario sin wrap ---- */
+.side-item .user-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 1000px) {
   .cards { grid-template-columns: repeat(2, 1fr); }
   .grid2 { grid-template-columns: repeat(2, 1fr); }

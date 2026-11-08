@@ -389,7 +389,7 @@ fn BarraLateral() -> Element {
                 if let Some(s) = sesion {
                     div { class: "side-item",
                         span { class: "avatar", "{s.nombre.chars().next().unwrap_or('·')}" }
-                        span { "{s.nombre} · {s.rol}" }
+                        span { class: "user-name", "{s.nombre} · {s.rol}" }
                     }
                     button { class: "side-item dim", onclick: salir,
                         span { class: "ico", "→" }
@@ -708,6 +708,7 @@ fn VistaPersonas() -> Element {
     let t = textos(idioma);
     let mut busqueda = use_signal(String::new);
     let personas = use_signal(Vec::<Persona>::new);
+    let mut seleccion = use_signal(Vec::<Uuid>::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
     let mut mostrar_form = use_signal(|| false);
@@ -779,6 +780,28 @@ fn VistaPersonas() -> Element {
                 oninput: move |e| busqueda.set(e.value()),
             }
             span { class: "pill", "{t.tabla}" }
+            if !seleccion.read().is_empty() {
+                span { class: "pill", "{seleccion.read().len()} ✓" }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| {
+                        let ids = seleccion();
+                        spawn(async move {
+                            for id in ids {
+                                let _ = cliente::eliminar_persona(id).await;
+                            }
+                            seleccion.set(Vec::new());
+                            recargar_personas(personas);
+                        });
+                    },
+                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| seleccion.set(Vec::new()),
+                    "✕"
+                }
+            }
         }
         SelectorVistas {
             objeto: "personas".to_string(),
@@ -842,7 +865,13 @@ fn VistaPersonas() -> Element {
                 table { class: "tbl",
                     thead {
                         tr {
-                            th { class: "check", "☐" }
+                            th { class: "check",
+                                button {
+                                    class: "check-btn",
+                                    onclick: move |_| alternar_todos(seleccion, filas.iter().map(|p| p.id).collect()),
+                                    if filas.iter().all(|p| seleccion.read().contains(&p.id)) && !filas.is_empty() { "☑" } else { "☐" }
+                                }
+                            }
                             th { "👤 ", if idioma == Idioma::Es { "Nombre" } else { "Name" } }
                             th { "✉️ ", "{t.correo}" }
                             th { "💼 ", if idioma == Idioma::Es { "Puesto" } else { "Role" } }
@@ -852,8 +881,17 @@ fn VistaPersonas() -> Element {
                     }
                     tbody {
                         for p in filas.iter() {
-                            tr { key: "{p.id}",
-                                td { class: "check", "☐" }
+                            tr { key: "{p.id}", class: if seleccion.read().contains(&p.id) { "selected" } else { "" },
+                                td { class: "check",
+                                    button {
+                                        class: "check-btn",
+                                        onclick: {
+                                            let id = p.id;
+                                            move |_| alternar_seleccion(seleccion, id)
+                                        },
+                                        if seleccion.read().contains(&p.id) { "☑" } else { "☐" }
+                                    }
+                                }
                                 td {
                                     span { class: "chip",
                                         span { class: "mini-avatar", "{p.iniciales()}" }
@@ -920,6 +958,7 @@ fn VistaOportunidades() -> Element {
     let idioma = IDIOMA();
     let t = textos(idioma);
     let oportunidades = use_signal(Vec::<Oportunidad>::new);
+    let mut seleccion = use_signal(Vec::<Uuid>::new);
     let mut colegios = use_signal(Vec::<Colegio>::new);
     let mut personas = use_signal(Vec::<Persona>::new);
     let mut aviso = use_signal(String::new);
@@ -1000,6 +1039,30 @@ fn VistaOportunidades() -> Element {
             filtros: serde_json::json!({}),
             on_cargar: move |v: occb_core::VistaGuardada| vista_tabla.set(v.tipo == "tabla"),
         }
+        if !seleccion.read().is_empty() {
+            div { class: "bulk-bar",
+                span { class: "pill", "{seleccion.read().len()} ✓" }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| {
+                        let ids = seleccion();
+                        spawn(async move {
+                            for id in ids {
+                                let _ = cliente::eliminar_oportunidad(id).await;
+                            }
+                            seleccion.set(Vec::new());
+                            recargar_oportunidades(oportunidades);
+                        });
+                    },
+                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| seleccion.set(Vec::new()),
+                    "✕"
+                }
+            }
+        }
         if mostrar_form() {
         div { class: "panel form",
             label {
@@ -1040,7 +1103,13 @@ fn VistaOportunidades() -> Element {
                 table { class: "tbl",
                     thead {
                         tr {
-                            th { class: "check", "☐" }
+                            th { class: "check",
+                                button {
+                                    class: "check-btn",
+                                    onclick: move |_| alternar_todos(seleccion, oportunidades.read().iter().map(|o| o.id).collect()),
+                                    if oportunidades.read().iter().all(|o| seleccion.read().contains(&o.id)) && !oportunidades.read().is_empty() { "☑" } else { "☐" }
+                                }
+                            }
                             th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
                             th { if idioma == Idioma::Es { "Importe" } else { "Amount" } }
                             th { if idioma == Idioma::Es { "Etapa" } else { "Stage" } }
@@ -1049,8 +1118,17 @@ fn VistaOportunidades() -> Element {
                     }
                     tbody {
                         for o in oportunidades.read().iter() {
-                            tr { key: "{o.id}",
-                                td { class: "check", "☐" }
+                            tr { key: "{o.id}", class: if seleccion.read().contains(&o.id) { "selected" } else { "" },
+                                td { class: "check",
+                                    button {
+                                        class: "check-btn",
+                                        onclick: {
+                                            let id = o.id;
+                                            move |_| alternar_seleccion(seleccion, id)
+                                        },
+                                        if seleccion.read().contains(&o.id) { "☑" } else { "☐" }
+                                    }
+                                }
                                 td { class: "strong",
                                     Link { to: Ruta::DetalleOportunidad { id: o.id }, class: "link", "{o.nombre}" }
                                     EstrellaFavorito { tipo: "postulacion".to_string(), id: o.id }
@@ -2092,6 +2170,27 @@ fn iniciales_de(nombres: &str, apellidos: &str) -> String {
     )
 }
 
+/// Alterna un id en una selección (los `Signal` se copian).
+fn alternar_seleccion(mut seleccion: Signal<Vec<Uuid>>, id: Uuid) {
+    let mut actual = seleccion();
+    if actual.contains(&id) {
+        actual.retain(|x| x != &id);
+    } else {
+        actual.push(id);
+    }
+    seleccion.set(actual);
+}
+
+/// Marca todas las filas o limpia si ya estaban todas marcadas.
+fn alternar_todos(mut seleccion: Signal<Vec<Uuid>>, ids: Vec<Uuid>) {
+    let actual = seleccion();
+    if !ids.is_empty() && ids.iter().all(|id| actual.contains(id)) {
+        seleccion.set(Vec::new());
+    } else {
+        seleccion.set(ids);
+    }
+}
+
 /// Sección de salud reutilizada en el alta y la edición de alumno.
 /// Los `Signal` se copian; el llamador conserva la propiedad.
 fn campos_salud(
@@ -2167,6 +2266,7 @@ fn VistaAlumnos() -> Element {
     let mut busqueda = use_signal(String::new);
     let mut estado_f = use_signal(String::new);
     let mut alumnos = use_signal(Vec::<Alumno>::new);
+    let mut seleccion = use_signal(Vec::<Uuid>::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
     let mut mostrar_form = use_signal(|| false);
@@ -2260,6 +2360,30 @@ fn VistaAlumnos() -> Element {
                 }
             }
             span { class: "pill", "{t.tabla}" }
+            if !seleccion.read().is_empty() {
+                span { class: "pill", "{seleccion.read().len()} ✓" }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| {
+                        let ids = seleccion();
+                        spawn(async move {
+                            for id in ids {
+                                let _ = cliente::eliminar_alumno(id).await;
+                            }
+                            seleccion.set(Vec::new());
+                            if let Ok(lista) = cliente::listar_alumnos("", "").await {
+                                alumnos.set(lista);
+                            }
+                        });
+                    },
+                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| seleccion.set(Vec::new()),
+                    "✕"
+                }
+            }
         }
         SelectorVistas {
             objeto: "alumnos".to_string(),
@@ -2311,7 +2435,13 @@ fn VistaAlumnos() -> Element {
                 table { class: "tbl",
                     thead {
                         tr {
-                            th { class: "check", "☐" }
+                            th { class: "check",
+                                button {
+                                    class: "check-btn",
+                                    onclick: move |_| alternar_todos(seleccion, alumnos.read().iter().map(|a| a.id).collect()),
+                                    if alumnos.read().iter().all(|a| seleccion.read().contains(&a.id)) && !alumnos.read().is_empty() { "☑" } else { "☐" }
+                                }
+                            }
                             th { "RUT" }
                             th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
                             th { if idioma == Idioma::Es { "Curso" } else { "Grade" } }
@@ -2321,8 +2451,17 @@ fn VistaAlumnos() -> Element {
                     }
                     tbody {
                         for a in alumnos.read().iter() {
-                            tr { key: "{a.id}",
-                                td { class: "check", "☐" }
+                            tr { key: "{a.id}", class: if seleccion.read().contains(&a.id) { "selected" } else { "" },
+                                td { class: "check",
+                                    button {
+                                        class: "check-btn",
+                                        onclick: {
+                                            let id = a.id;
+                                            move |_| alternar_seleccion(seleccion, id)
+                                        },
+                                        if seleccion.read().contains(&a.id) { "☑" } else { "☐" }
+                                    }
+                                }
                                 td { class: "muted", "{a.rut}" }
                                 td {
                                     span { class: "chip",
@@ -2840,11 +2979,14 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
                 div { class: "row",
-                    input {
-                        class: "input",
-                        placeholder: if idioma == Idioma::Es { "Buscar destino…" } else { "Search destination…" },
-                        value: "{tr_busqueda}",
-                        oninput: move |e| tr_busqueda.set(e.value()),
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Colegio destino" } else { "Destination school" } }
+                        input {
+                            class: "input",
+                            placeholder: if idioma == Idioma::Es { "Buscar destino…" } else { "Search destination…" },
+                            value: "{tr_busqueda}",
+                            oninput: move |e| tr_busqueda.set(e.value()),
+                        }
                     }
                     SelectorTerritorio {
                         region_sel: tr_region,
@@ -2960,6 +3102,7 @@ fn VistaApoderados() -> Element {
     let t = textos(idioma);
     let mut busqueda = use_signal(String::new);
     let mut apoderados = use_signal(Vec::<Apoderado>::new);
+    let mut seleccion = use_signal(Vec::<Uuid>::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
     let mut mostrar_form = use_signal(|| false);
@@ -3036,6 +3179,30 @@ fn VistaApoderados() -> Element {
                 oninput: move |e| busqueda.set(e.value()),
             }
             span { class: "pill", "{t.tabla}" }
+            if !seleccion.read().is_empty() {
+                span { class: "pill", "{seleccion.read().len()} ✓" }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| {
+                        let ids = seleccion();
+                        spawn(async move {
+                            for id in ids {
+                                let _ = cliente::eliminar_apoderado(id).await;
+                            }
+                            seleccion.set(Vec::new());
+                            if let Ok(lista) = cliente::listar_apoderados("").await {
+                                apoderados.set(lista);
+                            }
+                        });
+                    },
+                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| seleccion.set(Vec::new()),
+                    "✕"
+                }
+            }
         }
         SelectorVistas {
             objeto: "apoderados".to_string(),
@@ -3091,7 +3258,13 @@ fn VistaApoderados() -> Element {
                 table { class: "tbl",
                     thead {
                         tr {
-                            th { class: "check", "☐" }
+                            th { class: "check",
+                                button {
+                                    class: "check-btn",
+                                    onclick: move |_| alternar_todos(seleccion, apoderados.read().iter().map(|a| a.id).collect()),
+                                    if apoderados.read().iter().all(|a| seleccion.read().contains(&a.id)) && !apoderados.read().is_empty() { "☑" } else { "☐" }
+                                }
+                            }
                             th { "RUT" }
                             th { if idioma == Idioma::Es { "Nombre" } else { "Name" } }
                             th { if idioma == Idioma::Es { "Teléfono" } else { "Phone" } }
@@ -3100,8 +3273,17 @@ fn VistaApoderados() -> Element {
                     }
                     tbody {
                         for a in apoderados.read().iter() {
-                            tr { key: "{a.id}",
-                                td { class: "check", "☐" }
+                            tr { key: "{a.id}", class: if seleccion.read().contains(&a.id) { "selected" } else { "" },
+                                td { class: "check",
+                                    button {
+                                        class: "check-btn",
+                                        onclick: {
+                                            let id = a.id;
+                                            move |_| alternar_seleccion(seleccion, id)
+                                        },
+                                        if seleccion.read().contains(&a.id) { "☑" } else { "☐" }
+                                    }
+                                }
                                 td { class: "muted", "{a.rut}" }
                                 td {
                                     span { class: "chip",
@@ -3539,6 +3721,7 @@ fn VistaNotas() -> Element {
     let t = textos(idioma);
     let mut busqueda = use_signal(String::new);
     let mut notas = use_signal(Vec::<Nota>::new);
+    let mut seleccion = use_signal(Vec::<Uuid>::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
     let mut mostrar_form = use_signal(|| false);
@@ -3603,6 +3786,30 @@ fn VistaNotas() -> Element {
                 oninput: move |e| busqueda.set(e.value()),
             }
             span { class: "pill", "{t.tabla}" }
+            if !seleccion.read().is_empty() {
+                span { class: "pill", "{seleccion.read().len()} ✓" }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| {
+                        let ids = seleccion();
+                        spawn(async move {
+                            for id in ids {
+                                let _ = cliente::eliminar_nota(id).await;
+                            }
+                            seleccion.set(Vec::new());
+                            if let Ok(lista) = cliente::listar_notas("").await {
+                                notas.set(lista);
+                            }
+                        });
+                    },
+                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                }
+                button {
+                    class: "btn-mini",
+                    onclick: move |_| seleccion.set(Vec::new()),
+                    "✕"
+                }
+            }
         }
         if mostrar_form() {
         div { class: "panel form",
@@ -3636,7 +3843,13 @@ fn VistaNotas() -> Element {
                 table { class: "tbl",
                     thead {
                         tr {
-                            th { class: "check", "☐" }
+                            th { class: "check",
+                                button {
+                                    class: "check-btn",
+                                    onclick: move |_| alternar_todos(seleccion, notas.read().iter().map(|n| n.id).collect()),
+                                    if notas.read().iter().all(|n| seleccion.read().contains(&n.id)) && !notas.read().is_empty() { "☑" } else { "☐" }
+                                }
+                            }
                             th { if idioma == Idioma::Es { "Título" } else { "Title" } }
                             th { if idioma == Idioma::Es { "Contenido" } else { "Body" } }
                             th { if idioma == Idioma::Es { "Creada" } else { "Created" } }
@@ -3645,8 +3858,17 @@ fn VistaNotas() -> Element {
                     }
                     tbody {
                         for n in notas.read().iter() {
-                            tr { key: "{n.id}",
-                                td { class: "check", "☐" }
+                            tr { key: "{n.id}", class: if seleccion.read().contains(&n.id) { "selected" } else { "" },
+                                td { class: "check",
+                                    button {
+                                        class: "check-btn",
+                                        onclick: {
+                                            let id = n.id;
+                                            move |_| alternar_seleccion(seleccion, id)
+                                        },
+                                        if seleccion.read().contains(&n.id) { "☑" } else { "☐" }
+                                    }
+                                }
                                 td { class: "strong", "{n.titulo}" }
                                 td {
                                     if editando() == Some(n.id) {

@@ -475,6 +475,11 @@ pub async fn actualizar_oportunidad(id: Uuid, datos: &CrearOportunidad) -> Resul
     enviar_json("PATCH", &format!("/api/oportunidades/{id}"), datos).await
 }
 
+/// Elimina una postulación (baja masiva desde la tabla).
+pub async fn eliminar_oportunidad(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/oportunidades/{id}")).await
+}
+
 /// Mueve una oportunidad de etapa vía `mover_etapa_oportunidad()`.
 /// `etapa` es el texto que guarda PG: contacto, postulante, evaluado, aceptado o matriculado.
 pub async fn mover_etapa(id: Uuid, etapa: &str) -> Result<Oportunidad, String> {

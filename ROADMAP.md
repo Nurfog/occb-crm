@@ -345,7 +345,14 @@ vive aquí.
 - ✅ Fichas (9d): paneles de relacionados vacíos ocultos (tareas, notas,
   eventos, correos, postulaciones, vinculados), Salud solo con datos y
   fila RBD vacía oculta; Ingresos médicos siempre visible por su alta.
-- ✅ Hecho cuando: E2E 110/110, clippy limpio.
+- ✅ Tablas (9e): checkboxes funcionales con selección, resaltado, borrado
+  masivo con confirmación en barra y conteo; chip de usuario sin wrap;
+  fila de traslado con etiquetas alineadas.
+- ✅ Hecho cuando: E2E 113/113, clippy limpio.
+- ✅ Fichas (9d): paneles de relacionados vacíos ocultos (tareas, notas,
+  eventos, correos, postulaciones, vinculados), Salud solo con datos y
+  fila RBD vacía oculta; Ingresos médicos siempre visible por su alta.
+- ✅ Hecho cuando: E2E 113/113, clippy limpio.
 
 ## Mapa de módulos → estado
 

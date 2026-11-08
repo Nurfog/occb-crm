@@ -1344,6 +1344,32 @@ await evaluar(`(() => {
 })()`);
 await esperarCondicion(`document.querySelector('.brand-name')?.textContent === 'OCCB CRM'`);
 
+// --- 31. Checkboxes funcionales con borrado masivo ---
+const MASIVO_APE = `Masivo ${SELLO}`;
+for (const [rut, nom] of [['13131313-6', 'Mas Uno'], ['14141414-3', 'Mas Dos']]) {
+  await api(`${API}/api/alumnos`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rut, nombres: nom, apellidos: MASIVO_APE }),
+  });
+}
+await ir('/alumnos');
+await esperarCondicion(`!!document.querySelector('.toolbar input')`);
+await evaluar(`(() => {
+  const inp = document.querySelector('.toolbar input');
+  inp.focus(); inp.value = ${JSON.stringify(MASIVO_APE)};
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+})()`);
+await esperarCondicion(`document.querySelectorAll('.tbl tbody tr').length === 2`);
+await evaluar(`document.querySelector('.tbl thead .check-btn').click()`);
+await dormir(600);
+const marcados = await evaluar(`document.querySelectorAll('.tbl tbody tr.selected').length`);
+afirma(marcados === 2, 'cabecera marca las filas visibles');
+await evaluar(`[...document.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('Eliminar')).click()`);
+const bulkFuera = await esperarCondicion(`![...document.querySelectorAll('.toolbar button')].some(b => b.textContent.includes('Eliminar'))`, 15000);
+afirma(bulkFuera, 'borrado masivo limpia la selección');
+const quedan = await (await api(`${API}/api/alumnos?busqueda=${encodeURIComponent(MASIVO_APE)}`)).json();
+afirma(quedan.length === 0, 'borrado masivo elimina en PG');
+
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();
 try {
