@@ -339,7 +339,10 @@ vive aquí.
   en ambas fichas, limpieza de filas propias.
 - ✅ E2E: dos ingresos por API, validación de motivo, alta/baja por UI,
   persistencia verificada.
-- ✅ Hecho cuando: E2E 108/108, clippy limpio.
+- ✅ Pulido visual (9c): buscador lateral compacto con elipsis, Guardar de
+  Ajustes aplica el nombre del espacio en la marca (API/BD de solo lectura),
+  importación CSV apilada en columna.
+- ✅ Hecho cuando: E2E 110/110, clippy limpio.
 
 ## Mapa de módulos → estado
 

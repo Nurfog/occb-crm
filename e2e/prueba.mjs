@@ -1322,6 +1322,28 @@ afirma(ingFuera, 'baja de ingreso por UI persiste en la ficha');
 for (const g of ingsUi) await api(`${API}/api/ingresos/${g.id}`, { method: 'DELETE' });
 await api(`${API}/api/alumnos/${alumIng.id}`, { method: 'DELETE' });
 
+// --- 30. Visual: buscador compacto y Guardar de Ajustes aplica ---
+await ir('/ajustes');
+await esperarCondicion(`!!document.querySelector('button.search')`);
+const textoBuscar = await evaluar(`document.querySelector('button.search')?.textContent || ''`);
+afirma(textoBuscar.includes('⌘') && !textoBuscar.includes('espacio'), 'buscador lateral compacto con atajo');
+const NOMBRE_ESP = `Espacio E2E ${SELLO}`;
+await evaluar(`(() => {
+  const inp = document.querySelectorAll('.panel.form')[0].querySelector('input');
+  inp.focus(); inp.value = ${JSON.stringify(NOMBRE_ESP)};
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  [...document.querySelectorAll('.panel.form')[0].querySelectorAll('button')].find(b => b.textContent.includes('Guardar')).click();
+})()`);
+const marcaOk = await esperarCondicion(`document.querySelector('.brand-name')?.textContent === ${JSON.stringify(NOMBRE_ESP)}`);
+afirma(marcaOk, 'Guardar de Ajustes aplica el nombre del espacio');
+await evaluar(`(() => {
+  const inp = document.querySelectorAll('.panel.form')[0].querySelector('input');
+  inp.focus(); inp.value = 'OCCB CRM';
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  [...document.querySelectorAll('.panel.form')[0].querySelectorAll('button')].find(b => b.textContent.includes('Guardar')).click();
+})()`);
+await esperarCondicion(`document.querySelector('.brand-name')?.textContent === 'OCCB CRM'`);
+
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();
 try {

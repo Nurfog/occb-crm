@@ -27,6 +27,8 @@ static IDIOMA: GlobalSignal<Idioma> = Signal::global(|| Idioma::Es);
 
 /// Destino pendiente tras entrar (el guardia lo fija antes de mandar a acceso).
 static VOLVER: GlobalSignal<Option<Ruta>> = Signal::global(|| None);
+/// Nombre visible del espacio (se edita en Ajustes, solo en memoria).
+static NOMBRE_ESPACIO: GlobalSignal<String> = Signal::global(|| "OCCB CRM".to_string());
 /// Diálogo de búsqueda global (⌘K / Ctrl+K).
 static BUSQUEDA_ABIERTA: GlobalSignal<bool> = Signal::global(|| false);
 
@@ -290,14 +292,14 @@ fn BarraLateral() -> Element {
             div { class: "brand",
                 div { class: "logo", "◧" }
                 div {
-                    div { class: "brand-name", "{t.nombre_app}" }
+                    div { class: "brand-name", "{NOMBRE_ESPACIO()}" }
                     div { class: "brand-sub", "{t.eslogan}" }
                 }
                 div { class: "avatar", "OC" }
             }
             button { class: "search", onclick: move |_| *BUSQUEDA_ABIERTA.write() = true,
                 span { class: "search-icon", "⌕" }
-                span { "{t.buscar_global}" }
+                span { "{t.buscar}" }
                 span { style: "margin-left: auto; display: flex; gap: 2px;",
                     kbd { "⌘" }
                     kbd { "K" }
@@ -3735,6 +3737,13 @@ fn VistaAjustes() -> Element {
     let mut csv_objeto = use_signal(|| "alumnos".to_string());
     let mut csv_texto = use_signal(String::new);
     let mut csv_resultado = use_signal(|| serde_json::Value::Null);
+    let mut nombre_tmp = use_signal(|| NOMBRE_ESPACIO().clone());
+    let guardar_nombre = move |_| {
+        let v = nombre_tmp.read().trim().to_string();
+        if !v.is_empty() {
+            *NOMBRE_ESPACIO.write() = v;
+        }
+    };
     let mut aviso = use_signal(String::new);
     let recargar_integraciones = move || {
         spawn(async move {
@@ -3786,11 +3795,11 @@ fn VistaAjustes() -> Element {
         }
         div { class: "panel form",
             label { if IDIOMA() == Idioma::Es { "Nombre del espacio" } else { "Workspace name" } }
-            input { class: "input", value: "OCCB CRM" }
+            input { class: "input", value: "{nombre_tmp}", oninput: move |e| nombre_tmp.set(e.value()) }
             label { "API" }
-            input { class: "input", value: "http://localhost:3001/api" }
+            input { class: "input", value: "http://localhost:3001/api", readonly: true }
             label { if IDIOMA() == Idioma::Es { "Base de datos" } else { "Database" } }
-            input { class: "input", value: "postgres://occb:occb@localhost:5432/occb" }
+            input { class: "input", value: "postgres://occb:occb@localhost:5432/occb", readonly: true }
             p { class: "muted small",
                 if IDIOMA() == Idioma::Es {
                     "El frontal lee y escribe en la API; el CRUD pasa solo por funciones seguras con RLS. Ver /migrations."
@@ -3811,7 +3820,7 @@ fn VistaAjustes() -> Element {
                 }
             }
             div { class: "row",
-                button { class: "btn-primary", "{t.guardar}" }
+                button { class: "btn-primary", onclick: guardar_nombre, "{t.guardar}" }
             }
         }
         if !aviso.read().is_empty() { p { class: "form-error", "{aviso}" } }
@@ -3873,17 +3882,24 @@ fn VistaAjustes() -> Element {
         }
         div { class: "panel integration-panel",
             div { class: "panel-head", span { class: "panel-title", "{t.importar}" } }
-            select { class: "input", value: "{csv_objeto}", onchange: move |e| csv_objeto.set(e.value()),
-                option { value: "alumnos", "{t.alumnos}" }
-                option { value: "apoderados", "{t.apoderados}" }
-            }
-            label { "{t.csv_archivo}" }
-            input { class: "input", r#type: "file", accept: ".csv,text/csv", onchange: move |e| {
-                if let Some(archivo)=e.files().first().cloned() {
-                    spawn(async move { match archivo.read_string().await { Ok(s)=>csv_texto.set(s), Err(_)=>aviso.set(if IDIOMA()==Idioma::Es { "No se pudo leer el archivo.".into() } else { "Could not read file.".into() }) } });
+            div { class: "campo",
+                label { if IDIOMA() == Idioma::Es { "Objeto" } else { "Object" } }
+                select { class: "input", value: "{csv_objeto}", onchange: move |e| csv_objeto.set(e.value()),
+                    option { value: "alumnos", "{t.alumnos}" }
+                    option { value: "apoderados", "{t.apoderados}" }
                 }
-            } }
-            textarea { class: "input csv-preview", value: "{csv_texto}", oninput: move |e| csv_texto.set(e.value()), placeholder: "rut,nombres,apellidos…" }
+            }
+            div { class: "campo",
+                label { "{t.csv_archivo}" }
+                input { class: "input", r#type: "file", accept: ".csv,text/csv", onchange: move |e| {
+                    if let Some(archivo)=e.files().first().cloned() {
+                        spawn(async move { match archivo.read_string().await { Ok(s)=>csv_texto.set(s), Err(_)=>aviso.set(if IDIOMA()==Idioma::Es { "No se pudo leer el archivo.".into() } else { "Could not read file.".into() }) } });
+                    }
+                } }
+            }
+            div { class: "campo",
+                textarea { class: "input csv-preview", value: "{csv_texto}", oninput: move |e| csv_texto.set(e.value()), placeholder: "rut,nombres,apellidos…" }
+            }
             div { class: "cal-bar",
                 button { class: "btn-mini", onclick: previsualizar, "{t.previsualizar}" }
                 button { class: "btn-primary", onclick: aplicar_csv, "{t.aplicar_importacion}" }

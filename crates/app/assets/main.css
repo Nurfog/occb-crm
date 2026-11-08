@@ -344,6 +344,16 @@ select.input { appearance: auto; }
   .search-result .mini-amt { margin-left: 96px; }
 }
 .center { text-align: center !important; }
+/* ---- Ajustes de Fase 9c: buscador lateral, solo-lectura e importación ---- */
+button.search { width: calc(100% - 8px); text-align: left; font: inherit; }
+button.search > span:nth-child(2) {
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+input[readonly] { background: var(--bg-tertiary); color: var(--muted); }
+.integration-panel .campo { margin-top: 8px; }
+.csv-preview { min-height: 90px; width: 100%; font-family: monospace; font-size: 12px; }
+.csv-result { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--bg-tertiary); border-radius: 8px; padding: 8px 10px; }
+.secret-once code { word-break: break-all; }
 @media (max-width: 1000px) {
   .cards { grid-template-columns: repeat(2, 1fr); }
   .grid2 { grid-template-columns: repeat(2, 1fr); }
