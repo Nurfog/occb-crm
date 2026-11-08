@@ -34,6 +34,7 @@ pub struct CuerpoApoderado {
     pub direccion: Option<String>,
     pub region_codigo: Option<i16>,
     pub comuna_codigo: Option<String>,
+    pub ocupacion: Option<String>,
 }
 
 /// GET /api/apoderados
@@ -76,6 +77,7 @@ fn a_dominio(cuerpo: &CuerpoApoderado) -> Result<occb_core::CrearApoderado, Erro
         direccion: cuerpo.direccion.clone().unwrap_or_default(),
         region_codigo: cuerpo.region_codigo,
         comuna_codigo: cuerpo.comuna_codigo.clone(),
+        ocupacion: cuerpo.ocupacion.clone().unwrap_or_default(),
     })?)
 }
 
@@ -87,7 +89,7 @@ pub async fn crear(
 ) -> Result<(StatusCode, Json<occb_core::Apoderado>), ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
     let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
-    let fila = sqlx::query("select * from crear_apoderado($1, $2, $3, $4, $5, $6, $7, $8)")
+    let fila = sqlx::query("select * from crear_apoderado($1, $2, $3, $4, $5, $6, $7, $8, $9)")
         .bind(&entrada.rut)
         .bind(&entrada.nombres)
         .bind(&entrada.apellidos)
@@ -96,6 +98,7 @@ pub async fn crear(
         .bind(&entrada.direccion)
         .bind(entrada.region_codigo)
         .bind(&entrada.comuna_codigo)
+        .bind(&entrada.ocupacion)
         .fetch_one(&mut *tx)
         .await?;
     tx.commit().await?;
@@ -111,7 +114,7 @@ pub async fn actualizar(
 ) -> Result<Json<occb_core::Apoderado>, ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
     let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
-    let fila = sqlx::query("select * from actualizar_apoderado($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+    let fila = sqlx::query("select * from actualizar_apoderado($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
         .bind(id)
         .bind(&entrada.rut)
         .bind(&entrada.nombres)
@@ -121,6 +124,7 @@ pub async fn actualizar(
         .bind(&entrada.direccion)
         .bind(entrada.region_codigo)
         .bind(&entrada.comuna_codigo)
+        .bind(&entrada.ocupacion)
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Apoderado no encontrado.".into()))?;

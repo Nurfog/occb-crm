@@ -100,6 +100,11 @@ pub fn fila_a_alumno(fila: &sqlx::postgres::PgRow) -> occb_core::Alumno {
         colegio_rbd: fila.get::<Option<String>, _>("colegio_rbd"),
         estado: occb_core::EstadoAlumno::desde_texto(&estado_texto)
             .unwrap_or(occb_core::EstadoAlumno::Postulante),
+        grupo_sanguineo: fila.get::<String, _>("grupo_sanguineo"),
+        alergias: fila.get::<String, _>("alergias"),
+        medicamentos: fila.get::<String, _>("medicamentos"),
+        antecedentes_medicos: fila.get::<String, _>("antecedentes_medicos"),
+        contacto_emergencia: fila.get::<String, _>("contacto_emergencia"),
         creado_en: fila.get("creado_en"),
     }
 }
@@ -116,6 +121,7 @@ pub fn fila_a_apoderado(fila: &sqlx::postgres::PgRow) -> occb_core::Apoderado {
         direccion: fila.get::<String, _>("direccion"),
         region_codigo: fila.get::<Option<i16>, _>("region_codigo"),
         comuna_codigo: fila.get::<Option<String>, _>("comuna_codigo"),
+        ocupacion: fila.get::<String, _>("ocupacion"),
         creado_en: fila.get("creado_en"),
     }
 }

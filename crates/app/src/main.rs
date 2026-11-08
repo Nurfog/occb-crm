@@ -2084,6 +2084,73 @@ fn iniciales_de(nombres: &str, apellidos: &str) -> String {
     )
 }
 
+/// Sección de salud reutilizada en el alta y la edición de alumno.
+/// Los `Signal` se copian; el llamador conserva la propiedad.
+fn campos_salud(
+    idioma: Idioma,
+    mut grupo: Signal<String>,
+    mut alergias: Signal<String>,
+    mut medicamentos: Signal<String>,
+    mut antecedentes: Signal<String>,
+    mut emergencia: Signal<String>,
+) -> Element {
+    rsx! {
+        div { class: "campo",
+            label { if idioma == Idioma::Es { "Grupo sanguíneo" } else { "Blood type" } }
+            select {
+                class: "input",
+                value: "{grupo}",
+                onchange: move |e| grupo.set(e.value()),
+                option { value: "", "—" }
+                for g in ["O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"] {
+                    option { value: "{g}", "{g}" }
+                }
+            }
+        }
+        div { class: "campo",
+            label { if idioma == Idioma::Es { "Alergias" } else { "Allergies" } }
+            input { class: "input", value: "{alergias}", oninput: move |e| alergias.set(e.value()) }
+        }
+        div { class: "campo",
+            label { if idioma == Idioma::Es { "Medicamentos" } else { "Medications" } }
+            input { class: "input", value: "{medicamentos}", oninput: move |e| medicamentos.set(e.value()) }
+        }
+        div { class: "campo",
+            label { if idioma == Idioma::Es { "Antecedentes médicos" } else { "Medical history" } }
+            input { class: "input", value: "{antecedentes}", oninput: move |e| antecedentes.set(e.value()) }
+        }
+        div { class: "campo",
+            label { if idioma == Idioma::Es { "Contacto de emergencia" } else { "Emergency contact" } }
+            input { class: "input", value: "{emergencia}", oninput: move |e| emergencia.set(e.value()) }
+        }
+    }
+}
+
+/// Panel de lectura con los datos de salud de la ficha del alumno.
+fn panel_salud(
+    idioma: Idioma,
+    titulo: String,
+    grupo: String,
+    alergias: String,
+    medicamentos: String,
+    antecedentes: String,
+    emergencia: String,
+) -> Element {
+    rsx! {
+        div { class: "panel",
+            div { class: "panel-head",
+                span { class: "panel-title", "{titulo}" }
+                span { class: "link", "↗" }
+            }
+            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "🩸 Grupo" } else { "🩸 Type" } } span { class: "mini-name", "{grupo}" } }
+            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "⚠ Alergias" } else { "⚠ Allergies" } } span { class: "mini-name", "{alergias}" } }
+            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "💊 Medicamentos" } else { "💊 Medications" } } span { class: "mini-name", "{medicamentos}" } }
+            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "📋 Antecedentes" } else { "📋 History" } } span { class: "mini-name", "{antecedentes}" } }
+            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "📞 Emergencia" } else { "📞 Emergency" } } span { class: "mini-name", "{emergencia}" } }
+        }
+    }
+}
+
 /// Vista de alumnos: tabla viva con búsqueda, filtro de estado, alta y baja.
 #[component]
 fn VistaAlumnos() -> Element {
@@ -2099,6 +2166,11 @@ fn VistaAlumnos() -> Element {
     let mut nombres = use_signal(String::new);
     let mut apellidos = use_signal(String::new);
     let mut curso = use_signal(String::new);
+    let mut grupo = use_signal(String::new);
+    let mut alergias = use_signal(String::new);
+    let mut medicamentos = use_signal(String::new);
+    let mut antecedentes = use_signal(String::new);
+    let mut emergencia = use_signal(String::new);
 
     use_effect(move || {
         let b = busqueda.read().clone();
@@ -2129,6 +2201,11 @@ fn VistaAlumnos() -> Element {
             curso: curso.read().clone(),
             colegio_rbd: None,
             estado: EstadoAlumno::Postulante,
+            grupo_sanguineo: grupo.read().clone(),
+            alergias: alergias.read().clone(),
+            medicamentos: medicamentos.read().clone(),
+            antecedentes_medicos: antecedentes.read().clone(),
+            contacto_emergencia: emergencia.read().clone(),
         };
         spawn(async move {
             match cliente::crear_alumno(&datos).await {
@@ -2138,6 +2215,11 @@ fn VistaAlumnos() -> Element {
                     nombres.set(String::new());
                     apellidos.set(String::new());
                     curso.set(String::new());
+                    grupo.set(String::new());
+                    alergias.set(String::new());
+                    medicamentos.set(String::new());
+                    antecedentes.set(String::new());
+                    emergencia.set(String::new());
                     mostrar_form.set(false);
                     if let Ok(lista) = cliente::listar_alumnos("", "").await {
                         alumnos.set(lista);
@@ -2204,6 +2286,7 @@ fn VistaAlumnos() -> Element {
                     label { if idioma == Idioma::Es { "Curso" } else { "Grade" } }
                     input { class: "input", placeholder: "8° Básico A", value: "{curso}", oninput: move |e| curso.set(e.value()) }
                 }
+                {campos_salud(idioma, grupo, alergias, medicamentos, antecedentes, emergencia)}
                 div { class: "campo campo-btn",
                     button { class: "btn-primary", onclick: crear, "{t.nueva}" }
                 }
@@ -2304,6 +2387,11 @@ fn DetalleAlumno(id: Uuid) -> Element {
     let mut apellidos = use_signal(String::new);
     let mut curso = use_signal(String::new);
     let mut estado_sel = use_signal(String::new);
+    let mut grupo = use_signal(String::new);
+    let mut alergias = use_signal(String::new);
+    let mut medicamentos = use_signal(String::new);
+    let mut antecedentes = use_signal(String::new);
+    let mut emergencia = use_signal(String::new);
     let mut vinc_apoderado = use_signal(String::new);
     let mut vinc_texto = use_signal(String::new);
     let mut tr_historial = use_signal(Vec::<Traslado>::new);
@@ -2351,6 +2439,11 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     apellidos.set(a.apellidos.clone());
                     curso.set(a.curso.clone());
                     estado_sel.set(a.estado.como_texto().to_string());
+                    grupo.set(a.grupo_sanguineo.clone());
+                    alergias.set(a.alergias.clone());
+                    medicamentos.set(a.medicamentos.clone());
+                    antecedentes.set(a.antecedentes_medicos.clone());
+                    emergencia.set(a.contacto_emergencia.clone());
                     alumno.set(Some(a.clone()));
                     recargar_vinculos(pid);
                     recargar_historial(pid);
@@ -2402,6 +2495,11 @@ fn DetalleAlumno(id: Uuid) -> Element {
             curso: curso.read().clone(),
             colegio_rbd: alumno.read().as_ref().and_then(|a| a.colegio_rbd.clone()),
             estado,
+            grupo_sanguineo: grupo.read().clone(),
+            alergias: alergias.read().clone(),
+            medicamentos: medicamentos.read().clone(),
+            antecedentes_medicos: antecedentes.read().clone(),
+            contacto_emergencia: emergencia.read().clone(),
         };
         spawn(async move {
             match cliente::actualizar_alumno(pid, &datos).await {
@@ -2509,6 +2607,14 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
             }
+            {
+                let (gs, al, med, ant, em) = alumno.read().as_ref().map(|a| (
+                    a.grupo_sanguineo.clone(), a.alergias.clone(), a.medicamentos.clone(),
+                    a.antecedentes_medicos.clone(), a.contacto_emergencia.clone(),
+                )).unwrap_or_default();
+                let titulo_salud = if idioma == Idioma::Es { "Salud".to_string() } else { "Health".to_string() };
+                panel_salud(idioma, titulo_salud, gs, al, med, ant, em)
+            }
             if editando() {
             div { class: "panel form",
                 label { if idioma == Idioma::Es { "Editar (se guarda en la API)" } else { "Edit (saved to the API)" } }
@@ -2542,6 +2648,7 @@ fn DetalleAlumno(id: Uuid) -> Element {
                             }
                         }
                     }
+                    {campos_salud(idioma, grupo, alergias, medicamentos, antecedentes, emergencia)}
                     div { class: "campo campo-btn",
                         button { class: "btn-primary", onclick: guardar, "{t.guardar}" }
                     }
@@ -2753,6 +2860,7 @@ fn VistaApoderados() -> Element {
     let mut nombres = use_signal(String::new);
     let mut apellidos = use_signal(String::new);
     let mut telefono = use_signal(String::new);
+    let mut ocupacion = use_signal(String::new);
     let mut region_sel = use_signal(String::new);
     let mut comuna_sel = use_signal(String::new);
 
@@ -2785,6 +2893,7 @@ fn VistaApoderados() -> Element {
             direccion: String::new(),
             region_codigo: region_codigo_de(&region_sel),
             comuna_codigo: comuna_codigo_de(&comuna_sel),
+            ocupacion: ocupacion.read().clone(),
         };
         spawn(async move {
             match cliente::crear_apoderado(&datos).await {
@@ -2794,6 +2903,7 @@ fn VistaApoderados() -> Element {
                     nombres.set(String::new());
                     apellidos.set(String::new());
                     telefono.set(String::new());
+                    ocupacion.set(String::new());
                     region_sel.set(String::new());
                     comuna_sel.set(String::new());
                     mostrar_form.set(false);
@@ -2849,6 +2959,10 @@ fn VistaApoderados() -> Element {
                 div { class: "campo",
                     label { if idioma == Idioma::Es { "Teléfono" } else { "Phone" } }
                     input { class: "input", value: "{telefono}", oninput: move |e| telefono.set(e.value()) }
+                }
+                div { class: "campo",
+                    label { if idioma == Idioma::Es { "Ocupación" } else { "Occupation" } }
+                    input { class: "input", value: "{ocupacion}", oninput: move |e| ocupacion.set(e.value()) }
                 }
                 SelectorTerritorio {
                     region_sel: region_sel,
@@ -2952,6 +3066,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
     let mut nombres = use_signal(String::new);
     let mut apellidos = use_signal(String::new);
     let mut telefono = use_signal(String::new);
+    let mut ocupacion = use_signal(String::new);
     let mut region_sel = use_signal(String::new);
     let mut comuna_sel = use_signal(String::new);
 
@@ -2984,6 +3099,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
                     nombres.set(a.nombres.clone());
                     apellidos.set(a.apellidos.clone());
                     telefono.set(a.telefono.clone());
+                    ocupacion.set(a.ocupacion.clone());
                     region_sel.set(a.region_codigo.map(|r| r.to_string()).unwrap_or_default());
                     comuna_sel.set(a.comuna_codigo.clone().unwrap_or_default());
                     apoderado.set(Some(a));
@@ -3006,6 +3122,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
             direccion: String::new(),
             region_codigo: region_codigo_de(&region_sel),
             comuna_codigo: comuna_codigo_de(&comuna_sel),
+            ocupacion: ocupacion.read().clone(),
         };
         spawn(async move {
             match cliente::actualizar_apoderado(pid, &datos).await {
@@ -3043,6 +3160,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
                 if let Some(a) = apoderado.read().as_ref() {
                     div { class: "mini-row", span { class: "muted", "RUT" } span { class: "mini-name", "{a.rut}" } }
                     div { class: "mini-row", span { class: "muted", "📞" } span { class: "mini-name", "{a.telefono}" } }
+                    div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "💼 Ocupación" } else { "💼 Occupation" } } span { class: "mini-name", "{a.ocupacion}" } }
                 }
             }
             if editando() {
@@ -3064,6 +3182,10 @@ fn DetalleApoderado(id: Uuid) -> Element {
                     div { class: "campo",
                         label { if idioma == Idioma::Es { "Teléfono" } else { "Phone" } }
                         input { class: "input", value: "{telefono}", oninput: move |e| telefono.set(e.value()) }
+                    }
+                    div { class: "campo",
+                        label { if idioma == Idioma::Es { "Ocupación" } else { "Occupation" } }
+                        input { class: "input", value: "{ocupacion}", oninput: move |e| ocupacion.set(e.value()) }
                     }
                     SelectorTerritorio {
                         region_sel: region_sel,

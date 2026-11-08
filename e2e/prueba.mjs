@@ -1208,6 +1208,61 @@ const reporteUi = await esperarCondicion(`(() => {
 })()`);
 afirma(reporteUi, 'importación por UI previsualiza y reporta fila mala');
 
+// --- 28. Ficha escolar: salud del alumno y ocupación del apoderado ---
+const RUT_SALUD = '66666666-6';
+const ALERGIA_F9 = `Maní ${SELLO}`;
+const alumSalud = await (await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: RUT_SALUD, nombres: 'Salud', apellidos: `E2E ${SELLO}`, grupo_sanguineo: 'a+', alergias: ALERGIA_F9, antecedentes_medicos: 'Asma leve', contacto_emergencia: 'Madre +5691' }),
+})).json();
+afirma(alumSalud.grupo_sanguineo === 'A+' && alumSalud.alergias === ALERGIA_F9, 'alumno guarda ficha de salud (grupo normalizado)');
+const grupoMal = await (await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: '99999999-9', nombres: 'X', apellidos: 'Y', grupo_sanguineo: 'Z+' }),
+})).json();
+afirma(grupoMal.codigo === 'datos_invalidos', 'grupo sanguíneo inválido se rechaza');
+const RUT_OCU = '88888888-8';
+const apoOcu = await (await api(`${API}/api/apoderados`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: RUT_OCU, nombres: 'Ocu', apellidos: `E2E ${SELLO}`, ocupacion: 'Enfermera' }),
+})).json();
+afirma(apoOcu.ocupacion === 'Enfermera', 'apoderado guarda ocupación');
+
+// Alta por UI con salud y lectura en la ficha.
+await ir('/alumnos');
+await esperarCondicion(`!!document.querySelector('.ghost-new')`);
+await evaluar(`document.querySelector('.ghost-new').click()`);
+await dormir(800);
+const RUT_SALUD_UI = '77777777-7';
+await evaluar(`
+  (() => {
+    const inputs = document.querySelectorAll('.panel.form input');
+    const set = (el, v) => { el.focus(); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    set(inputs[0], ${JSON.stringify(RUT_SALUD_UI)});
+    set(inputs[1], 'Salud UI');
+    set(inputs[2], ${JSON.stringify(SELLO)});
+    set(inputs[3], '8° Básico A');
+    set(inputs[4], ${JSON.stringify(ALERGIA_F9)});
+    const sel = document.querySelector('.panel.form select');
+    sel.value = 'A+';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  })()
+`);
+await evaluar(`[...document.querySelectorAll('.panel.form button')].find(b => b.textContent.includes('Crear')).click()`);
+await dormir(2500);
+const filaSalud = await (await api(`${API}/api/alumnos?busqueda=${encodeURIComponent(RUT_SALUD_UI)}`)).json();
+afirma(filaSalud.length === 1 && filaSalud[0].grupo_sanguineo === 'A+', 'alta por UI guarda salud en PG');
+await ir(`/alumnos/${filaSalud[0].id}`);
+await esperarCondicion(`document.body.textContent.includes('Salud')`);
+t = await texto();
+afirma(t.includes(ALERGIA_F9) && t.includes('A+'), 'ficha de alumno muestra salud');
+await ir(`/apoderados/${apoOcu.id}`);
+await esperarCondicion(`document.body.textContent.includes('Enfermera')`);
+afirma((await texto()).includes('Enfermera'), 'ficha de apoderado muestra ocupación');
+await api(`${API}/api/alumnos/${alumSalud.id}`, { method: 'DELETE' });
+await api(`${API}/api/alumnos/${filaSalud[0].id}`, { method: 'DELETE' });
+await api(`${API}/api/apoderados/${apoOcu.id}`, { method: 'DELETE' });
+
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();
 try {

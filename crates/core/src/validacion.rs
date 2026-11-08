@@ -155,7 +155,26 @@ pub fn validar_alumno(mut entrada: CrearAlumno) -> Result<CrearAlumno, ErrorDomi
     entrada.nombres = exigir_texto(&entrada.nombres, "nombres", 120)?;
     entrada.apellidos = exigir_texto(&entrada.apellidos, "apellidos", 120)?;
     entrada.curso = limpio(&entrada.curso);
+    entrada.grupo_sanguineo = entrada.grupo_sanguineo.trim().to_uppercase();
+    if !["", "O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"].contains(&entrada.grupo_sanguineo.as_str()) {
+        return Err(ErrorDominio::Validacion("Grupo sanguíneo no válido.".into()));
+    }
+    entrada.alergias = exigir_largo(&entrada.alergias, "alergias", 500)?;
+    entrada.medicamentos = exigir_largo(&entrada.medicamentos, "medicamentos", 500)?;
+    entrada.antecedentes_medicos = exigir_largo(&entrada.antecedentes_medicos, "antecedentes médicos", 2000)?;
+    entrada.contacto_emergencia = exigir_largo(&entrada.contacto_emergencia, "contacto de emergencia", 200)?;
     Ok(entrada)
+}
+
+/// Recorta un texto opcional verificando su largo máximo.
+fn exigir_largo(valor: &str, campo: &str, maximo: usize) -> Result<String, ErrorDominio> {
+    let texto = limpio(valor);
+    if texto.len() > maximo {
+        return Err(ErrorDominio::Validacion(format!(
+            "El campo «{campo}» no puede superar {maximo} caracteres."
+        )));
+    }
+    Ok(texto)
 }
 
 /// Valida un apoderado completo y devuelve la versión saneada.
@@ -174,6 +193,7 @@ pub fn validar_apoderado(mut entrada: CrearApoderado) -> Result<CrearApoderado, 
         }
     }
     validar_territorio_entrada(&mut entrada.region_codigo, &mut entrada.comuna_codigo)?;
+    entrada.ocupacion = exigir_largo(&entrada.ocupacion, "ocupación", 120)?;
     Ok(entrada)
 }
 
@@ -379,9 +399,15 @@ mod pruebas {
             curso: "8° Básico A".into(),
             colegio_rbd: None,
             estado: crate::dominio::EstadoAlumno::Postulante,
+            grupo_sanguineo: "O+".into(),
+            alergias: "Maní".into(),
+            medicamentos: "".into(),
+            antecedentes_medicos: "Asma leve.".into(),
+            contacto_emergencia: "María +56912345678".into(),
         };
         let saneado = validar_alumno(entrada).unwrap();
         assert_eq!(saneado.rut, "11111111-1");
+        assert_eq!(saneado.grupo_sanguineo, "O+");
     }
 
     #[test]
@@ -394,6 +420,30 @@ mod pruebas {
             curso: "".into(),
             colegio_rbd: None,
             estado: crate::dominio::EstadoAlumno::Postulante,
+            grupo_sanguineo: "".into(),
+            alergias: "".into(),
+            medicamentos: "".into(),
+            antecedentes_medicos: "".into(),
+            contacto_emergencia: "".into(),
+        };
+        assert!(validar_alumno(entrada).is_err());
+    }
+
+    #[test]
+    fn rechaza_grupo_sanguineo_invalido() {
+        let entrada = CrearAlumno {
+            rut: "12345678-5".into(),
+            nombres: "Ana".into(),
+            apellidos: "Pérez".into(),
+            fecha_nacimiento: None,
+            curso: "".into(),
+            colegio_rbd: None,
+            estado: crate::dominio::EstadoAlumno::Postulante,
+            grupo_sanguineo: "Z+".into(),
+            alergias: "".into(),
+            medicamentos: "".into(),
+            antecedentes_medicos: "".into(),
+            contacto_emergencia: "".into(),
         };
         assert!(validar_alumno(entrada).is_err());
     }

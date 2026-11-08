@@ -55,12 +55,12 @@ pub async fn importar(
             match occb_core::EstadoAlumno::desde_texto(&estado_txt) {
                 None=>Some("Estado de alumno no válido.".to_string()),
                 Some(estado)=>{
-                    let entrada=occb_core::CrearAlumno{rut:datos["rut"].as_str().unwrap_or("").into(),nombres:datos["nombres"].as_str().unwrap_or("").into(),apellidos:datos["apellidos"].as_str().unwrap_or("").into(),fecha_nacimiento:None,curso:datos["curso"].as_str().unwrap_or("").into(),colegio_rbd:datos["colegio_rbd"].as_str().filter(|s|!s.is_empty()).map(str::to_string),estado};
+                    let entrada=occb_core::CrearAlumno{rut:datos["rut"].as_str().unwrap_or("").into(),nombres:datos["nombres"].as_str().unwrap_or("").into(),apellidos:datos["apellidos"].as_str().unwrap_or("").into(),fecha_nacimiento:None,curso:datos["curso"].as_str().unwrap_or("").into(),colegio_rbd:datos["colegio_rbd"].as_str().filter(|s|!s.is_empty()).map(str::to_string),estado,grupo_sanguineo:String::new(),alergias:String::new(),medicamentos:String::new(),antecedentes_medicos:String::new(),contacto_emergencia:String::new()};
                     occb_core::validar_alumno(entrada).err().map(|e|e.to_string())
                 }
             }
         } else {
-            let entrada=occb_core::CrearApoderado{rut:get_from(&datos,"rut"),nombres:get_from(&datos,"nombres"),apellidos:get_from(&datos,"apellidos"),telefono:get_from(&datos,"telefono"),correo:get_from(&datos,"correo"),direccion:get_from(&datos,"direccion"),region_codigo:get_from(&datos,"region_codigo").parse().ok(),comuna_codigo:Some(get_from(&datos,"comuna_codigo")).filter(|s|!s.is_empty())};
+            let entrada=occb_core::CrearApoderado{rut:get_from(&datos,"rut"),nombres:get_from(&datos,"nombres"),apellidos:get_from(&datos,"apellidos"),telefono:get_from(&datos,"telefono"),correo:get_from(&datos,"correo"),direccion:get_from(&datos,"direccion"),region_codigo:get_from(&datos,"region_codigo").parse().ok(),comuna_codigo:Some(get_from(&datos,"comuna_codigo")).filter(|s|!s.is_empty()),ocupacion:String::new()};
             occb_core::validar_apoderado(entrada).err().map(|e|e.to_string())
         };
         if i<5 {

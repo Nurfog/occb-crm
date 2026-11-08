@@ -74,6 +74,11 @@ pub fn datos_semilla_alumnos() -> Vec<Alumno> {
         curso: curso.into(),
         colegio_rbd: None,
         estado: EstadoAlumno::Postulante,
+        grupo_sanguineo: "".into(),
+        alergias: "".into(),
+        medicamentos: "".into(),
+        antecedentes_medicos: "".into(),
+        contacto_emergencia: "".into(),
         creado_en: ahora,
     };
     vec![
@@ -96,6 +101,7 @@ pub fn datos_semilla_apoderados() -> Vec<Apoderado> {
         direccion: "".into(),
         region_codigo: Some(region),
         comuna_codigo: Some(comuna.into()),
+        ocupacion: "".into(),
         creado_en: ahora,
     };
     vec![

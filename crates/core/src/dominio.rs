@@ -82,6 +82,16 @@ pub struct Alumno {
     pub curso: String,
     pub colegio_rbd: Option<String>,
     pub estado: EstadoAlumno,
+    /// Grupo sanguíneo (O-, O+, A-, A+, B-, B+, AB-, AB+ o vacío).
+    pub grupo_sanguineo: String,
+    /// Alergias relevantes (texto libre, máx. 500).
+    pub alergias: String,
+    /// Medicamentos habituales (texto libre, máx. 500).
+    pub medicamentos: String,
+    /// Antecedentes médicos (texto libre, máx. 2000).
+    pub antecedentes_medicos: String,
+    /// Contacto de emergencia (texto libre, máx. 200).
+    pub contacto_emergencia: String,
     pub creado_en: DateTime<Utc>,
 }
 
@@ -95,6 +105,11 @@ pub struct CrearAlumno {
     pub curso: String,
     pub colegio_rbd: Option<String>,
     pub estado: EstadoAlumno,
+    pub grupo_sanguineo: String,
+    pub alergias: String,
+    pub medicamentos: String,
+    pub antecedentes_medicos: String,
+    pub contacto_emergencia: String,
 }
 
 /// Apoderado (madre, padre, tutor u otro) con RUT único.
@@ -109,6 +124,8 @@ pub struct Apoderado {
     pub direccion: String,
     pub region_codigo: Option<i16>,
     pub comuna_codigo: Option<String>,
+    /// Ocupación u oficio (texto libre, máx. 120).
+    pub ocupacion: String,
     pub creado_en: DateTime<Utc>,
 }
 
@@ -123,6 +140,7 @@ pub struct CrearApoderado {
     pub direccion: String,
     pub region_codigo: Option<i16>,
     pub comuna_codigo: Option<String>,
+    pub ocupacion: String,
 }
 
 /// Vínculo entre un alumno y su apoderado.

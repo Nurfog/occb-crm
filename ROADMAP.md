@@ -317,6 +317,23 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
   políticas y multi-espacio quedan para después del roadmap (la API ya
   aísla por usuario autenticado en funciones `SECURITY DEFINER`).
 
+### ✅ Fase 9 — Ficha escolar ampliada
+Objetivo: antecedentes de salud en la ficha del alumno y ocupación del
+apoderado. El CRM de schoolccb queda reemplazado por este proyecto: no se
+integra nada de ese CRM externo (tampoco `crm_sales_*`); la ficha escolar
+vive aquí.
+
+- ✅ Base de datos (migración 026): `alumnos.grupo_sanguineo` (lista cerrada),
+  `alergias`, `medicamentos` (≤500), `antecedentes_medicos` (≤2000),
+  `contacto_emergencia` (≤200); `apoderados.ocupacion` (≤120). Funciones
+  `crear/actualizar` con una sola firma vigente (se retiran las anteriores).
+- ✅ API: cuerpos y mapeos extendidos; validación espejo en Rust.
+- ✅ Frontal: sección Salud reutilizada en alta y edición de alumno, panel
+  Salud en la ficha, ocupación en alta/ficha de apoderado (ES/EN).
+- ✅ E2E: alta con salud por API y UI, grupo inválido rechazado, lectura
+  en ambas fichas, limpieza de filas propias.
+- ✅ Hecho cuando: E2E 101/101, clippy limpio.
+
 ## Mapa de módulos → estado
 
 | Módulo | Estado | Fase |
@@ -346,6 +363,7 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
 | Importación CSV | ✅ Parcial con reporte | 8 |
 | Respaldos y operación | ✅ Salud, ritmo y logs (sin programar) | 8 |
 | Ajustes | ✅ Claves, webhooks e importación | 3 + 8 |
+| Ficha escolar ampliada | ✅ Salud y ocupación | 9 |
 
 ## Reglas de cada fase (no negociables)
 1. Primero la base de datos (tablas + funciones seguras + RLS + migración nueva;

@@ -36,6 +36,11 @@ pub struct CuerpoAlumno {
     pub curso: Option<String>,
     pub colegio_rbd: Option<String>,
     pub estado: Option<String>,
+    pub grupo_sanguineo: Option<String>,
+    pub alergias: Option<String>,
+    pub medicamentos: Option<String>,
+    pub antecedentes_medicos: Option<String>,
+    pub contacto_emergencia: Option<String>,
 }
 
 /// GET /api/alumnos
@@ -85,6 +90,11 @@ fn a_dominio(cuerpo: &CuerpoAlumno) -> Result<occb_core::CrearAlumno, ErrorApi> 
         curso: cuerpo.curso.clone().unwrap_or_default(),
         colegio_rbd: cuerpo.colegio_rbd.clone(),
         estado,
+        grupo_sanguineo: cuerpo.grupo_sanguineo.clone().unwrap_or_default(),
+        alergias: cuerpo.alergias.clone().unwrap_or_default(),
+        medicamentos: cuerpo.medicamentos.clone().unwrap_or_default(),
+        antecedentes_medicos: cuerpo.antecedentes_medicos.clone().unwrap_or_default(),
+        contacto_emergencia: cuerpo.contacto_emergencia.clone().unwrap_or_default(),
     })?)
 }
 
@@ -96,7 +106,7 @@ pub async fn crear(
 ) -> Result<(StatusCode, Json<occb_core::Alumno>), ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
     let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
-    let fila = sqlx::query("select * from crear_alumno($1, $2, $3, $4, $5, $6, $7)")
+    let fila = sqlx::query("select * from crear_alumno($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)")
         .bind(&entrada.rut)
         .bind(&entrada.nombres)
         .bind(&entrada.apellidos)
@@ -104,6 +114,11 @@ pub async fn crear(
         .bind(&entrada.curso)
         .bind(entrada.colegio_rbd.clone())
         .bind(entrada.estado.como_texto())
+        .bind(&entrada.grupo_sanguineo)
+        .bind(&entrada.alergias)
+        .bind(&entrada.medicamentos)
+        .bind(&entrada.antecedentes_medicos)
+        .bind(&entrada.contacto_emergencia)
         .fetch_one(&mut *tx)
         .await?;
     tx.commit().await?;
@@ -119,7 +134,7 @@ pub async fn actualizar(
 ) -> Result<Json<occb_core::Alumno>, ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
     let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
-    let fila = sqlx::query("select * from actualizar_alumno($1, $2, $3, $4, $5, $6, $7, $8)")
+    let fila = sqlx::query("select * from actualizar_alumno($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)")
         .bind(id)
         .bind(&entrada.rut)
         .bind(&entrada.nombres)
@@ -128,6 +143,11 @@ pub async fn actualizar(
         .bind(&entrada.curso)
         .bind(entrada.colegio_rbd.clone())
         .bind(entrada.estado.como_texto())
+        .bind(&entrada.grupo_sanguineo)
+        .bind(&entrada.alergias)
+        .bind(&entrada.medicamentos)
+        .bind(&entrada.antecedentes_medicos)
+        .bind(&entrada.contacto_emergencia)
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Alumno no encontrado.".into()))?;
