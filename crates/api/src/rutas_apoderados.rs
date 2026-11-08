@@ -184,3 +184,22 @@ pub async fn alumnos_de(
             .collect(),
     ))
 }
+
+/// POST /api/apoderados/:id/anonimizar — solo admin.
+pub async fn anonimizar(
+    State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<occb_core::Apoderado>, ErrorApi> {
+    if usuario.rol != "admin" {
+        return Err(ErrorApi::Prohibido("Solo un admin puede hacer esto.".into()));
+    }
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
+    let fila = sqlx::query("select * from anonimizar_apoderado($1)")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| ErrorApi::NoEncontrado("Apoderado no encontrado.".into()))?;
+    tx.commit().await?;
+    Ok(Json(bd::fila_a_apoderado(&fila)))
+}

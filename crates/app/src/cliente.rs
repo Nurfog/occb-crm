@@ -320,6 +320,11 @@ pub async fn eliminar_alumno(id: Uuid) -> Result<(), String> {
     borrar(&format!("/api/alumnos/{id}")).await
 }
 
+/// Anonimiza un alumno (solo admin): desactiva y reemplaza datos personales.
+pub async fn anonimizar_alumno(id: Uuid) -> Result<Alumno, String> {
+    enviar_json("POST", &format!("/api/alumnos/{id}/anonimizar"), &serde_json::json!({})).await
+}
+
 /// Apoderado vinculado con su vínculo y permisos (algunos campos se muestran
 /// en detalles futuros).
 #[allow(dead_code)]
@@ -409,6 +414,11 @@ pub async fn actualizar_apoderado(id: Uuid, datos: &CrearApoderado) -> Result<Ap
 /// Elimina un apoderado (desvincula en cascada).
 pub async fn eliminar_apoderado(id: Uuid) -> Result<(), String> {
     borrar(&format!("/api/apoderados/{id}")).await
+}
+
+/// Anonimiza un apoderado (solo admin).
+pub async fn anonimizar_apoderado(id: Uuid) -> Result<Apoderado, String> {
+    enviar_json("POST", &format!("/api/apoderados/{id}/anonimizar"), &serde_json::json!({})).await
 }
 
 /// Alumno vinculado con su vínculo (algunos campos se muestran en detalles futuros).

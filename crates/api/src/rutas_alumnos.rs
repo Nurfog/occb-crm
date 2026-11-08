@@ -290,3 +290,23 @@ pub async fn desvincular(
         .ok_or_else(|| ErrorApi::NoEncontrado("Vínculo no encontrado.".into()))?;
     Ok(StatusCode::NO_CONTENT)
 }
+
+/// POST /api/alumnos/:id/anonimizar — solo admin: desactiva y reemplaza
+/// datos personales por valores por defecto (UUID intacto).
+pub async fn anonimizar(
+    State(pool): State<PgPool>,
+    axum::Extension(usuario): axum::Extension<crate::auth::UsuarioActual>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<occb_core::Alumno>, ErrorApi> {
+    if usuario.rol != "admin" {
+        return Err(ErrorApi::Prohibido("Solo un admin puede hacer esto.".into()));
+    }
+    let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
+    let fila = sqlx::query("select * from anonimizar_alumno($1)")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| ErrorApi::NoEncontrado("Alumno no encontrado.".into()))?;
+    tx.commit().await?;
+    Ok(Json(bd::fila_a_alumno(&fila)))
+}

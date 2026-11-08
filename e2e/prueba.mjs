@@ -1364,11 +1364,50 @@ await evaluar(`document.querySelector('.tbl thead .check-btn').click()`);
 await dormir(600);
 const marcados = await evaluar(`document.querySelectorAll('.tbl tbody tr.selected').length`);
 afirma(marcados === 2, 'cabecera marca las filas visibles');
-await evaluar(`[...document.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('Eliminar')).click()`);
-const bulkFuera = await esperarCondicion(`![...document.querySelectorAll('.toolbar button')].some(b => b.textContent.includes('Eliminar'))`, 15000);
+await evaluar(`[...document.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('Deshabilitar')).click()`);
+const bulkFuera = await esperarCondicion(`![...document.querySelectorAll('.toolbar button')].some(b => b.textContent.includes('Deshabilitar'))`, 15000);
 afirma(bulkFuera, 'borrado masivo limpia la selección');
 const quedan = await (await api(`${API}/api/alumnos?busqueda=${encodeURIComponent(MASIVO_APE)}`)).json();
 afirma(quedan.length === 0, 'borrado masivo elimina en PG');
+
+// --- 32. Borrado lógico y anonimización (protección de datos) ---
+const RUT_BORRA = '16161616-8';
+const APE_BORRA = `Borra ${SELLO}`;
+const alumBorra = await (await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: RUT_BORRA, nombres: 'Borra', apellidos: APE_BORRA }),
+})).json();
+await api(`${API}/api/alumnos/${alumBorra.id}`, { method: 'DELETE' });
+const listaTrasBaja = await (await api(`${API}/api/alumnos?busqueda=${encodeURIComponent(RUT_BORRA)}`)).json();
+afirma(listaTrasBaja.length === 0, 'baja oculta de listas pero no borra');
+const fichaBaja = await api(`${API}/api/alumnos/${alumBorra.id}`);
+afirma(fichaBaja.status === 404, 'ficha de registro dado de baja avisa no encontrado');
+const alumReuso = await (await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: RUT_BORRA, nombres: 'Reuso', apellidos: APE_BORRA }),
+})).json();
+afirma(!!alumReuso.id, 'RUT liberado se puede reutilizar');
+const anonMiembro = await api(`${API}/api/alumnos/${alumReuso.id}/anonimizar`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+});
+afirma(anonMiembro.status === 403, 'miembro no puede anonimizar (403)');
+// Anonimizar por UI como admin y verificar el scrub + historial intacto.
+await enviar('Page.navigate', { url: `${FRONTAL}/alumnos/${alumReuso.id}` });
+await esperarCondicion(`document.body.textContent.includes('Bienvenido de nuevo')`);
+await loginUI(ADMIN_CORREO, E2E_CLAVE);
+await esperarCondicion(`document.body.textContent.includes('Ficha de alumno')`);
+await evaluar(`[...document.querySelectorAll('.record-panel button')].find(b => b.textContent.includes('Anonimizar')).click()`);
+await dormir(600);
+await evaluar(`[...document.querySelectorAll('.record-panel button')].find(b => b.textContent.includes('Confirmar')).click()`);
+const anonUi = await esperarCondicion(`(() => {
+  const t = document.querySelector('.record-panel .record-title')?.textContent || '';
+  return t.includes('—');
+})()`);
+afirma(anonUi, 'anonimizar por UI reemplaza datos personales');
+const verifAnon = await (await apiAdmin(`${API}/api/alumnos?busqueda=${encodeURIComponent(RUT_BORRA)}`)).json();
+afirma(verifAnon.length === 0, 'anonimizado no aparece en listas ni búsqueda');
+const timelineAnon = await (await apiAdmin(`${API}/api/actividad?tipo=alumno&id=${alumReuso.id}`)).json();
+afirma(timelineAnon.length >= 1 && timelineAnon.every((a) => !!a.autor), 'historial UUID intacto con autor tras anonimizar');
 
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();

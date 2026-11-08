@@ -188,6 +188,10 @@ async fn main() {
                 .delete(rutas_personas::eliminar),
         )
         .route(
+            "/api/personas/{id}/anonimizar",
+            axum::routing::post(rutas_personas::anonimizar),
+        )
+        .route(
             "/api/oportunidades",
             get(rutas_oportunidades::listar).post(rutas_oportunidades::crear),
         )
@@ -199,6 +203,10 @@ async fn main() {
             "/api/oportunidades/{id}",
             axum::routing::patch(rutas_oportunidades::actualizar)
                 .delete(rutas_oportunidades::eliminar),
+        )
+        .route(
+            "/api/oportunidades/{id}/anonimizar",
+            axum::routing::post(rutas_oportunidades::anonimizar),
         )
         .route(
             "/api/alumnos",
@@ -213,6 +221,10 @@ async fn main() {
         .route(
             "/api/alumnos/{id}/apoderados",
             get(rutas_alumnos::apoderados_de).post(rutas_alumnos::vincular),
+        )
+        .route(
+            "/api/alumnos/{id}/anonimizar",
+            axum::routing::post(rutas_alumnos::anonimizar),
         )
         .route(
             "/api/alumnos/{id}/traslados",
@@ -235,6 +247,10 @@ async fn main() {
         .route(
             "/api/apoderados/{id}/alumnos",
             get(rutas_apoderados::alumnos_de),
+        )
+        .route(
+            "/api/apoderados/{id}/anonimizar",
+            axum::routing::post(rutas_apoderados::anonimizar),
         )
         .route(
             "/api/tareas",

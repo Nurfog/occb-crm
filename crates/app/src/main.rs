@@ -794,7 +794,7 @@ fn VistaPersonas() -> Element {
                             recargar_personas(personas);
                         });
                     },
-                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                    if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" }
                 }
                 button {
                     class: "btn-mini",
@@ -907,7 +907,7 @@ fn VistaPersonas() -> Element {
                                 td {
                                     button {
                                         class: "btn-mini",
-                                        title: "✕",
+                                        title: if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" },
                                         onclick: {
                                             let id = p.id;
                                             move |_| {
@@ -1054,7 +1054,7 @@ fn VistaOportunidades() -> Element {
                             recargar_oportunidades(oportunidades);
                         });
                     },
-                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                    if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" }
                 }
                 button {
                     class: "btn-mini",
@@ -2376,7 +2376,7 @@ fn VistaAlumnos() -> Element {
                             }
                         });
                     },
-                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                    if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" }
                 }
                 button {
                     class: "btn-mini",
@@ -2477,7 +2477,7 @@ fn VistaAlumnos() -> Element {
                                 td {
                                     button {
                                         class: "btn-mini",
-                                        title: "✕",
+                                        title: if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" },
                                         onclick: {
                                             let id = a.id;
                                             move |_| {
@@ -2529,6 +2529,7 @@ fn DetalleAlumno(id: Uuid) -> Element {
     let mut aviso = use_signal(String::new);
     let mut listo = use_signal(|| false);
     let mut editando = use_signal(|| false);
+    let mut confirma_anon = use_signal(|| false);
     let mut rut = use_signal(String::new);
     let mut nombres = use_signal(String::new);
     let mut apellidos = use_signal(String::new);
@@ -2777,6 +2778,38 @@ fn DetalleAlumno(id: Uuid) -> Element {
                 div { class: "panel-head",
                     span { class: "panel-title", if idioma == Idioma::Es { "General" } else { "General" } }
                     button { class: "btn-mini", onclick: move |_| editando.set(!editando()), "✎" }
+                    if cliente::SESION().map(|s| s.rol == "admin").unwrap_or(false) {
+                        if confirma_anon() {
+                            button {
+                                class: "btn-mini",
+                                onclick: move |_| {
+                                    let pid = id_actual();
+                                    spawn(async move {
+                                        match cliente::anonimizar_alumno(pid).await {
+                                            Ok(a) => {
+                                                aviso.set(String::new());
+                                                confirma_anon.set(false);
+                                                alumno.set(Some(a));
+                                            }
+                                            Err(mensaje) => aviso.set(mensaje),
+                                        }
+                                    });
+                                },
+                                if idioma == Idioma::Es { "Confirmar anonimización" } else { "Confirm anonymization" }
+                            }
+                            button {
+                                class: "btn-mini",
+                                onclick: move |_| confirma_anon.set(false),
+                                "✕"
+                            }
+                        } else {
+                            button {
+                                class: "btn-mini",
+                                onclick: move |_| confirma_anon.set(true),
+                                if idioma == Idioma::Es { "Anonimizar" } else { "Anonymize" }
+                            }
+                        }
+                    }
                 }
                 if let Some(a) = alumno.read().as_ref() {
                     div { class: "mini-row", span { class: "muted", "RUT" } span { class: "mini-name", "{a.rut}" } }
@@ -3195,7 +3228,7 @@ fn VistaApoderados() -> Element {
                             }
                         });
                     },
-                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                    if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" }
                 }
                 button {
                     class: "btn-mini",
@@ -3298,7 +3331,7 @@ fn VistaApoderados() -> Element {
                                 td {
                                     button {
                                         class: "btn-mini",
-                                        title: "✕",
+                                        title: if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" },
                                         onclick: {
                                             let id = a.id;
                                             move |_| {
@@ -3351,6 +3384,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
     let mut aviso = use_signal(String::new);
     let mut listo = use_signal(|| false);
     let mut editando = use_signal(|| false);
+    let mut confirma_anon = use_signal(|| false);
     let mut rut = use_signal(String::new);
     let mut nombres = use_signal(String::new);
     let mut apellidos = use_signal(String::new);
@@ -3445,6 +3479,38 @@ fn DetalleApoderado(id: Uuid) -> Element {
                 div { class: "panel-head",
                     span { class: "panel-title", if idioma == Idioma::Es { "General" } else { "General" } }
                     button { class: "btn-mini", onclick: move |_| editando.set(!editando()), "✎" }
+                    if cliente::SESION().map(|s| s.rol == "admin").unwrap_or(false) {
+                        if confirma_anon() {
+                            button {
+                                class: "btn-mini",
+                                onclick: move |_| {
+                                    let pid = id_actual();
+                                    spawn(async move {
+                                        match cliente::anonimizar_apoderado(pid).await {
+                                            Ok(a) => {
+                                                aviso.set(String::new());
+                                                confirma_anon.set(false);
+                                                apoderado.set(Some(a));
+                                            }
+                                            Err(mensaje) => aviso.set(mensaje),
+                                        }
+                                    });
+                                },
+                                if idioma == Idioma::Es { "Confirmar anonimización" } else { "Confirm anonymization" }
+                            }
+                            button {
+                                class: "btn-mini",
+                                onclick: move |_| confirma_anon.set(false),
+                                "✕"
+                            }
+                        } else {
+                            button {
+                                class: "btn-mini",
+                                onclick: move |_| confirma_anon.set(true),
+                                if idioma == Idioma::Es { "Anonimizar" } else { "Anonymize" }
+                            }
+                        }
+                    }
                 }
                 if let Some(a) = apoderado.read().as_ref() {
                     div { class: "mini-row", span { class: "muted", "RUT" } span { class: "mini-name", "{a.rut}" } }
@@ -3657,7 +3723,7 @@ fn VistaTareas() -> Element {
                                 span { class: "opp-prob", "{ta.prioridad}" }
                                 button {
                                     class: "btn-mini",
-                                    title: if idioma == Idioma::Es { "Eliminar" } else { "Delete" },
+                                    title: if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" },
                                     onclick: {
                                         let id = ta.id;
                                         move |_| {
@@ -3802,7 +3868,7 @@ fn VistaNotas() -> Element {
                             }
                         });
                     },
-                    if idioma == Idioma::Es { "Eliminar" } else { "Delete" }
+                    if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" }
                 }
                 button {
                     class: "btn-mini",
@@ -3928,7 +3994,7 @@ fn VistaNotas() -> Element {
                                     }
                                     button {
                                         class: "btn-mini",
-                                        title: "✕",
+                                        title: if idioma == Idioma::Es { "Deshabilitar" } else { "Disable" },
                                         onclick: {
                                             let id = n.id;
                                             move |_| {

@@ -349,10 +349,25 @@ vive aquí.
   masivo con confirmación en barra y conteo; chip de usuario sin wrap;
   fila de traslado con etiquetas alineadas.
 - ✅ Hecho cuando: E2E 113/113, clippy limpio.
-- ✅ Fichas (9d): paneles de relacionados vacíos ocultos (tareas, notas,
-  eventos, correos, postulaciones, vinculados), Salud solo con datos y
-  fila RBD vacía oculta; Ingresos médicos siempre visible por su alta.
-- ✅ Hecho cuando: E2E 113/113, clippy limpio.
+
+### ✅ Fase 10 — Borrado lógico + anonimización (protección de datos)
+Objetivo: nada se borra; los registros se deshabilitan y los datos personales
+se reemplazan por valores por defecto. Los UUID se conservan, así que informes
+e historial siguen consistentes.
+
+- ✅ Base de datos (migración 028): columna `activo` en personas,
+  oportunidades, alumnos, apoderados, tareas, notas, eventos, correos,
+  ingresos y colegios; unicidad de RUT/correo solo entre activos; listas,
+  lectura, edición y vínculos solo consideran activos; `eliminar_*` desactiva;
+  `anonimizar_persona/alumno/apoderado/oportunidad` reemplazan datos
+  personales (RUT `00000000-0`, nombres `—`, contacto vacío).
+- ✅ API: mismos endpoints de baja (204, el registro se oculta);
+  `POST /:recurso/:id/anonimizar` solo admin (403 para miembro).
+- ✅ Frontal: títulos y botones honestos (Deshabilitar), anonimizar en dos
+  pasos en fichas de alumno y apoderado (solo admin).
+- ✅ E2E: baja oculta sin borrar (fila sigue en PG), RUT reutilizable,
+  403 para miembro, anonimización por UI con historial intacto.
+- ✅ Hecho cuando: E2E 120/120, clippy limpio.
 
 ## Mapa de módulos → estado
 
@@ -384,6 +399,7 @@ vive aquí.
 | Respaldos y operación | ✅ Salud, ritmo y logs (sin programar) | 8 |
 | Ajustes | ✅ Claves, webhooks e importación | 3 + 8 |
 | Ficha escolar ampliada | ✅ Salud y ocupación | 9 |
+| Borrado lógico + anonimización | ✅ Sin borrados físicos | 10 |
 
 ## Reglas de cada fase (no negociables)
 1. Primero la base de datos (tablas + funciones seguras + RLS + migración nueva;
