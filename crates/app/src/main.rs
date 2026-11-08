@@ -1274,9 +1274,11 @@ fn DetalleOportunidad(id: Uuid) -> Element {
                         span { class: "muted", if idioma == Idioma::Es { "Aporte" } else { "Amount" } }
                         span { class: "mini-name", "${o.importe}" }
                     }
-                    div { class: "mini-row",
-                        span { class: "muted", "RBD" }
-                        span { class: "mini-name", "{o.colegio_rbd.clone().unwrap_or_default()}" }
+                    if let Some(rbd) = o.colegio_rbd.clone() {
+                        div { class: "mini-row",
+                            span { class: "muted", "RBD" }
+                            span { class: "mini-name", "{rbd}" }
+                        }
                     }
                     div { class: "mini-row",
                         span { class: "muted", if idioma == Idioma::Es { "Creada" } else { "Created" } }
@@ -1356,6 +1358,7 @@ fn DetalleColegio(rbd: String) -> Element {
                 }
                 p { class: "muted", "📍 {nombre_comuna} · {nombre_region}" }
             }
+            if !opps_rel.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -1369,6 +1372,7 @@ fn DetalleColegio(rbd: String) -> Element {
                         span { class: "stage stage-{o.etapa:?}", "{etiqueta_etapa(o.etapa, idioma)}" }
                     }
                 }
+            }
             }
         }
         }
@@ -1512,6 +1516,7 @@ fn DetallePersona(id: Uuid) -> Element {
                 }
             }
             }
+            if !opps_rel.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -1526,6 +1531,7 @@ fn DetallePersona(id: Uuid) -> Element {
                         span { class: "stage stage-{o.etapa:?}", "{etiqueta_etapa(o.etapa, idioma)}" }
                     }
                 }
+            }
             }
             Timeline { tipo: "persona".to_string(), id }
         }
@@ -2649,8 +2655,12 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     a.grupo_sanguineo.clone(), a.alergias.clone(), a.medicamentos.clone(),
                     a.antecedentes_medicos.clone(), a.contacto_emergencia.clone(),
                 )).unwrap_or_default();
-                let titulo_salud = if idioma == Idioma::Es { "Salud".to_string() } else { "Health".to_string() };
-                panel_salud(idioma, titulo_salud, gs, al, med, ant, em)
+                if gs.is_empty() && al.is_empty() && med.is_empty() && ant.is_empty() && em.is_empty() {
+                    rsx! {}
+                } else {
+                    let titulo_salud = if idioma == Idioma::Es { "Salud".to_string() } else { "Health".to_string() };
+                    panel_salud(idioma, titulo_salud, gs, al, med, ant, em)
+                }
             }
             div { class: "panel",
                 div { class: "panel-head",
@@ -2872,6 +2882,7 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
             }
+            if !rel_tareas.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -2886,6 +2897,8 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
             }
+            }
+            if !rel_notas.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -2900,6 +2913,8 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
             }
+            }
+            if !rel_eventos.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -2914,6 +2929,8 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
             }
+            }
+            if !rel_correos.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -2929,6 +2946,7 @@ fn DetalleAlumno(id: Uuid) -> Element {
                         span { class: "mini-amt", "{c.remitente}" }
                     }
                 }
+            }
             }
             Timeline { tipo: "alumno".to_string(), id }
         }
@@ -3289,6 +3307,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
                 }
             }
             }
+            if !vinculados.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -3307,6 +3326,8 @@ fn DetalleApoderado(id: Uuid) -> Element {
                     }
                 }
             }
+            }
+            if !rel_eventos.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -3321,6 +3342,8 @@ fn DetalleApoderado(id: Uuid) -> Element {
                     }
                 }
             }
+            }
+            if !rel_correos.read().is_empty() {
             div { class: "panel",
                 div { class: "panel-head",
                     span { class: "panel-title",
@@ -3336,6 +3359,7 @@ fn DetalleApoderado(id: Uuid) -> Element {
                         span { class: "mini-amt", "{c.remitente}" }
                     }
                 }
+            }
             }
             Timeline { tipo: "apoderado".to_string(), id }
         }

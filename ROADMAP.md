@@ -342,6 +342,9 @@ vive aquí.
 - ✅ Pulido visual (9c): buscador lateral compacto con elipsis, Guardar de
   Ajustes aplica el nombre del espacio en la marca (API/BD de solo lectura),
   importación CSV apilada en columna.
+- ✅ Fichas (9d): paneles de relacionados vacíos ocultos (tareas, notas,
+  eventos, correos, postulaciones, vinculados), Salud solo con datos y
+  fila RBD vacía oculta; Ingresos médicos siempre visible por su alta.
 - ✅ Hecho cuando: E2E 110/110, clippy limpio.
 
 ## Mapa de módulos → estado
