@@ -168,7 +168,8 @@ Objetivo: multiusuario de verdad; base para permisos por usuario.
     para la SPA, además de cookie `HttpOnly`), `POST /api/acceso/renovar`
     (acepta cuerpo o cookie), `POST /api/acceso/salir`, `GET /api/acceso/yo`.
   - ✅ Middleware que exige JWT: públicas solo salud, acceso, regiones/comunas,
-    colegios y panel; el resto exige sesión (401 `sin_sesion`).
+    lectura de colegios y panel; la escritura de colegios también exige
+    sesión; el resto exige sesión (401 `sin_sesion`).
   - ✅ `GET /api/miembros`, `PATCH /api/miembros/{id}/rol` (solo admin,
     403 `prohibido`).
   - ⬜ RLS por usuario → se movió a Fase 8 (las funciones `SECURITY DEFINER`
@@ -308,7 +309,8 @@ Objetivo: que terceros integren y que operar sea aburrido (en el buen sentido).
     límite 60 logins/min por IP (429 `demasiadas_solicitudes`).
   - ✅ Trazabilidad por usuario: `app.usuario_id` local por transacción en
     escrituras (autoría de actividad y webhooks); colecciones personales
-    filtradas por JWT/clave.
+    filtradas por JWT/clave. `APP_SECRETO` se puede sobreescribir por entorno
+    (`${APP_SECRETO:-secreto-e2e-local}`) sin editar el compose.
   - ⬜ Respaldos programados y multi-espacio: fuera de alcance (ver nota).
 - ✅ E2E: CSV con 1 fila mala importa 2/3 y la reporta; entrega firmada
   verificada punto a punto en local y ciclo con reintentos en docker;

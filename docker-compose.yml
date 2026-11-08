@@ -40,8 +40,8 @@ services:
       DATABASE_URL: postgres://occb:occb@bd:5432/occb
       PUERTO_API: 3001
       RUST_LOG: info
-      # Desarrollo: mismo secreto que los E2E y el mock LLM locales.
-      APP_SECRETO: secreto-e2e-local
+      # Desarrollo: se puede sobreescribir sin editar el archivo.
+      APP_SECRETO: ${APP_SECRETO:-secreto-e2e-local}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

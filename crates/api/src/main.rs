@@ -69,14 +69,8 @@ async fn main() {
         .route("/api/acceso/salir", axum::routing::post(auth::salir))
         .route("/api/regiones", get(rutas_territorio::listar_regiones))
         .route("/api/comunas", get(rutas_territorio::listar_comunas))
-        .route(
-            "/api/colegios",
-            get(rutas_colegios::listar).post(rutas_colegios::crear),
-        )
-        .route(
-            "/api/colegios/{rbd}",
-            get(rutas_colegios::obtener).delete(rutas_colegios::eliminar),
-        )
+        .route("/api/colegios", get(rutas_colegios::listar))
+        .route("/api/colegios/{rbd}", get(rutas_colegios::obtener))
         .route("/api/schools", get(rutas_colegios::listar))
         .route("/api/panel", get(rutas_oportunidades::panel))
         .route("/api/dashboard", get(rutas_oportunidades::panel));
@@ -173,6 +167,11 @@ async fn main() {
                 .delete(rutas_automatizaciones::eliminar),
         )
         .route("/api/miembros", get(auth::miembros))
+        .route("/api/colegios", axum::routing::post(rutas_colegios::crear))
+        .route(
+            "/api/colegios/{rbd}",
+            axum::routing::delete(rutas_colegios::eliminar),
+        )
         .route(
             "/api/miembros/{id}/rol",
             axum::routing::patch(auth::cambiar_rol),
