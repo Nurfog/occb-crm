@@ -1,0 +1,48 @@
+# .egmignore — patrones que egm-bootstrap debe descartar del mapa.
+# Sintaxis tipo .gitignore. Se suma a .gitignore y a los directorios
+# ocultos/de sistema (.git, node_modules, dist, build, etc.).
+# Todo en el proyecto de trabajo: /home/juan/orca/projects/occb-crm
+
+# Control de versiones y harness
+.git/
+.antigravity/
+.opencode/
+.claude/
+.opencodeignore
+
+# Compilados y dependencias (Rust, Node, Python)
+target/
+**/target/
+dist/
+**/dist/
+build/
+node_modules/
+venv/
+.venv/
+third_party/
+coverage/
+*.d
+
+# Secretos, locales y temporales
+.env
+.env.*
+*.log
+*.tmp
+.DS_Store
+/tmp/
+
+# Medios binarios del manual (las capturas y el video no se revisan
+# como código; el texto/manual sí: docs/manual/MANUAL.md se conserva)
+docs/manual/img/
+docs/manual/video/
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.webm
+*.pdf
+
+# Derivados y registros de deriva fechados (se generan,
+# no se documentan como fuente)
+**/2026-11-11_DRIFT_REPORT.md
+**/*_DRIFT_REPORT.md
