@@ -22,6 +22,7 @@ mod rutas_espacio;
 mod rutas_integraciones;
 mod rutas_importacion;
 mod rutas_ingresos;
+mod rutas_matricula;
 mod rutas_notas;
 mod rutas_oportunidades;
 mod rutas_personas;
@@ -197,6 +198,10 @@ async fn main() {
         .route(
             "/api/oportunidades/{id}/etapa",
             axum::routing::patch(rutas_oportunidades::mover_etapa),
+        )
+        .route(
+            "/api/oportunidades/{id}/matricular",
+            axum::routing::post(rutas_matricula::matricular),
         )
         .route(
             "/api/oportunidades/{id}",

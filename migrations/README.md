@@ -2,11 +2,11 @@
 
 ## System Overview
 
-Historial lineal de esquema PostgreSQL 18 del CRM escolar (28 migraciones `sqlx`, `001–028`): tablas, funciones `SECURITY DEFINER` con `SET search_path = public`, RLS sin políticas permisivas (`REVOKE ALL` + `GRANT SELECT/EXECUTE` a `public`), índices y semillas. La API las aplica al arrancar (`bd::migrar_y_sembrar`); nunca se edita una migración aplicada (el `checksum` de `sqlx` lo impide), solo se añade la siguiente.
+Historial lineal de esquema PostgreSQL 18 del CRM escolar (31 migraciones `sqlx`, `001–031`): tablas, funciones `SECURITY DEFINER` con `SET search_path = public`, RLS sin políticas permisivas (`REVOKE ALL` + `GRANT SELECT/EXECUTE` a `public`), índices y semillas. La API las aplica al arrancar (`bd::migrar_y_sembrar`); nunca se edita una migración aplicada (el `checksum` de `sqlx` lo impide), solo se añade la siguiente. `029` fundación tenant SaaS (holdings, colegios contratados, membresías, importaciones, supresión, `es_miembro`), `030` matrícula y consentimiento (`prospecto_rut/origen/consentimiento/ttl`, `matricular_postulacion` idempotente) y `031` repara siembra escolar en BD limpias son aditivas y no cambian el comportamiento legado.
 
 ## Local Interface & Invariants
 
-Tablas (`CREATE TABLE`, minúsculas en los ficheros): `empresas` (legado, retirada del producto), `personas`, `oportunidades`, `regiones`, `comunas`, `colegios` (RBD como clave, 12 038 vigentes vía 36 `INSERT` multi-fila en `[010_colegios_admision.sql]`), `alumnos` (RUT único entre activos), `apoderados`, `alumno_apoderado`, `traslados`, `tareas`, `notas`, `eventos`, `correos`, `favoritos`, `vistas`, `actividad`, `automatizaciones`, `ejecuciones`, `conversaciones`, `mensajes`, `claves_api`, `webhooks`, `entregas_webhook`, `usuarios`, `sesiones`, `ingresos_medicos`.
+Tablas (`CREATE TABLE`, minúsculas en los ficheros): `empresas` (legado, retirada del producto), `personas`, `oportunidades`, `regiones`, `comunas`, `colegios` (RBD como clave, 12 038 vigentes vía 36 `INSERT` multi-fila en `[010_colegios_admision.sql]`), `alumnos` (RUT único entre activos), `apoderados`, `alumno_apoderado`, `traslados`, `tareas`, `notas`, `eventos`, `correos`, `favoritos`, `vistas`, `actividad`, `automatizaciones`, `ejecuciones`, `conversaciones`, `mensajes`, `claves_api`, `webhooks`, `entregas_webhook`, `usuarios`, `sesiones`, `ingresos_medicos`, `holdings`, `colegios_contratados` (RBD FK al directorio), `membresias_usuario`, `importaciones` (jobs CSV), `supresion` (hash RUT).
 
 Funciones por dominio (`CREATE OR REPLACE FUNCTION`, todas `SECURITY DEFINER`): `listar_*/obtener_*/crear_*/actualizar_*/eliminar_*` por entidad, `mover_etapa_oportunidad`, `panel_resumen`, `es_rut_valido`, `rut_normalizado`, `vincular/desvincular_apoderado`, `apoderados_de_alumno`, `alumnos_de_apoderado`, `trasladar_alumno`, `marcar_tarea`, `marcar_correo_leido`, `listar_eventos_mes`, `buscar_espacio` (FTS español + trigramas), `alternar_favorito`, `timeline`, `registrar_actividad_cambio` (disparadores de auditoría), `ejecutar_automatizaciones` y `validar_regla_automatizacion`, `registrar_usuario` (el primero admin), `credencial_usuario`, `crear/rotar/cerrar_sesion`, `listar_miembros`, `cambiar_rol`, `importar_alumnos/apoderados` (hasta 1000 filas, parcial con reporte), `crear/listar/validar/revocar_clave_api`, `crear/listar/alternar/eliminar/probar_webhook`, `reclamar_entregas_webhook`, `registrar_resultado_webhook` (backoff `least(60,5*2^(intentos-1))`), `anonimizar_persona/alumno/apoderado/oportunidad` y `eliminar_*` (borrado lógico).
 
@@ -14,7 +14,7 @@ Invariantes clave: RUT chileno con DV módulo 11 (`[011_alumnos_apoderados.sql:e
 
 ## Subdirectories & System Boundaries
 
-- (sin subdirectorios: los 28 ficheros `001–028_*.sql` viven directamente en esta carpeta y se aplican en orden lexicográfico).
+- (sin subdirectorios: los 31 ficheros `001–031_*.sql` viven directamente en esta carpeta y se aplican en orden lexicográfico).
 
 ## Global Invariants
 
@@ -28,4 +28,4 @@ Invariantes clave: RUT chileno con DV módulo 11 (`[011_alumnos_apoderados.sql:e
 
 ## System Verification
 
-- Run: `docker compose up -d bd && cargo run -p occb-api` (aplica `001–028` al arrancar) o `node e2e/prueba.mjs` (E2E sobre esquema migrado).
+- Run: `docker compose up -d bd && cargo run -p occb-api` (aplica `001–031` al arrancar) o `node e2e/prueba.mjs` (E2E sobre esquema migrado).

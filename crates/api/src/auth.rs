@@ -40,6 +40,12 @@ struct Reclamos {
     exp: u64,
     /// Identificador único: dos accesos nunca comparten el token.
     jti: String,
+    /// Alcance tenant SaaS (029): holding opcional y colegios del portador.
+    /// `default` mantiene válidos los tokens emitidos antes de 029.
+    #[serde(default)]
+    holding_id: Option<uuid::Uuid>,
+    #[serde(default)]
+    colegio_rbd: Vec<String>,
 }
 
 /// Usuario autenticado que el middleware deja en las extensiones.
@@ -50,6 +56,9 @@ pub struct UsuarioActual {
     pub rol: String,
     /// `None` para JWT; una clave API lleva alcances explícitos.
     pub alcances: Option<Vec<String>>,
+    /// Alcance tenant SaaS (029): `None`/vacío = legado sin scope (no filtra).
+    pub holding_id: Option<uuid::Uuid>,
+    pub colegio_rbd: Vec<String>,
 }
 
 fn ahora_segs() -> u64 {
@@ -109,14 +118,27 @@ fn login_limitado(ip: std::net::IpAddr) -> bool {
     false
 }
 
-/// Emite un JWT de acceso para el usuario.
+/// Emite un JWT de acceso para el usuario (legado sin scope tenant).
 fn emitir_acceso(id: &uuid::Uuid, nombre: &str, rol: &str) -> Result<String, ErrorApi> {
+    emitir_acceso_con_scope(id, nombre, rol, None, &[])
+}
+
+/// Emite un JWT de acceso con alcance tenant SaaS (029, M1b).
+fn emitir_acceso_con_scope(
+    id: &uuid::Uuid,
+    nombre: &str,
+    rol: &str,
+    holding_id: Option<uuid::Uuid>,
+    colegio_rbd: &[String],
+) -> Result<String, ErrorApi> {
     let reclamos = Reclamos {
         sub: id.to_string(),
         nombre: nombre.into(),
         rol: rol.into(),
         exp: ahora_segs() + VIDA_ACCESO_SEGS,
         jti: uuid::Uuid::new_v4().to_string(),
+        holding_id,
+        colegio_rbd: colegio_rbd.to_vec(),
     };
     jsonwebtoken::encode(
         &jsonwebtoken::Header::default(),
@@ -144,7 +166,27 @@ fn leer_acceso(token: &str) -> Result<UsuarioActual, ErrorApi> {
         nombre: datos.claims.nombre,
         rol: datos.claims.rol,
         alcances: None,
+        holding_id: datos.claims.holding_id,
+        colegio_rbd: datos.claims.colegio_rbd,
     })
+}
+
+/// Alcance tenant SaaS (029): true si el usuario pertenece al holding/colegio.
+/// `colegio_rbd` nulo o membresía con `colegio_rbd` nulo = todo el holding.
+/// Aditivo y sin enforcement en `exigir_sesion` (M1b) para no romper E2E 122.
+pub async fn es_miembro(
+    pool: &sqlx::PgPool,
+    usuario_id: &uuid::Uuid,
+    holding_id: Option<uuid::Uuid>,
+    colegio_rbd: Option<&str>,
+) -> bool {
+    sqlx::query_scalar::<_, bool>("select es_miembro($1,$2,$3)")
+        .bind(usuario_id)
+        .bind(holding_id)
+        .bind(colegio_rbd)
+        .fetch_one(pool)
+        .await
+        .unwrap_or(false)
 }
 
 /// Middleware que exige `Authorization: Bearer <jwt>` válido.
@@ -174,6 +216,8 @@ pub async fn exigir_sesion(
                 nombre: f.get("nombre"),
                 rol: f.get("rol"),
                 alcances: Some(f.get("alcances")),
+                holding_id: None,
+                colegio_rbd: Vec::new(),
             }),
             Ok(None) => Err(ErrorApi::NoEncontrado("Clave API inválida o revocada.".into())),
             Err(e) => {

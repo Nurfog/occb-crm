@@ -19,9 +19,28 @@ pub async fn transaccion_con_actor(
     pool: &PgPool,
     usuario_id: Uuid,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
+    transaccion_con_actor_con_scope(pool, usuario_id, None, None).await
+}
+
+/// Variante SaaS (029): además fija `app.holding_id` y `app.colegio_rbd`.
+/// Aditiva: la original delega aquí con scope nulo (legado sin filtro).
+pub async fn transaccion_con_actor_con_scope<'a>(
+    pool: &'a PgPool,
+    usuario_id: Uuid,
+    holding_id: Option<Uuid>,
+    colegio_rbd: Option<&'a str>,
+) -> Result<sqlx::Transaction<'a, sqlx::Postgres>, sqlx::Error> {
     let mut tx = pool.begin().await?;
     sqlx::query("select set_config('app.usuario_id', $1, true)")
         .bind(usuario_id.to_string())
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("select set_config('app.holding_id', coalesce($1,''), true)")
+        .bind(holding_id.map(|h| h.to_string()))
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("select set_config('app.colegio_rbd', coalesce($1,''), true)")
+        .bind(colegio_rbd)
         .execute(&mut *tx)
         .await?;
     Ok(tx)

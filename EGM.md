@@ -2,7 +2,7 @@
 
 ## System Overview
 
-CRM escolar en Rust 2024 (español por defecto, conmutador ES/EN): frontal Dioxus 0.7 → WASM servido por `nginx` (`:8080`), API Axum (`:3001`) que solo ejecuta funciones PostgreSQL 18 `SECURITY DEFINER` con RLS, y 28 migraciones `sqlx` con semillas (territorio SUBDERE, 12 038 colegios MINEDUC). Suite E2E en Chrome headless (122 afirmaciones, filas dedicadas) y manual de uso con fotos y video. Orquestación local vía `docker-compose` (`bd` + `redis` + `api` + `frontal`).
+CRM escolar en Rust 2024 (español por defecto, conmutador ES/EN): frontal Dioxus 0.7 → WASM servido por `nginx` (`:8080`), API Axum (`:3001`) que solo ejecuta funciones PostgreSQL 18 `SECURITY DEFINER` con RLS, y 31 migraciones `sqlx` con semillas (territorio SUBDERE, 12 038 colegios MINEDUC, base tenant SaaS 029-031 aditiva). Suite E2E en Chrome headless (122 afirmaciones, filas dedicadas) y manual de uso con fotos y video. Orquestación local vía `docker-compose` (`bd` + `redis` + `api` + `frontal`).
 
 ## Local Interface & Invariants
 
@@ -13,12 +13,13 @@ CRM escolar en Rust 2024 (español por defecto, conmutador ES/EN): frontal Dioxu
 
 ## Subdirectories & System Boundaries
 
+- `crates`: [Blueprint](./crates/README.md) — agrupador Rust (`core`, `api`, `app`).
 - `crates/core`: [Blueprint](./crates/core/README.md) — dominio puro, validación, territorio CUT, i18n ES/EN, semilla demo ([paquete](./crates/core/src/README.md)).
 - `crates/api`: [Blueprint](./crates/api/README.md) — API Axum + JWT/claves/webhooks/importación ([paquete](./crates/api/src/README.md)).
 - `crates/app`: [Blueprint](./crates/app/README.md) — frontal Dioxus, sesión en memoria ([paquete](./crates/app/src/README.md), [estáticos](./crates/app/assets/README.md)).
-- `migrations`: [Blueprint](./migrations/README.md) — 28 migraciones, funciones seguras + RLS + semillas.
+- `migrations`: [Blueprint](./migrations/README.md) — 31 migraciones, funciones seguras + RLS + semillas + tenant SaaS aditivo (029-031).
 - `e2e`: [Blueprint](./e2e/README.md) — suite Chrome headless, 122 afirmaciones.
-- `docs`: [Blueprint](./docs/README.md) — manual de uso ([manual](./docs/manual/README.md), medios excluidos por `.egmignore`).
+- `docs`: [Blueprint](./docs/README.md) — manual de uso ([manual](./docs/manual/README.md), medios excluidos por `.egmignore`) + diseños ([RFCs](./docs/designs/README.md)).
 
 ## Global Invariants
 
