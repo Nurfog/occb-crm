@@ -534,6 +534,10 @@ pub struct Oportunidad {
     pub colegio_rbd: Option<String>,
     pub contacto_id: Option<Uuid>,
     pub fecha_cierre: Option<DateTime<Utc>>,
+    /// RUT normalizado del prospecto en cuarentena (028+030, M2); `None` en el flujo clásico.
+    pub prospecto_rut: Option<String>,
+    /// Origen de la postulación (`contacto`, `csv`, `traslado`); `None` = clásico.
+    pub origen: Option<String>,
     pub creado_en: DateTime<Utc>,
 }
 

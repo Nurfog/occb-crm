@@ -121,6 +121,8 @@ pub fn datos_semilla_oportunidades(ids_personas: &[Uuid]) -> Vec<Oportunidad> {
         colegio_rbd: None,
         contacto_id: contacto(i),
         fecha_cierre: None,
+        prospecto_rut: None,
+        origen: None,
         creado_en: ahora,
     };
     use EtapaOportunidad::*;

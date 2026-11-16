@@ -102,6 +102,8 @@ pub fn fila_a_oportunidad(fila: &sqlx::postgres::PgRow) -> occb_core::Oportunida
         colegio_rbd: fila.get::<Option<String>, _>("colegio_rbd"),
         contacto_id: fila.get::<Option<uuid::Uuid>, _>("contacto_id"),
         fecha_cierre: fila.get::<Option<chrono::DateTime<chrono::Utc>>, _>("fecha_cierre"),
+        prospecto_rut: fila.get::<Option<String>, _>("prospecto_rut"),
+        origen: fila.get::<Option<String>, _>("origen"),
         creado_en: fila.get("creado_en"),
     }
 }

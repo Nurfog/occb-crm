@@ -1219,6 +1219,30 @@ for (const rut of ['33333333-3', '44444444-4']) {
   for (const a of filas) await api(`${API}/api/alumnos/${a.id}`, { method: 'DELETE' });
 }
 
+// --- 25b. CSV en cuarentena (M2, opt-in): postulaciones contacto/origen csv, nunca alumnos ---
+const RBD_Q = (await (await api(`${API}/api/colegios?limite=1`)).json())[0].rbd;
+const CSV_Q = `rut,nombres,apellidos,curso,colegio_rbd,consentimiento\n30303030-1,Cuarentena,Uno,8° Básico A,${RBD_Q},si\n123,X,Y,,,no\n40404040-5,Cuarentena,Dos,,,si\n50505050-9,Cuarentena,Tres,,${RBD_Q},`;
+async function importarCuarentena(csv) {
+  const forma = new FormData();
+  forma.set('archivo', new Blob([csv], { type: 'text/csv' }), 'cuarentena.csv');
+  return (await (await api(`${API}/api/importar/alumnos?aplicar=true&modo=cuarentena`, { method: 'POST', body: forma })).json());
+}
+const quar = await importarCuarentena(CSV_Q);
+afirma(quar.modo === 'cuarentena' && typeof quar.resultado.job_id === 'string', 'cuarentena devuelve job_id');
+afirma(quar.resultado.creados === 1 && quar.resultado.total === 4, 'cuarentena crea 1 de 4 filas');
+const codsQ = [...(quar.resultado.errores || [])].map((e) => e.codigo).sort().join(',');
+afirma(codsQ === 'CONSENTIMIENTO_FALTANTE,RBD_DESCONOCIDO,RUT_INVALIDO', 'cuarentena clasifica cada HOLD por código');
+const sinAlumno = await (await api(`${API}/api/alumnos?busqueda=30303030-1`)).json();
+afirma(Array.isArray(sinAlumno) && sinAlumno.length === 0, 'cuarentena no crea alumnos directos');
+const listaQ = await (await api(`${API}/api/oportunidades?limite=200`)).json();
+const oppQ = listaQ.find((o) => o.prospecto_rut === '30303030-1');
+afirma(!!oppQ && oppQ.etapa === 'contacto' && oppQ.origen === 'csv', 'cuarentena crea postulación contacto/origen csv');
+const modoMalo = await (await api(`${API}/api/importar/alumnos?aplicar=true&modo=otro`, { method: 'POST', body: (() => { const f = new FormData(); f.set('archivo', new Blob(['rut,nombres,apellidos\n'], { type: 'text/csv' }), 'x.csv'); return f; })() })).json();
+afirma(modoMalo.codigo === 'datos_invalidos', 'modo de importación inválido se rechaza');
+const quarApo = await (async () => { const f = new FormData(); f.set('archivo', new Blob(['rut,nombres,apellidos\n'], { type: 'text/csv' }), 'x.csv'); return (await (await api(`${API}/api/importar/apoderados?aplicar=true&modo=cuarentena`, { method: 'POST', body: f })).json()); })();
+afirma(quarApo.codigo === 'datos_invalidos', 'cuarentena solo disponible para alumnos');
+if (oppQ) await api(`${API}/api/oportunidades/${oppQ.id}`, { method: 'DELETE' });
+
 // Receptor local para el webhook (el worker entrega con firma HMAC).
 const { createServer } = await import('node:http');
 const RECEPTOR_PUERTO = 18766;

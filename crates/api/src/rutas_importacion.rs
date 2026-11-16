@@ -7,7 +7,12 @@ use sqlx::PgPool;
 use crate::{auth::UsuarioActual,errores::ErrorApi};
 
 #[derive(Debug,Deserialize)]
-pub struct ParametrosImportacion { #[serde(default)] pub aplicar:bool }
+pub struct ParametrosImportacion {
+    #[serde(default)] pub aplicar:bool,
+    /// `directo` (por defecto, crea alumnos/apoderados) o `cuarentena`
+    /// (solo alumnos: crea postulaciones `contacto`/`origen=csv`, nunca alumnos).
+    #[serde(default)] pub modo:Option<String>,
+}
 
 pub async fn importar(
     State(pool):State<PgPool>,
@@ -46,7 +51,7 @@ pub async fn importar(
         let get=|campo:&str|indice(campo).and_then(|j|registro.get(j)).unwrap_or("").trim().to_string();
         let fila_num=i+2;
         let mut datos=if objeto=="alumnos" {
-            serde_json::json!({"fila":fila_num,"rut":get("rut"),"nombres":get("nombres"),"apellidos":get("apellidos"),"curso":get("curso"),"colegio_rbd":get("colegio_rbd"),"estado":if get("estado").is_empty(){"postulante".to_string()}else{get("estado")}})
+            serde_json::json!({"fila":fila_num,"rut":get("rut"),"nombres":get("nombres"),"apellidos":get("apellidos"),"curso":get("curso"),"colegio_rbd":get("colegio_rbd"),"consentimiento":get("consentimiento"),"estado":if get("estado").is_empty(){"postulante".to_string()}else{get("estado")}})
         } else {
             serde_json::json!({"fila":fila_num,"rut":get("rut"),"nombres":get("nombres"),"apellidos":get("apellidos"),"telefono":get("telefono"),"correo":get("correo"),"direccion":get("direccion"),"region_codigo":get("region_codigo"),"comuna_codigo":get("comuna_codigo")})
         };
@@ -73,9 +78,32 @@ pub async fn importar(
     if !params.aplicar {
         return Ok((StatusCode::OK,Json(serde_json::json!({"objeto":objeto,"total":filas.len(),"previsualizacion":previa,"aplicado":false}))));
     }
+    let modo = params.modo.as_deref().unwrap_or("directo").to_lowercase();
+    if modo == "cuarentena" {
+        if objeto != "alumnos" {
+            return Err(ErrorApi::Validacion("La cuarentena solo está disponible para alumnos.".into()));
+        }
+        return importar_cuarentena(pool, usuario, filas, previa, objeto).await;
+    }
+    if modo != "directo" {
+        return Err(ErrorApi::Validacion("Modo no válido: usa directo o cuarentena.".into()));
+    }
     let funcion=if objeto=="alumnos" {"select importar_alumnos($1,$2)"} else {"select importar_apoderados($1,$2)"};
     let resultado:serde_json::Value=sqlx::query_scalar(funcion).bind(usuario.id).bind(serde_json::Value::Array(filas)).fetch_one(&pool).await?;
-    Ok((StatusCode::OK,Json(serde_json::json!({"objeto":objeto,"aplicado":true,"previsualizacion":previa,"resultado":resultado}))))
+    Ok((StatusCode::OK,Json(serde_json::json!({"objeto":objeto,"modo":"directo","aplicado":true,"previsualizacion":previa,"resultado":resultado}))))
+}
+
+/// M2: CSV a cuarentena (solo alumnos). Reutiliza las filas ya validadas (con
+/// `colegio_rbd` y `consentimiento` si el CSV las trae); la función SQL decide.
+async fn importar_cuarentena(
+    pool:PgPool,
+    usuario:UsuarioActual,
+    filas:Vec<serde_json::Value>,
+    previa:Vec<serde_json::Value>,
+    objeto:String,
+) -> Result<(StatusCode,Json<serde_json::Value>),ErrorApi> {
+    let resultado:serde_json::Value=sqlx::query_scalar("select importar_alumnos_cuarentena($1,$2)").bind(usuario.id).bind(serde_json::Value::Array(filas)).fetch_one(&pool).await?;
+    Ok((StatusCode::OK,Json(serde_json::json!({"objeto":objeto,"modo":"cuarentena","aplicado":true,"previsualizacion":previa,"resultado":resultado}))))
 }
 
 fn get_from(v:&serde_json::Value,k:&str)->String{v.get(k).and_then(|x|x.as_str()).unwrap_or("").to_string()}
