@@ -11,7 +11,7 @@ Binario de la API HTTP OCCB (`occb-api` sobre Axum + PostgreSQL 18): separa ruta
 ## Global Invariants
 
 - Nada se borra de verdad: deshabilitación lógica (`activo`) + anonimización a valores por defecto solo admin, con UUID estables para informes.
-- La escritura exige sesión; la lectura del directorio y del panel es pública.
+- La escritura exige sesión; la lectura del directorio es pública y el panel exige sesión.
 - La validación canónica vive en `occb-core`; la API la reaplica antes de cada escritura y mapea errores PG a JSON en español.
 
 ## Global Side Effects

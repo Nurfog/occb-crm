@@ -92,6 +92,8 @@ enum Ruta {
         DetalleOportunidad { id: Uuid },
         #[route("/miembros")]
         VistaMiembros {},
+        #[route("/holdings")]
+        VistaHoldings {},
         #[route("/calendario")]
         VistaCalendario {},
         #[route("/correos")]
@@ -109,13 +111,13 @@ enum Ruta {
 
 
 /// Disposición con barra lateral.
-/// El panel es público; el resto exige sesión (sin ella, vuelve a acceso
-/// recordando el destino para volver tras entrar).
+/// Todo exige sesión desde M1b (el panel ya no es público); sin sesión se
+/// vuelve a acceso recordando el destino para volver tras entrar.
 #[component]
 fn DisposicionApp() -> Element {
     let nav = use_navigator();
     let ruta_actual: Ruta = use_route();
-    if cliente::SESION().is_none() && !matches!(ruta_actual, Ruta::Panel {}) {
+    if cliente::SESION().is_none() {
         *VOLVER.write() = Some(ruta_actual);
         nav.replace(Ruta::VistaAcceso {});
         return rsx! {
@@ -294,6 +296,10 @@ fn BarraLateral() -> Element {
                 Link { to: Ruta::VistaMiembros {}, class: "side-item",
                     span { class: "ico ico-personas", "👥" }
                     span { "{t.miembros}" }
+                }
+                Link { to: Ruta::VistaHoldings {}, class: "side-item",
+                    span { class: "ico", "🏛" }
+                    span { "{t.holding}" }
                 }
                 Link { to: Ruta::VistaCalendario {}, class: "side-item",
                     span { class: "ico ico-notas", "📅" }
@@ -5079,6 +5085,158 @@ fn NoEncontrada(segmentos: Vec<String>) -> Element {
                     }
                 }
                 Link { to: Ruta::Panel {}, class: "btn-primary block", "←" }
+            }
+        }
+    }
+}
+
+/// Holdings y colegios contratados (M1 SaaS): lista, alta admin, vínculo RBD.
+/// Solo lectura de tenancy para miembros; escritura solo admin.
+#[component]
+fn VistaHoldings() -> Element {
+    let idioma = IDIOMA();
+    let t = textos(idioma);
+    let es_admin = cliente::SESION().map(|s| s.rol == "admin").unwrap_or(false);
+    let mut holdings = use_signal(Vec::<cliente::Holding>::new);
+    let mut seleccionado = use_signal(|| None::<Uuid>);
+    let mut contratados = use_signal(Vec::<cliente::Contratado>::new);
+    let mut aviso = use_signal(String::new);
+    let mut nombre = use_signal(String::new);
+    let mut plan = use_signal(|| "small".to_string());
+    let mut rbd = use_signal(String::new);
+    let mut licencia = use_signal(|| "small".to_string());
+    use_effect(move || {
+        spawn(async move {
+            match cliente::listar_holdings().await {
+                Ok(lista) => holdings.set(lista),
+                Err(m) => aviso.set(m),
+            }
+        });
+    });
+    let recargar = move |_| {
+        spawn(async move {
+            if let Ok(lista) = cliente::listar_holdings().await {
+                holdings.set(lista);
+            }
+        });
+    };
+    rsx! {
+        BarraSuperior { titulo: t.holding.to_string(), subtitulo: format!("{}", holdings.read().len()) }
+        div { class: "toolbar",
+            span { class: "pill", if es_admin { "admin" } else { "miembro" } }
+        }
+        if !aviso.read().is_empty() {
+            p { class: "form-error", "{aviso}" }
+        }
+        div { class: "panel",
+            div { class: "panel-head", span { class: "panel-title", "{t.holding}" } }
+            for h in holdings.read().iter().cloned() {
+                div { class: "mini-row", key: "{h.id}",
+                    button {
+                        class: "btn-mini",
+                        onclick: move |_| {
+                            seleccionado.set(Some(h.id));
+                            spawn(async move {
+                                if let Ok(lista) = cliente::colegios_del_holding(h.id).await {
+                                    contratados.set(lista);
+                                }
+                            });
+                        },
+                        "{h.nombre}"
+                    }
+                    span { class: "pill", "{h.plan}" }
+                    span { class: "mini-amt", "{h.colegios} 🏫" }
+                    if es_admin {
+                        button {
+                            class: "btn-mini",
+                            onclick: move |_| {
+                                let id = h.id;
+                                spawn(async move {
+                                    match cliente::eliminar_holding(id).await {
+                                        Ok(()) => recargar(()),
+                                        Err(m) => aviso.set(m),
+                                    }
+                                });
+                            },
+                            "✕"
+                        }
+                    }
+                }
+            }
+            if holdings.read().is_empty() {
+                p { class: "muted", if idioma == Idioma::Es { "Sin holdings todavía." } else { "No holdings yet." } }
+            }
+        }
+        if es_admin {
+            div { class: "panel form",
+                label { if idioma == Idioma::Es { "Nuevo holding" } else { "New holding" } }
+                div { class: "row",
+                    input { class: "input", placeholder: "{t.nombre}", value: "{nombre}", oninput: move |e| nombre.set(e.value()) }
+                    select { class: "input", value: "{plan}", onchange: move |e| plan.set(e.value()),
+                        option { value: "small", "small" }
+                        option { value: "group", "group" }
+                        option { value: "holding", "holding" }
+                    }
+                    button {
+                        class: "btn-primary",
+                        onclick: move |_| {
+                            let n = nombre.read().trim().to_string();
+                            let p = plan.read().clone();
+                            spawn(async move {
+                                match cliente::crear_holding(&n, &p).await {
+                                    Ok(_) => { nombre.set(String::new()); recargar(()); }
+                                    Err(m) => aviso.set(m),
+                                }
+                            });
+                        },
+                        "{t.guardar}"
+                    }
+                }
+            }
+        }
+        if let Some(hid) = seleccionado() {
+            div { class: "panel",
+                div { class: "panel-head", span { class: "panel-title", "{t.colegios}" } }
+                for c in contratados.read().iter() {
+                    div { class: "mini-row", key: "{c.rbd}",
+                        span { class: "mini-name", "{c.nombre}" }
+                        span { class: "mini-amt", "{c.rbd}" }
+                        span { class: "pill", "{c.licencia}" }
+                    }
+                }
+                if contratados.read().is_empty() {
+                    p { class: "muted", if idioma == Idioma::Es { "Sin colegios vinculados." } else { "No schools linked." } }
+                }
+                if es_admin {
+                    div { class: "row",
+                        input { class: "input", placeholder: "RBD", value: "{rbd}", oninput: move |e| rbd.set(e.value()) }
+                        select { class: "input", value: "{licencia}", onchange: move |e| licencia.set(e.value()),
+                            option { value: "small", "small" }
+                            option { value: "group", "group" }
+                            option { value: "holding", "holding" }
+                        }
+                        button {
+                            class: "btn-primary",
+                            onclick: move |_| {
+                                let r = rbd.read().trim().to_string();
+                                let l = licencia.read().clone();
+                                spawn(async move {
+                                    match cliente::vincular_colegio(hid, &r, &l, "").await {
+                                        Ok(_) => {
+                                            rbd.set(String::new());
+                                            if let Ok(lista) = cliente::colegios_del_holding(hid).await {
+                                                contratados.set(lista);
+                                            }
+                                            recargar(());
+                                        }
+                                        Err(m) => aviso.set(m),
+                                    }
+                                });
+                            },
+                            if idioma == Idioma::Es { "Vincular RBD" } else { "Link RBD" }
+                        }
+                    }
+                }
             }
         }
     }

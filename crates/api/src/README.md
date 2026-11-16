@@ -2,7 +2,7 @@
 
 ## Overview
 
-Paquete binario `occb-api`: expone la API HTTP del CRM escolar sobre Axum y PostgreSQL 18. Todo el acceso a datos pasa por funciones `SECURITY DEFINER` de `migrations/` (vía `sqlx`); la validación de negocio se reutiliza desde `occb-core` antes de tocar la base. El enrutado (`main.rs`) separa rutas públicas (salud, acceso, regiones/comunas, lectura de colegios y panel) de rutas protegidas por el middleware `exigir_sesion` (JWT Bearer o clave API). Incluye acceso con JWT + renovación opaca rotativa, claves API con alcances, webhooks HMAC con worker de reintentos, importación CSV, asistente con LLM y automatizaciones sobre postulaciones.
+Paquete binario `occb-api`: expone la API HTTP del CRM escolar sobre Axum y PostgreSQL 18. Todo el acceso a datos pasa por funciones `SECURITY DEFINER` de `migrations/` (vía `sqlx`); la validación de negocio se reutiliza desde `occb-core` antes de tocar la base. El enrutado (`main.rs`) separa rutas públicas (salud, acceso, regiones/comunas, lectura de colegios) de rutas protegidas por el middleware `exigir_sesion` (JWT Bearer o clave API). Incluye acceso con JWT + renovación opaca rotativa, claves API con alcances, webhooks HMAC con worker de reintentos, importación CSV, asistente con LLM y automatizaciones sobre postulaciones.
 
 ## Interface
 

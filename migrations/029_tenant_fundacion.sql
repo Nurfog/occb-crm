@@ -30,6 +30,7 @@ create table if not exists membresias_usuario (
 );
 create index if not exists idx_membresias_usuario on membresias_usuario (usuario_id);
 create index if not exists idx_membresias_holding on membresias_usuario (holding_id);
+create unique index if not exists uq_membresias_natural on membresias_usuario (usuario_id, holding_id, coalesce(colegio_rbd, ''));
 comment on table membresias_usuario is 'Alcance por usuario: holding_id obligatorio, colegio_rbd nulo = todo el holding';
 
 create table if not exists importaciones (

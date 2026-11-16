@@ -315,6 +315,8 @@ SES.renovacion = deNuevo.renovacion;
 
 // --- 1. Panel con datos vivos ---
 await ir('/');
+await esperarCondicion(`document.body.textContent.includes('Bienvenido de nuevo')`);
+await loginUI(E2E_CORREO, E2E_CLAVE);
 await esperarCondicion(`document.body.textContent.includes('API :3001')`);
 let t = await texto();
 afirma(t.includes('● API :3001'), 'panel indica API en línea (no demo local)');
@@ -1189,6 +1191,8 @@ if (process.env.LLM_MOCK_API_URL) {
 // --- 26. Plataforma: salud, claves, importación CSV y webhooks ---
 const salud = await (await fetch(`${API}/api/salud`)).json();
 afirma(salud.estado === 'correcto' && typeof salud.version === 'string' && salud.migracion >= 24 && typeof salud.latencia_bd_ms === 'number', 'salud extendida con versión, migración y latencia');
+const panelSinSesion = await fetch(`${API}/api/panel`);
+afirma(panelSinSesion.status === 401, 'panel exige sesión (M1b, no es público)');
 
 const NOMBRE_CLAVE = `Clave E2E ${SELLO}`;
 const claveCreada = await (await api(`${API}/api/claves`, {
@@ -1237,6 +1241,39 @@ afirma(Array.isArray(sinAlumno) && sinAlumno.length === 0, 'cuarentena no crea a
 const listaQ = await (await api(`${API}/api/oportunidades?limite=200`)).json();
 const oppQ = listaQ.find((o) => o.prospecto_rut === '30303030-1');
 afirma(!!oppQ && oppQ.etapa === 'contacto' && oppQ.origen === 'csv', 'cuarentena crea postulación contacto/origen csv');
+// --- 25c. Holdings (M1 SaaS): admin crea, vincula RBD, vista y borrado ---
+const NOMBRE_H = `Holding ${SELLO}`;
+const hCreado = await (await apiAdmin(`${API}/api/holdings`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: NOMBRE_H, plan: 'group' }),
+})).json();
+afirma(typeof hCreado.id === 'string' && hCreado.plan === 'group', 'admin crea holding');
+const hs = await (await apiAdmin(`${API}/api/holdings`)).json();
+afirma(hs.some((h) => h.id === hCreado.id && h.puede_ver === true), 'holding aparece para admin');
+const rbdH = (await (await api(`${API}/api/colegios?limite=1`)).json())[0].rbd;
+const vincH = await (await apiAdmin(`${API}/api/holdings/${hCreado.id}/colegios`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rbd: rbdH, licencia: 'group' }),
+})).json();
+afirma(vincH.rbd === rbdH && vincH.licencia === 'group', 'admin vincula RBD al holding');
+const contra = await (await apiAdmin(`${API}/api/holdings/${hCreado.id}/colegios`)).json();
+afirma(contra.length === 1 && contra[0].rbd === rbdH, 'colegios contratados listan el RBD');
+const noAdminH = await api(`${API}/api/holdings`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: 'X', plan: 'small' }),
+});
+afirma(noAdminH.status === 403, 'miembro no puede crear holding (403)');
+await ir('/holdings');
+// La vista se abre como E2E (miembro, sin membresía en el holding del admin):
+// se verifica el encabezado y que un miembro no vea holdings ajenos.
+const vistaH = await esperarCondicion(`document.body.textContent.includes('Holding')`);
+afirma(vistaH, 'vista holdings renderiza');
+const hAjenos = await (await api(`${API}/api/holdings`)).json();
+afirma(!hAjenos.some((h) => h.id === hCreado.id), 'miembro no ve holdings ajenos');
+await apiAdmin(`${API}/api/holdings/${hCreado.id}`, { method: 'DELETE' });
+const trasBorrar = await (await apiAdmin(`${API}/api/holdings`)).json();
+afirma(!trasBorrar.some((h) => h.id === hCreado.id), 'admin elimina holding');
+
 const modoMalo = await (await api(`${API}/api/importar/alumnos?aplicar=true&modo=otro`, { method: 'POST', body: (() => { const f = new FormData(); f.set('archivo', new Blob(['rut,nombres,apellidos\n'], { type: 'text/csv' }), 'x.csv'); return f; })() })).json();
 afirma(modoMalo.codigo === 'datos_invalidos', 'modo de importación inválido se rechaza');
 const quarApo = await (async () => { const f = new FormData(); f.set('archivo', new Blob(['rut,nombres,apellidos\n'], { type: 'text/csv' }), 'x.csv'); return (await (await api(`${API}/api/importar/apoderados?aplicar=true&modo=cuarentena`, { method: 'POST', body: f })).json()); })();

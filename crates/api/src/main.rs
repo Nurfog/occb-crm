@@ -20,6 +20,7 @@ mod rutas_correos;
 mod rutas_eventos;
 mod rutas_espacio;
 mod rutas_integraciones;
+mod rutas_holdings;
 mod rutas_importacion;
 mod rutas_ingresos;
 mod rutas_matricula;
@@ -72,13 +73,26 @@ async fn main() {
         .route("/api/comunas", get(rutas_territorio::listar_comunas))
         .route("/api/colegios", get(rutas_colegios::listar))
         .route("/api/colegios/{rbd}", get(rutas_colegios::obtener))
-        .route("/api/schools", get(rutas_colegios::listar))
-        .route("/api/panel", get(rutas_oportunidades::panel))
-        .route("/api/dashboard", get(rutas_oportunidades::panel));
+        .route("/api/schools", get(rutas_colegios::listar));
 
     // Protegidas: exigen JWT (ver Fase 3 del roadmap).
+    // El panel vive aquí desde M1b: resume datos por rol y nunca es público.
     let protegidas = Router::new()
         .route("/api/acceso/yo", get(auth::yo))
+        .route(
+            "/api/holdings",
+            get(rutas_holdings::listar).post(rutas_holdings::crear),
+        )
+        .route(
+            "/api/holdings/{id}",
+            axum::routing::delete(rutas_holdings::eliminar),
+        )
+        .route(
+            "/api/holdings/{id}/colegios",
+            get(rutas_holdings::colegios).post(rutas_holdings::vincular),
+        )
+        .route("/api/panel", get(rutas_oportunidades::panel))
+        .route("/api/dashboard", get(rutas_oportunidades::panel))
         .route("/api/buscar", get(rutas_espacio::buscar))
         .route("/api/favoritos", get(rutas_espacio::favoritos))
         .route(

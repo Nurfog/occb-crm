@@ -904,3 +904,62 @@ pub async fn importar_csv(objeto:&str,contenido:&str,aplicar:bool)->Result<serde
     }
     Err("No se pudo completar la importación.".into())
 }
+
+/// Holding visible en el selector de alcance (M1 SaaS).
+#[derive(Debug, Clone, serde::Deserialize, PartialEq)]
+pub struct Holding {
+    pub id: Uuid,
+    pub nombre: String,
+    pub plan: String,
+    pub colegios: i64,
+    pub puede_ver: bool,
+}
+
+/// Colegio contratado por un holding (directorio MINEDUC).
+#[derive(Debug, Clone, serde::Deserialize, PartialEq)]
+pub struct Contratado {
+    pub rbd: String,
+    pub nombre: String,
+    pub licencia: String,
+    pub dominio: String,
+}
+
+/// Lista holdings visibles (todos si admin, propios si miembro).
+pub async fn listar_holdings() -> Result<Vec<Holding>, String> {
+    obtener_json("/api/holdings").await
+}
+
+/// Crea un holding (solo admin) y deja al creador como miembro global.
+pub async fn crear_holding(nombre: &str, plan: &str) -> Result<Holding, String> {
+    enviar_json(
+        "POST",
+        "/api/holdings",
+        &serde_json::json!({ "nombre": nombre, "plan": plan }),
+    )
+    .await
+}
+
+/// Colegios contratados del holding.
+pub async fn colegios_del_holding(id: Uuid) -> Result<Vec<Contratado>, String> {
+    obtener_json(&format!("/api/holdings/{id}/colegios")).await
+}
+
+/// Vincula un RBD del directorio a un holding (solo admin, upsert).
+pub async fn vincular_colegio(
+    id: Uuid,
+    rbd: &str,
+    licencia: &str,
+    dominio: &str,
+) -> Result<Contratado, String> {
+    enviar_json(
+        "POST",
+        &format!("/api/holdings/{id}/colegios"),
+        &serde_json::json!({ "rbd": rbd, "licencia": licencia, "dominio": dominio }),
+    )
+    .await
+}
+
+/// Elimina un holding (solo admin, cascada).
+pub async fn eliminar_holding(id: Uuid) -> Result<(), String> {
+    borrar(&format!("/api/holdings/{id}")).await
+}
