@@ -385,6 +385,55 @@ afirma(
   tocada?.etapa === A_TEXTO_DB[esperadoEs],
   `avance kanban persiste en PG (${antes.nombre}: ${tocada?.etapa})`,
 );
+
+// --- 4b. S1 Twenty mínima: Path strip + highlights + chip (solo UI) ---
+await ir(`/oportunidades/${oppCreada.id}`);
+const pathListo = await esperarCondicion(
+  `document.querySelectorAll('.path-strip .path-chevron').length === 5`,
+);
+afirma(pathListo, 'Path muestra 5 etapas en la ficha');
+const pathActual = await evaluar(
+  `document.querySelector('.path-strip .path-current')?.textContent.trim()`,
+);
+afirma(pathActual === despues, 'Path marca la etapa actual');
+const idxPath = ORDEN_ES.indexOf(despues);
+const sigEs = ORDEN_ES[Math.min(idxPath + 1, ORDEN_ES.length - 1)];
+await evaluar(
+  `[...document.querySelectorAll('.path-strip .path-chevron')].find(b => b.textContent.trim() === ${JSON.stringify(sigEs)}).click()`,
+);
+const pathMueve = await esperarCondicion(
+  `document.querySelector('.path-strip .path-current')?.textContent.trim() === ${JSON.stringify(sigEs)}`,
+);
+afirma(pathMueve, 'Path cambia la etapa actual al hacer clic');
+const listaPath = await (await api(`${API}/api/oportunidades?limite=200`)).json();
+const tocadaPath = listaPath.find((o) => o.nombre === antes.nombre);
+afirma(
+  tocadaPath?.etapa === A_TEXTO_DB[sigEs],
+  'Path persiste la etapa en PG con el mismo handler',
+);
+const cols = await (await api(`${API}/api/colegios?limite=1`)).json();
+await ir(`/colegios/${cols[0].rbd}`);
+const hlCol = await esperarCondicion(
+  `!!document.querySelector('.highlights') && (document.querySelector('.record-title')?.textContent.trim().length || 0) > 0`,
+);
+afirma(hlCol, 'ficha de colegio muestra highlights');
+const alus = await (await api(`${API}/api/alumnos?limite=1`)).json();
+if (alus.length > 0) {
+  await ir(`/alumnos/${alus[0].id}`);
+  const hlAlu = await esperarCondicion(`!!document.querySelector('.highlights')`);
+  afirma(hlAlu, 'ficha de alumno muestra highlights');
+}
+await ir('/personas');
+await esperarCondicion(`!!document.querySelector('.toolbar input')`);
+const chipAntes = await evaluar(`document.querySelector('.chip-pill') === null`);
+afirma(chipAntes, 'sin filtro no hay chip de vista');
+await evaluar(`(() => {
+  const el = document.querySelector('.toolbar input');
+  el.focus(); el.value = 'E2E';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+})()`);
+const chipDespues = await esperarCondicion(`!!document.querySelector('.chip-pill')`);
+afirma(chipDespues, 'chip de vista aparece al filtrar');
 await api(`${API}/api/oportunidades/${oppCreada.id}`, { method: 'DELETE' });
 
 // --- 5. Acceso renderiza en español ---
@@ -574,6 +623,11 @@ await evaluar(`
   })()
 `);
 await dormir(800);
+const destOk = await esperarCondicion(`(() => {
+  const d = document.querySelector('.traslado-destino');
+  return d && d.textContent.includes(${JSON.stringify(destinoT.rbd)});
+})()`);
+afirma(destOk, 'traslado muestra resumen del destino antes de confirmar');
 await evaluar(`
   (() => {
     const inputs = document.querySelectorAll('.record-panel input');
@@ -590,6 +644,12 @@ afirma(
   histDesp.length === histAntes.length + 1 && histDesp[0].motivo === 'E2E traslado',
   'traslado registra historial con motivo',
 );
+await ir(`/alumnos/${idAT}`);
+const tzOk = await esperarCondicion(`(() => {
+  const d = document.querySelector('.timeline-date');
+  return d && d.textContent.includes('UTC');
+})()`);
+afirma(tzOk, 'timeline muestra sufijo UTC');
 
 // --- 14. Tarea por UI: alta y avance persisten ---
 const TIT_T = `Tarea ${SELLO}`;
@@ -956,6 +1016,12 @@ await evaluar(`(() => {
 await evaluar(`[...document.querySelectorAll('.automation-form button')].find(b => b.className.includes('btn-primary')).click()`);
 const reglaVisible = await esperarCondicion(`document.body.textContent.includes(${JSON.stringify(NOMBRE_REGLA)})`);
 afirma(reglaVisible, 'regla de admisión se crea desde el editor guiado');
+const fraseOk = await esperarCondicion(`(() => {
+  const card = [...document.querySelectorAll('.automation-card')].find(c => c.textContent.includes(${JSON.stringify(NOMBRE_REGLA)}));
+  const f = card && card.querySelector('.rule-sentence');
+  return f && f.textContent.includes('Cuando') && f.textContent.includes('Entonces');
+})()`);
+afirma(fraseOk, 'regla muestra frase humana Cuando/Si/Entonces');
 const regla = (await (await api(`${API}/api/automatizaciones`)).json()).find((r) => r.nombre === NOMBRE_REGLA);
 afirma(!!regla?.id, 'regla guiada persiste en PG');
 
@@ -1037,6 +1103,8 @@ await api(`${API}/api/conversaciones/${conv.id}`, { method: 'DELETE' });
 const convAntesUi = await (await api(`${API}/api/conversaciones`)).json();
 await ir('/agentes');
 await esperarCondicion(`!!document.querySelector('.chat-layout')`);
+const hintOk = await evaluar(`!!document.querySelector('.chat-hint')`);
+afirma(hintOk, 'chat muestra pista de límite');
 await evaluar(`[...document.querySelectorAll('.chat-history button')].find(b => b.textContent.includes('Nueva conversación')).click()`);
 await dormir(500);
 await evaluar(`(() => {
@@ -1408,6 +1476,9 @@ const verifAnon = await (await apiAdmin(`${API}/api/alumnos?busqueda=${encodeURI
 afirma(verifAnon.length === 0, 'anonimizado no aparece en listas ni búsqueda');
 const timelineAnon = await (await apiAdmin(`${API}/api/actividad?tipo=alumno&id=${alumReuso.id}`)).json();
 afirma(timelineAnon.length >= 1 && timelineAnon.every((a) => !!a.autor), 'historial UUID intacto con autor tras anonimizar');
+await ir(`/alumnos/${alumReuso.id}`);
+const anonAviso = await esperarCondicion(`document.body.textContent.includes('no encontrado')`);
+afirma(anonAviso, 'ficha anonimizada avisa no encontrado como baja');
 
 console.log(fallos === 0 ? 'E2E: TODO CORRECTO' : `E2E: ${fallos} FALLOS`);
 ws.close();

@@ -7,13 +7,13 @@ Suite de extremo a extremo del CRM escolar (`node e2e/prueba.mjs`, sin dependenc
 ## Local Interface & Invariants
 
 - Requisitos: frontal en `:8080`, API en `:3001` y Chrome en `/opt/google/chrome/chrome` (reescribibles vía `FRONTAL_URL`, `API_URL`, `CHROME_BIN`); el mock LLM vía `LLM_MOCK_API_URL` y webhooks vía `WEBHOOK_HOST` (`[prueba.mjs:FRONTAL]`, `[prueba.mjs:API]`, `[prueba.mjs:CHROME]`, `[prueba.mjs:LLM_MOCK_API_URL]`).
-- Ayudantes CDP: `dormir`, `esperarUrl`, `enviar`, `evaluar`, `esperarCondicion`, `ir`, `loginUI`, `texto`, `afirma` (122 afirmaciones con `PASS`/`FAIL` por línea) (`[prueba.mjs:afirma]`).
+- Ayudantes CDP: `dormir`, `esperarUrl`, `enviar`, `evaluar`, `esperarCondicion`, `ir`, `loginUI`, `texto`, `afirma` (135 afirmaciones con `PASS`/`FAIL` por línea) (`[prueba.mjs:afirma]`).
 - Aislamiento: `reservaPuerto` efímero para CDP, perfil Chrome en `/tmp/opencode/e2e-chrome-<puerto>`, receptor webhook en `:18766`, usuarios `e2e-<SELLO>@test.cl` y colegios/oportunidades `E2E-<SELLO>` dedicados (`[prueba.mjs:SELLO]`, `[prueba.mjs:reservaPuerto]`).
-- Cobertura: acceso ES/EN, panel vivo, colegios (API + ficha), kanban persistido, edición en fichas, territorio chileno, tareas/notas, calendario, correos, miembros/roles, automatizaciones, asistente mock, claves, webhooks e importación CSV.
+- Cobertura: acceso ES/EN, panel vivo, colegios (API + ficha), kanban persistido, Path (5 etapas, clic persiste), highlights en fichas, chip de vista, traslado con resumen previo, edición en fichas, territorio chileno, tareas/notas, calendario UTC, correos, miembros/roles, automatizaciones (frase Cuando/Si/Entonces), chat con hint, claves, webhooks e importación CSV.
 
 ## Subdirectories & System Boundaries
 
-- (sin subdirectorios: solo `prueba.mjs`, 122 afirmaciones).
+- (sin subdirectorios: solo `prueba.mjs`, 135 afirmaciones).
 
 ## Global Invariants
 

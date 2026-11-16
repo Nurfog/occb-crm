@@ -709,6 +709,7 @@ fn VistaPersonas() -> Element {
     let mut busqueda = use_signal(String::new);
     let personas = use_signal(Vec::<Persona>::new);
     let mut seleccion = use_signal(Vec::<Uuid>::new);
+    let mut vista_nombre = use_signal(String::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
     let mut mostrar_form = use_signal(|| false);
@@ -803,11 +804,20 @@ fn VistaPersonas() -> Element {
                 }
             }
         }
+        ChipVistaActiva {
+            vista: if vista_nombre.read().is_empty() { None } else { Some(vista_nombre.read().clone()) },
+            busqueda: busqueda.read().clone(),
+            on_limpiar: move |_| {
+                busqueda.set(String::new());
+                vista_nombre.set(String::new());
+            },
+        }
         SelectorVistas {
             objeto: "personas".to_string(),
             modo: "tabla".to_string(),
             filtros: serde_json::json!({ "busqueda": busqueda() }),
             on_cargar: move |v: occb_core::VistaGuardada| {
+                vista_nombre.set(v.nombre.clone());
                 if let Some(q) = v.filtros.get("busqueda").and_then(|x| x.as_str()) {
                     busqueda.set(q.to_string());
                 }
@@ -1339,6 +1349,15 @@ fn DetalleOportunidad(id: Uuid) -> Element {
             p { class: "page-sub", if idioma == Idioma::Es { "Ficha de postulación" } else { "Application record" } }
             if !aviso.read().is_empty() { p { class: "form-error", "{aviso}" } }
             if let Some(o) = oportunidad.read().as_ref() {
+                BarraEtapas {
+                    etapa: o.etapa,
+                    id: o.id,
+                    on_cambio: move |nueva: EtapaOportunidad| {
+                        if let Some(oo) = oportunidad.write().as_mut() {
+                            oo.etapa = nueva;
+                        }
+                    },
+                }
                 div { class: "panel",
                     div { class: "panel-head",
                         span { class: "panel-title", if idioma == Idioma::Es { "General" } else { "General" } }
@@ -1422,6 +1441,16 @@ fn DetalleColegio(rbd: String) -> Element {
         Link { to: Ruta::Panel {}, class: "record-close", "✕ {t.panel}" }
         h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo }} }
         p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de colegio" } else { "School record" }).to_string()} }
+        CabeceraResumen {
+            lineas: vec![
+                ("RBD".to_string(), rbd.clone()),
+                (
+                    if idioma == Idioma::Es { "Comuna".to_string() } else { "District (Comuna)".to_string() },
+                    format!("{} · {}", nombre_comuna.clone(), nombre_region.clone()),
+                ),
+            ],
+            conteo: Some((t.oportunidades.to_string(), opps_rel.read().len())),
+        }
         if !aviso.read().is_empty() && !listo() {
             div { class: "panel",
                 p { class: "muted", "{aviso}" }
@@ -1617,6 +1646,57 @@ fn DetallePersona(id: Uuid) -> Element {
     }
 }
 
+/// Frase humana de una regla (S3, solo UI): Cuando/Si/Entonces desde el JSON.
+/// Sin condición muestra texto fijo; clave desconocida muestra su nombre.
+fn frase_regla(regla: &occb_core::Automatizacion, idioma: Idioma) -> String {
+    let t = textos(idioma);
+    let y = if idioma == Idioma::Es { " y " } else { " and " };
+    let conds = regla
+        .condiciones
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|c| {
+                    let campo = c.get("campo").and_then(|x| x.as_str()).unwrap_or("?");
+                    let op = c.get("operador").and_then(|x| x.as_str()).unwrap_or("?");
+                    let val = c.get("valor").and_then(|x| x.as_str()).unwrap_or("?");
+                    format!("{campo} {op} {val}")
+                })
+                .collect::<Vec<_>>()
+                .join(y)
+        })
+        .unwrap_or_default();
+    let conds = if conds.is_empty() {
+        if idioma == Idioma::Es {
+            "Sin condición (siempre)".to_string()
+        } else {
+            "No condition (always)".to_string()
+        }
+    } else {
+        conds
+    };
+    let acts = regla
+        .acciones
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|x| x.get("tipo").and_then(|v| v.as_str()).unwrap_or("?").to_string())
+                .collect::<Vec<_>>()
+                .join(y)
+        })
+        .unwrap_or_default();
+    let acts = if acts.is_empty() {
+        if idioma == Idioma::Es {
+            "Sin acción".to_string()
+        } else {
+            "No action".to_string()
+        }
+    } else {
+        acts
+    };
+    format!("{} {} · {} {} · {} {}", t.cuando, regla.disparador, t.si, conds, t.entonces, acts)
+}
+
 /// Reglas guiadas para el flujo de admisión; sin código arbitrario.
 #[component]
 fn VistaAutomatizaciones() -> Element {
@@ -1765,6 +1845,7 @@ fn VistaAutomatizaciones() -> Element {
                     span { class: if regla.activa { "pill" } else { "pill muted" }, if regla.activa { if idioma == Idioma::Es { "Activa" } else { "Active" } } else { if idioma == Idioma::Es { "Inactiva" } else { "Inactive" } } }
                 }
                 p { class: "muted", "{regla.disparador} · postulacion" }
+                p { class: "rule-sentence", "{frase_regla(regla, idioma)}" }
                 p { class: "automation-json", "{regla.condiciones}" }
                 p { class: "automation-json", "{regla.acciones}" }
                 div { class: "cal-bar",
@@ -1973,6 +2054,7 @@ fn VistaAgentes() -> Element {
                         }
                     }
                 }
+                p { class: "chat-hint muted", "{t.pista_limite}" }
                 div { class: "chat-compose",
                     textarea {
                         class: "input",
@@ -2147,6 +2229,78 @@ fn SelectorVistas(
     }
 }
 
+/// Path de etapas de admisión (S1, solo UI): chevrones con la etapa actual
+/// marcada; el clic reutiliza `mover_etapa` con la cadena DB
+/// (nunca la etiqueta localizada).
+#[component]
+fn BarraEtapas(etapa: EtapaOportunidad, id: Uuid, on_cambio: EventHandler<EtapaOportunidad>) -> Element {
+    rsx! {
+        div { class: "path-strip",
+            for e in EtapaOportunidad::todas() {
+                button {
+                    key: "{e:?}",
+                    class: if *e == etapa { "path-chevron path-current" } else { "path-chevron" },
+                    title: "{etiqueta_etapa(*e, IDIOMA())}",
+                    onclick: move |_| {
+                        let etapa_db = e.como_texto().to_string();
+                        let nueva = *e;
+                        spawn(async move {
+                            if cliente::mover_etapa(id, &etapa_db).await.is_ok() {
+                                on_cambio.call(nueva);
+                            }
+                        });
+                    },
+                    "{etiqueta_etapa(*e, IDIOMA())}"
+                }
+            }
+        }
+    }
+}
+
+/// Resumen fijo de ficha (S1, solo UI): deriva de campos ya cargados,
+/// sin fetch nuevo; solo envuelve, no renombra copias ni selectores.
+#[component]
+fn CabeceraResumen(lineas: Vec<(String, String)>, conteo: Option<(String, usize)>) -> Element {
+    rsx! {
+        div { class: "highlights",
+            for (k, v) in lineas {
+                span { class: "highlights-item", key: "{k}",
+                    span { class: "muted", "{k}" }
+                    span { class: "mini-name", "{v}" }
+                }
+            }
+            if let Some((etiqueta, n)) = conteo {
+                span { class: "highlights-count", "{etiqueta}: {n}" }
+            }
+        }
+    }
+}
+
+/// Chip de vista activa (S1, solo UI): muestra el filtro vigente y lo limpia.
+/// No toca `SelectorVistas`; el padre resetea su `busqueda`.
+#[component]
+fn ChipVistaActiva(vista: Option<String>, busqueda: String, on_limpiar: EventHandler<()>) -> Element {
+    let t = textos(IDIOMA());
+    if vista.is_none() && busqueda.is_empty() {
+        rsx! { div {} }
+    } else {
+        rsx! {
+            div { class: "chip-pill",
+                if let Some(v) = vista {
+                    span { class: "chip-vista", "Vista: {v}" }
+                }
+                if !busqueda.is_empty() {
+                    span { class: "chip-busqueda", "Búsqueda: {busqueda}" }
+                }
+                button { class: "chip-clear", title: "{t.limpiar_filtro}",
+                    onclick: move |_| on_limpiar.call(()),
+                    "{t.limpiar_filtro} ✕"
+                }
+            }
+        }
+    }
+}
+
 /// Etiqueta de estado de alumno según idioma.
 fn etiqueta_estado(estado: EstadoAlumno, idioma: Idioma) -> &'static str {
     match (estado, idioma) {
@@ -2266,6 +2420,7 @@ fn VistaAlumnos() -> Element {
     let mut busqueda = use_signal(String::new);
     let mut estado_f = use_signal(String::new);
     let mut alumnos = use_signal(Vec::<Alumno>::new);
+    let mut vista_nombre = use_signal(String::new);
     let mut seleccion = use_signal(Vec::<Uuid>::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
@@ -2385,11 +2540,20 @@ fn VistaAlumnos() -> Element {
                 }
             }
         }
+        ChipVistaActiva {
+            vista: if vista_nombre.read().is_empty() { None } else { Some(vista_nombre.read().clone()) },
+            busqueda: busqueda.read().clone(),
+            on_limpiar: move |_| {
+                busqueda.set(String::new());
+                vista_nombre.set(String::new());
+            },
+        }
         SelectorVistas {
             objeto: "alumnos".to_string(),
             modo: "tabla".to_string(),
             filtros: serde_json::json!({ "busqueda": busqueda(), "estado": estado_f() }),
             on_cargar: move |v: occb_core::VistaGuardada| {
+                vista_nombre.set(v.nombre.clone());
                 if let Some(q) = v.filtros.get("busqueda").and_then(|x| x.as_str()) {
                     busqueda.set(q.to_string());
                 }
@@ -2769,6 +2933,16 @@ fn DetalleAlumno(id: Uuid) -> Element {
         Link { to: Ruta::VistaAlumnos {}, class: "record-close", "✕ {t.alumnos}" }
         h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo.clone() }} EstrellaFavorito { tipo: "alumno".to_string(), id } }
         p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de alumno" } else { "Student record" }).to_string()} }
+        CabeceraResumen {
+            lineas: vec![
+                ("RUT".to_string(), rut.read().clone()),
+                (
+                    if idioma == Idioma::Es { "Curso".to_string() } else { "Course".to_string() },
+                    curso.read().clone(),
+                ),
+            ],
+            conteo: Some((t.apoderados.to_string(), vinculados.read().len())),
+        }
         if !aviso.read().is_empty() && !listo() {
             div { class: "panel",
                 p { class: "muted", "{aviso}" }
@@ -3044,6 +3218,21 @@ fn DetalleAlumno(id: Uuid) -> Element {
                     }
                 }
                 if !tr_destino.read().is_empty() {
+                    {
+                        let d = tr_destino.read().clone();
+                        let info = tr_resultados
+                            .read()
+                            .iter()
+                            .find(|c| c.rbd == d)
+                            .map(|c| format!("{} · {} · {}", c.nombre, c.rbd, c.comuna))
+                            .unwrap_or(d);
+                        rsx! {
+                            p { class: "traslado-destino",
+                                if idioma == Idioma::Es { "Destino: " } else { "Destination: " },
+                                "{info}"
+                            }
+                        }
+                    }
                     div { class: "row",
                         input {
                             class: "input",
@@ -3136,6 +3325,7 @@ fn VistaApoderados() -> Element {
     let mut busqueda = use_signal(String::new);
     let mut apoderados = use_signal(Vec::<Apoderado>::new);
     let mut seleccion = use_signal(Vec::<Uuid>::new);
+    let mut vista_nombre = use_signal(String::new);
     let mut listo = use_signal(|| false);
     let mut aviso = use_signal(String::new);
     let mut mostrar_form = use_signal(|| false);
@@ -3237,11 +3427,20 @@ fn VistaApoderados() -> Element {
                 }
             }
         }
+        ChipVistaActiva {
+            vista: if vista_nombre.read().is_empty() { None } else { Some(vista_nombre.read().clone()) },
+            busqueda: busqueda.read().clone(),
+            on_limpiar: move |_| {
+                busqueda.set(String::new());
+                vista_nombre.set(String::new());
+            },
+        }
         SelectorVistas {
             objeto: "apoderados".to_string(),
             modo: "tabla".to_string(),
             filtros: serde_json::json!({ "busqueda": busqueda() }),
             on_cargar: move |v: occb_core::VistaGuardada| {
+                vista_nombre.set(v.nombre.clone());
                 if let Some(q) = v.filtros.get("busqueda").and_then(|x| x.as_str()) {
                     busqueda.set(q.to_string());
                 }
@@ -3470,6 +3669,16 @@ fn DetalleApoderado(id: Uuid) -> Element {
         Link { to: Ruta::VistaApoderados {}, class: "record-close", "✕ {t.apoderados}" }
         h2 { class: "record-title", {if titulo.is_empty() { "…".to_string() } else { titulo.clone() }} EstrellaFavorito { tipo: "apoderado".to_string(), id } }
         p { class: "page-sub", {(if idioma == Idioma::Es { "Ficha de apoderado" } else { "Guardian record" }).to_string()} }
+        CabeceraResumen {
+            lineas: vec![
+                ("RUT".to_string(), rut.read().clone()),
+                (
+                    if idioma == Idioma::Es { "Ocupación".to_string() } else { "Occupation".to_string() },
+                    ocupacion.read().clone(),
+                ),
+            ],
+            conteo: Some((t.alumnos.to_string(), vinculados.read().len())),
+        }
         if !aviso.read().is_empty() && !listo() {
             div { class: "panel",
                 p { class: "muted", "{aviso}" }
@@ -4438,12 +4647,14 @@ fn a_campo_local(fecha: chrono::DateTime<chrono::Utc>) -> String {
 
 /// Hora corta (`15:04`) para eventos y correos.
 fn fmt_hora(fecha: chrono::DateTime<chrono::Utc>) -> String {
-    fecha.format("%H:%M").to_string()
+    fecha.format("%H:%M UTC").to_string()
 }
 
-/// Día y hora (`20/11 15:04`) para relacionados y listas.
+/// Día y hora (`20/11 15:04 UTC`) para relacionados y listas.
+/// Día y hora con sufijo UTC estático de una sola vía (`20/11 15:04 UTC`).
+/// Nunca va en `data-dia`, `.cal-punto`, `.opp-name`, `.stage` ni `[data-correo]`.
 fn fmt_dia_hora(fecha: chrono::DateTime<chrono::Utc>) -> String {
-    fecha.format("%d/%m %H:%M").to_string()
+    fecha.format("%d/%m %H:%M UTC").to_string()
 }
 
 /// Fecha completa (`20/11/2026`) para el día seleccionado.
