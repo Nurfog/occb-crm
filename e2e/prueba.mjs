@@ -1534,11 +1534,22 @@ const listaTrasBaja = await (await api(`${API}/api/alumnos?busqueda=${encodeURIC
 afirma(listaTrasBaja.length === 0, 'baja oculta de listas pero no borra');
 const fichaBaja = await api(`${API}/api/alumnos/${alumBorra.id}`);
 afirma(fichaBaja.status === 404, 'ficha de registro dado de baja avisa no encontrado');
+// Q1: el RUT es dato único (PK es UUID). Una baja lógica NO lo libera.
+const reusoBloqueado = await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: RUT_BORRA, nombres: 'Reuso', apellidos: APE_BORRA }),
+});
+afirma(reusoBloqueado.status >= 400, 'RUT de registro dado de baja no se reutiliza');
+// Solo la anonimización admin libera el RUT (centinela compartido).
+const anonAdmin = await apiAdmin(`${API}/api/alumnos/${alumBorra.id}/anonimizar`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+});
+afirma(anonAdmin.status === 200, 'admin anonimiza el registro dado de baja');
 const alumReuso = await (await api(`${API}/api/alumnos`, {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ rut: RUT_BORRA, nombres: 'Reuso', apellidos: APE_BORRA }),
 })).json();
-afirma(!!alumReuso.id, 'RUT liberado se puede reutilizar');
+afirma(!!alumReuso.id, 'RUT liberado tras anonimizar se puede reutilizar');
 const anonMiembro = await api(`${API}/api/alumnos/${alumReuso.id}/anonimizar`, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
 });

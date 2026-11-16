@@ -2,7 +2,7 @@
 
 ## System Overview
 
-Historial lineal de esquema PostgreSQL 18 del CRM escolar (32 migraciones `sqlx`, `001–032`): tablas, funciones `SECURITY DEFINER` con `SET search_path = public`, RLS sin políticas permisivas (`REVOKE ALL` + `GRANT SELECT/EXECUTE` a `public`), índices y semillas. La API las aplica al arrancar (`bd::migrar_y_sembrar`); nunca se edita una migración aplicada (el `checksum` de `sqlx` lo impide), solo se añade la siguiente. `029` fundación tenant SaaS (holdings, colegios contratados, membresías, importaciones, supresión, `es_miembro`), `030` matrícula y consentimiento (`prospecto_rut/origen/consentimiento/ttl`, `matricular_postulacion` idempotente), `031` repara siembra escolar en BD limpias y `032` credencial de sesión vía función (sin SQL directo en `renovar`) son aditivas y no cambian el comportamiento legado.
+Historial lineal de esquema PostgreSQL 18 del CRM escolar (35 migraciones `sqlx`, `001–035`): tablas, funciones `SECURITY DEFINER` con `SET search_path = public`, RLS sin políticas permisivas (`REVOKE ALL` + `GRANT SELECT/EXECUTE` a `public`), índices y semillas. La API las aplica al arrancar (`bd::migrar_y_sembrar`); nunca se edita una migración aplicada (el `checksum` de `sqlx` lo impide), solo se añade la siguiente. '029' fundación tenant SaaS (holdings, colegios contratados, membresías, importaciones, supresión, `es_miembro`), `030` matrícula y consentimiento, `031` repara la siembra escolar, `032` credencial de sesión vía función, `033` CSV en cuarentena, `034` CRUD de holdings y `035` RUT/correo único real (PK sigue `id uuid`; único salvo el centinela de anonimización): todas aditivas y sin cambio del flujo legado.
 
 ## Local Interface & Invariants
 
@@ -14,7 +14,7 @@ Invariantes clave: RUT chileno con DV módulo 11 (`[011_alumnos_apoderados.sql:e
 
 ## Subdirectories & System Boundaries
 
-- (sin subdirectorios: los 32 ficheros `001–032_*.sql` viven directamente en esta carpeta y se aplican en orden lexicográfico).
+- (sin subdirectorios: los 35 ficheros `001–035_*.sql` viven directamente en esta carpeta y se aplican en orden lexicográfico).
 
 ## Global Invariants
 
@@ -28,4 +28,4 @@ Invariantes clave: RUT chileno con DV módulo 11 (`[011_alumnos_apoderados.sql:e
 
 ## System Verification
 
-- Run: `docker compose up -d bd && cargo run -p occb-api` (aplica `001–032` al arrancar) o `node e2e/prueba.mjs` (E2E sobre esquema migrado).
+- Run: `docker compose up -d bd && cargo run -p occb-api` (aplica `001–035` al arrancar) o `node e2e/prueba.mjs` (E2E sobre esquema migrado).

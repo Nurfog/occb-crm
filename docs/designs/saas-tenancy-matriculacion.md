@@ -35,7 +35,7 @@ Proposed solution: tenant foundation first with contracted schools plus membersh
 
 ## Open Questions
 
-* **Question 1**: RUT scope — global with traslado and merge versus RBD-scoped with quarantine view — needs author sign-off before migration 029.
+* **Question 1**: RESOLVED 2026-11-16 by author: el RUT es dato único de negocio y la PK es `id uuid`. Unicidad global (no por colegio) salvo el centinela de anonimización `00000000-0`; la baja lógica no libera el RUT, solo la anonimización admin (migración 035). Sin merge: el traslado audita el cambio de colegio.
 * **Question 2**: Holding metric formulas — ingresos, resultados, metas as sum versus average with currency, academic period, etapa homologation, importe versus real arancel — needs author sign-off before panel change.
 * **Question 3**: Value metric for licensing — per alumno, per matricula, per usuario — needs author sign-off; Small, Group, Holding display names already fixed.
 
