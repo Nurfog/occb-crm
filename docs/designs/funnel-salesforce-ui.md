@@ -124,7 +124,15 @@ Failure modes closed by construction: exhaustive match on EtapaOportunidad, inva
 
 ### Future Improvements
 
-* Drag and drop as progressive enhancement after main.rs split; week views only if schools request scheduling density; Flow canvas only with backend ordering support.
+* Drag and drop as progressive enhancement after main.rs split; week views only if schools request scheduling density; Flow canvas only with backend ordering support. Helpers puros extraídos a `crates/app/src/formatos.rs` (noviembre 2026) como primer corte, sin cambios de conducta.
+
+--------------------------------------------------------------------------------
+
+## Estado de implementación (2026-11-16, commit c1101e8)
+
+* S1 y S3 fusionados: `BarraEtapas` (Path clicable, mismo handler que `▶`), `CabeceraResumen` (fichas con datos cargados), `ChipVistaActiva` (Vista/Búsqueda + Limpiar), frase `Cuando/Si/Entonces`, hint de chat, resumen de traslado, sufijo UTC en `fmt_hora`/`fmt_dia_hora`.
+* E2E 135/135 en limpio sobre 001–031; Q1–Q3 del diseño original siguen abiertas.
+* Pendiente del diseño: drag, vistas semana/día, Flow canvas, re-auditoría formal de Etapas 5-9 sobre el doc actualizado.
 
 --------------------------------------------------------------------------------
 

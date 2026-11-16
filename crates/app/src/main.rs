@@ -6,17 +6,25 @@
 //! muestran datos de demostración locales.
 
 mod cliente;
+mod formatos;
 
 use dioxus::prelude::*;
 use uuid::Uuid;
 use chrono::Datelike;
+use formatos::{
+    a_campo_local, alternar_seleccion, alternar_todos, campos_salud, cargar_colegios_demo,
+    cargar_personas_demo, ciudad_de_comuna, comuna_codigo_de, desde_campo_local, etiqueta_estado,
+    etiqueta_etapa, etiqueta_tarea, etiqueta_tipo_busqueda, fmt_dia_hora, fmt_fecha, fmt_hora,
+    frase_regla, hace_tiempo, iniciales_de, mover_mes, nombre_mes, panel_salud, recargar_mes,
+    recargar_oportunidades, recargar_personas, region_codigo_de, titulo_actividad,
+};
 use occb_core::{
     Alumno, Apoderado, Colegio, Correo, CrearAlumno, CrearApoderado, CrearCorreo, CrearEvento,
     CrearIngreso, CrearNota, CrearOportunidad, CrearPersona, CrearTarea, EstadoAlumno, EstadoTarea,
     EtapaOportunidad, Evento, Idioma, IngresoMedico, Nota, Oportunidad, Persona, Tarea, Traslado,
     calcular_resumen, datos_semilla_alumnos, datos_semilla_apoderados,
-    datos_semilla_colegios, datos_semilla_notas, datos_semilla_oportunidades,
-    datos_semilla_personas, datos_semilla_tareas, textos,
+    datos_semilla_notas, datos_semilla_oportunidades,
+    datos_semilla_tareas, textos,
 };
 
 /// Hoja de estilos del frontal.
@@ -98,45 +106,7 @@ enum Ruta {
     NoEncontrada { segmentos: Vec<String> },
 }
 
-/// Fecha relativa estilo Twenty ("hace 39 minutos" / "39 minutes ago").
-fn hace_tiempo(fecha: chrono::DateTime<chrono::Utc>, idioma: Idioma) -> String {
-    let mins = (chrono::Utc::now() - fecha).num_minutes().max(0);
-    if idioma == Idioma::Es {
-        if mins < 1 {
-            "ahora mismo".to_string()
-        } else if mins < 60 {
-            format!("hace {mins} minutos")
-        } else if mins < 60 * 24 {
-            format!("hace {} horas", mins / 60)
-        } else {
-            format!("hace {} días", mins / 60 / 24)
-        }
-    } else if mins < 1 {
-        "just now".to_string()
-    } else if mins < 60 {
-        format!("{mins} minutes ago")
-    } else if mins < 60 * 24 {
-        format!("{} hours ago", mins / 60)
-    } else {
-        format!("{} days ago", mins / 60 / 24)
-    }
-}
 
-/// Etiqueta de etapa según el idioma (la BD guarda siempre el texto español).
-fn etiqueta_etapa(etapa: EtapaOportunidad, idioma: Idioma) -> &'static str {
-    match (etapa, idioma) {
-        (EtapaOportunidad::Contacto, Idioma::Es) => "Contacto",
-        (EtapaOportunidad::Postulante, Idioma::Es) => "Postulante",
-        (EtapaOportunidad::Evaluado, Idioma::Es) => "Evaluado",
-        (EtapaOportunidad::Aceptado, Idioma::Es) => "Aceptado",
-        (EtapaOportunidad::Matriculado, Idioma::Es) => "Matriculado",
-        (EtapaOportunidad::Contacto, Idioma::En) => "Contact",
-        (EtapaOportunidad::Postulante, Idioma::En) => "Applicant",
-        (EtapaOportunidad::Evaluado, Idioma::En) => "Evaluated",
-        (EtapaOportunidad::Aceptado, Idioma::En) => "Accepted",
-        (EtapaOportunidad::Matriculado, Idioma::En) => "Enrolled",
-    }
-}
 
 /// Disposición con barra lateral.
 /// El panel es público; el resto exige sesión (sin ella, vuelve a acceso
@@ -191,29 +161,6 @@ fn ruta_busqueda(tipo: &str, id: &str) -> Ruta {
     }
 }
 
-fn etiqueta_tipo_busqueda(tipo: &str, idioma: Idioma) -> &'static str {
-    match (tipo, idioma) {
-        ("alumno", Idioma::Es) => "Alumnos",
-        ("alumno", Idioma::En) => "Students",
-        ("apoderado", Idioma::Es) => "Apoderados",
-        ("apoderado", Idioma::En) => "Guardians",
-        ("persona", Idioma::Es) => "Personas",
-        ("persona", Idioma::En) => "People",
-        ("postulacion", Idioma::Es) => "Admisión",
-        ("postulacion", Idioma::En) => "Admissions",
-        ("tarea", Idioma::Es) => "Tareas",
-        ("tarea", Idioma::En) => "Tasks",
-        ("nota", Idioma::Es) => "Notas",
-        ("nota", Idioma::En) => "Notes",
-        ("evento", Idioma::Es) => "Eventos",
-        ("evento", Idioma::En) => "Events",
-        ("correo", Idioma::Es) => "Correos",
-        ("correo", Idioma::En) => "Mail",
-        ("colegio", Idioma::Es) => "Colegios",
-        ("colegio", Idioma::En) => "Schools",
-        _ => "",
-    }
-}
 
 fn ruta_favorito(tipo: &str, id: Uuid) -> Ruta {
     match tipo {
@@ -516,68 +463,12 @@ fn SelectorTerritorio(region_sel: Signal<String>, comuna_sel: Signal<String>) ->
     }
 }
 
-/// Código de región desde el selector (1–16) o `None`.
-fn region_codigo_de(sel: &Signal<String>) -> Option<i16> {
-    sel.read().parse::<i16>().ok().filter(|r| (1..=16).contains(r))
-}
 
-/// CUT de comuna desde el selector o `None` si está vacío.
-fn comuna_codigo_de(sel: &Signal<String>) -> Option<String> {
-    let texto = sel.read().clone();
-    if texto.trim().is_empty() {
-        None
-    } else {
-        Some(texto)
-    }
-}
 
-/// Ciudad para guardar: el nombre oficial de la comuna elegida (o vacío).
-fn ciudad_de_comuna(sel: &Signal<String>) -> String {
-    let cut = sel.read().clone();
-    if cut.trim().is_empty() {
-        String::new()
-    } else {
-        occb_core::territorio::comuna_por_cut(cut.trim())
-            .map(|c| c.nombre.to_string())
-            .unwrap_or_default()
-    }
-}
 
-/// Colegios de demostración (el directorio oficial vive en PG con 12.038).
-fn cargar_colegios_demo() -> Vec<Colegio> {
-    datos_semilla_colegios()
-}
 
-/// Personas de demostración.
-fn cargar_personas_demo() -> Vec<Persona> {
-    datos_semilla_personas()
-}
 
-/// Recarga personas desde la API; usa demo solo si aún no hay nada.
-fn recargar_personas(mut personas: Signal<Vec<Persona>>) {
-    spawn(async move {
-        match cliente::listar_personas().await {
-            Ok(lista) => personas.set(lista),
-            Err(_) if personas.read().is_empty() => personas.set(cargar_personas_demo()),
-            Err(_) => {}
-        }
-    });
-}
 
-/// Recarga oportunidades desde la API; usa demo solo si aún no hay nada.
-fn recargar_oportunidades(mut oportunidades: Signal<Vec<Oportunidad>>) {
-    spawn(async move {
-        match cliente::listar_oportunidades().await {
-            Ok(lista) => oportunidades.set(lista),
-            Err(_) if oportunidades.read().is_empty() => {
-                let demo_p = cargar_personas_demo();
-                let ids: Vec<_> = demo_p.iter().map(|p| p.id).collect();
-                oportunidades.set(datos_semilla_oportunidades(&ids));
-            }
-            Err(_) => {}
-        }
-    });
-}
 
 /// Vista del panel principal con tarjetas y resumen (datos vivos de la API).
 #[component]
@@ -1325,9 +1216,20 @@ fn VistaOportunidades() -> Element {
 fn DetalleOportunidad(id: Uuid) -> Element {
     let idioma = IDIOMA();
     let t = textos(idioma);
+    let nav = use_navigator();
     let mut oportunidad = use_signal(|| None::<Oportunidad>);
     let mut aviso = use_signal(String::new);
     let mut id_actual = use_signal(|| id);
+    let mut mostrar_matricula = use_signal(|| false);
+    let mut matriculando = use_signal(|| false);
+    let mut mat_oid = use_signal(|| None::<Uuid>);
+    let mut mat_colegio = use_signal(|| None::<String>);
+    let mut mat_rut = use_signal(String::new);
+    let mut mat_nombres = use_signal(String::new);
+    let mut mat_apellidos = use_signal(String::new);
+    let mut mat_curso = use_signal(|| "1 básico".to_string());
+    let mut mat_apoderados = use_signal(String::new);
+    let mut mat_llave = use_signal(String::new);
     if id_actual() != id {
         id_actual.set(id);
     }
@@ -1357,6 +1259,116 @@ fn DetalleOportunidad(id: Uuid) -> Element {
                             oo.etapa = nueva;
                         }
                     },
+                }
+                if o.etapa != EtapaOportunidad::Matriculado {
+                    button {
+                        class: "btn-primary",
+                        onclick: move |_| {
+                            let (oid, ocolegio, nom, ape) = match oportunidad.read().as_ref() {
+                                Some(oo) => {
+                                    let mut partes = oo.nombre.splitn(2, ' ');
+                                    (
+                                        Some(oo.id),
+                                        oo.colegio_rbd.clone(),
+                                        partes.next().unwrap_or("").to_string(),
+                                        partes.next().unwrap_or("").to_string(),
+                                    )
+                                }
+                                None => (None, None, String::new(), String::new()),
+                            };
+                            mat_oid.set(oid);
+                            mat_colegio.set(ocolegio);
+                            mat_nombres.set(nom);
+                            mat_apellidos.set(ape);
+                            mat_rut.set(String::new());
+                            mat_curso.set("1 básico".to_string());
+                            mat_apoderados.set(String::new());
+                            mat_llave.set(Uuid::new_v4().to_string());
+                            aviso.set(String::new());
+                            mostrar_matricula.set(true);
+                        },
+                        if idioma == Idioma::Es { "Matricular" } else { "Enroll" }
+                    }
+                }
+                if mostrar_matricula() {
+                    if mat_oid().is_some() {
+                        div { class: "panel form matricula-form",
+                            label { if idioma == Idioma::Es { "Matricular postulación" } else { "Enroll application" } }
+                            input {
+                                class: "input",
+                                placeholder: "RUT",
+                                value: "{mat_rut}",
+                                oninput: move |e| mat_rut.set(e.value()),
+                            }
+                            input {
+                                class: "input",
+                                placeholder: if idioma == Idioma::Es { "Nombres" } else { "First names" },
+                                value: "{mat_nombres}",
+                                oninput: move |e| mat_nombres.set(e.value()),
+                            }
+                            input {
+                                class: "input",
+                                placeholder: if idioma == Idioma::Es { "Apellidos" } else { "Last names" },
+                                value: "{mat_apellidos}",
+                                oninput: move |e| mat_apellidos.set(e.value()),
+                            }
+                            input {
+                                class: "input",
+                                placeholder: if idioma == Idioma::Es { "Curso" } else { "Grade" },
+                                value: "{mat_curso}",
+                                oninput: move |e| mat_curso.set(e.value()),
+                            }
+                            textarea {
+                                class: "input",
+                                placeholder: if idioma == Idioma::Es { "RUTs apoderados (uno por línea)" } else { "Guardian RUTs (one per line)" },
+                                value: "{mat_apoderados}",
+                                oninput: move |e| mat_apoderados.set(e.value()),
+                            }
+                            p { class: "muted",
+                                if idioma == Idioma::Es { "Colegio: " } else { "School: " },
+                                if let Some(rbd) = mat_colegio.read().as_ref() {
+                                    span { "{rbd}" }
+                                } else {
+                                    span { "—" }
+                                }
+                            }
+                            div { class: "row",
+                                button {
+                                    class: "btn-primary",
+                                    disabled: matriculando(),
+                                    onclick: move |_| {
+                                        let oid = mat_oid().unwrap_or(id);
+                                        let colegio = mat_colegio.read().clone();
+                                        let rut = mat_rut.read().trim().to_string();
+                                        let nombres = mat_nombres.read().trim().to_string();
+                                        let apellidos = mat_apellidos.read().trim().to_string();
+                                        let curso = mat_curso.read().trim().to_string();
+                                        let apos: Vec<String> = mat_apoderados.read().lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
+                                        let llave = mat_llave.read().clone();
+                                        matriculando.set(true);
+                                        spawn(async move {
+                                            match cliente::matricular_oportunidad(oid, &rut, &nombres, &apellidos, &curso, colegio.as_deref(), apos, &llave).await {
+                                                Ok(a) => {
+                                                    aviso.set(String::new());
+                                                    mostrar_matricula.set(false);
+                                                    matriculando.set(false);
+                                                    nav.push(Ruta::DetalleAlumno { id: a.id });
+                                                }
+                                                Err(m) => {
+                                                    aviso.set(m);
+                                                    matriculando.set(false);
+                                                }
+                                            }
+                                        });
+                                    },
+                                    if idioma == Idioma::Es { "Confirmar matrícula" } else { "Confirm enrollment" }
+                                }
+                                button { class: "btn-mini", onclick: move |_| mostrar_matricula.set(false),
+                                    if idioma == Idioma::Es { "Cancelar" } else { "Cancel" }
+                                }
+                            }
+                        }
+                    }
                 }
                 div { class: "panel",
                     div { class: "panel-head",
@@ -1646,56 +1658,6 @@ fn DetallePersona(id: Uuid) -> Element {
     }
 }
 
-/// Frase humana de una regla (S3, solo UI): Cuando/Si/Entonces desde el JSON.
-/// Sin condición muestra texto fijo; clave desconocida muestra su nombre.
-fn frase_regla(regla: &occb_core::Automatizacion, idioma: Idioma) -> String {
-    let t = textos(idioma);
-    let y = if idioma == Idioma::Es { " y " } else { " and " };
-    let conds = regla
-        .condiciones
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .map(|c| {
-                    let campo = c.get("campo").and_then(|x| x.as_str()).unwrap_or("?");
-                    let op = c.get("operador").and_then(|x| x.as_str()).unwrap_or("?");
-                    let val = c.get("valor").and_then(|x| x.as_str()).unwrap_or("?");
-                    format!("{campo} {op} {val}")
-                })
-                .collect::<Vec<_>>()
-                .join(y)
-        })
-        .unwrap_or_default();
-    let conds = if conds.is_empty() {
-        if idioma == Idioma::Es {
-            "Sin condición (siempre)".to_string()
-        } else {
-            "No condition (always)".to_string()
-        }
-    } else {
-        conds
-    };
-    let acts = regla
-        .acciones
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .map(|x| x.get("tipo").and_then(|v| v.as_str()).unwrap_or("?").to_string())
-                .collect::<Vec<_>>()
-                .join(y)
-        })
-        .unwrap_or_default();
-    let acts = if acts.is_empty() {
-        if idioma == Idioma::Es {
-            "Sin acción".to_string()
-        } else {
-            "No action".to_string()
-        }
-    } else {
-        acts
-    };
-    format!("{} {} · {} {} · {} {}", t.cuando, regla.disparador, t.si, conds, t.entonces, acts)
-}
 
 /// Reglas guiadas para el flujo de admisión; sin código arbitrario.
 #[component]
@@ -2119,13 +2081,6 @@ fn Timeline(tipo: String, id: Uuid) -> Element {
     }
 }
 
-fn titulo_actividad(actividad: &occb_core::Actividad) -> &str {
-    actividad
-        .detalle
-        .get("titulo")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("Registro")
-}
 
 /// Selector y guardado de vistas personales. `on_cargar` aplica los filtros
 /// almacenados en la pantalla que lo contiene.
@@ -2301,116 +2256,11 @@ fn ChipVistaActiva(vista: Option<String>, busqueda: String, on_limpiar: EventHan
     }
 }
 
-/// Etiqueta de estado de alumno según idioma.
-fn etiqueta_estado(estado: EstadoAlumno, idioma: Idioma) -> &'static str {
-    match (estado, idioma) {
-        (EstadoAlumno::Postulante, Idioma::Es) => "Postulante",
-        (EstadoAlumno::Matriculado, Idioma::Es) => "Matriculado",
-        (EstadoAlumno::Trasladado, Idioma::Es) => "Trasladado",
-        (EstadoAlumno::Retirado, Idioma::Es) => "Retirado",
-        (EstadoAlumno::Postulante, Idioma::En) => "Applicant",
-        (EstadoAlumno::Matriculado, Idioma::En) => "Enrolled",
-        (EstadoAlumno::Trasladado, Idioma::En) => "Transferred",
-        (EstadoAlumno::Retirado, Idioma::En) => "Withdrawn",
-    }
-}
 
-/// Iniciales para avatares.
-fn iniciales_de(nombres: &str, apellidos: &str) -> String {
-    format!(
-        "{}{}",
-        nombres.chars().next().unwrap_or('?'),
-        apellidos.chars().next().unwrap_or('?')
-    )
-}
 
-/// Alterna un id en una selección (los `Signal` se copian).
-fn alternar_seleccion(mut seleccion: Signal<Vec<Uuid>>, id: Uuid) {
-    let mut actual = seleccion();
-    if actual.contains(&id) {
-        actual.retain(|x| x != &id);
-    } else {
-        actual.push(id);
-    }
-    seleccion.set(actual);
-}
 
-/// Marca todas las filas o limpia si ya estaban todas marcadas.
-fn alternar_todos(mut seleccion: Signal<Vec<Uuid>>, ids: Vec<Uuid>) {
-    let actual = seleccion();
-    if !ids.is_empty() && ids.iter().all(|id| actual.contains(id)) {
-        seleccion.set(Vec::new());
-    } else {
-        seleccion.set(ids);
-    }
-}
 
-/// Sección de salud reutilizada en el alta y la edición de alumno.
-/// Los `Signal` se copian; el llamador conserva la propiedad.
-fn campos_salud(
-    idioma: Idioma,
-    mut grupo: Signal<String>,
-    mut alergias: Signal<String>,
-    mut medicamentos: Signal<String>,
-    mut antecedentes: Signal<String>,
-    mut emergencia: Signal<String>,
-) -> Element {
-    rsx! {
-        div { class: "campo",
-            label { if idioma == Idioma::Es { "Grupo sanguíneo" } else { "Blood type" } }
-            select {
-                class: "input",
-                value: "{grupo}",
-                onchange: move |e| grupo.set(e.value()),
-                option { value: "", "—" }
-                for g in ["O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"] {
-                    option { value: "{g}", "{g}" }
-                }
-            }
-        }
-        div { class: "campo",
-            label { if idioma == Idioma::Es { "Alergias" } else { "Allergies" } }
-            input { class: "input", value: "{alergias}", oninput: move |e| alergias.set(e.value()) }
-        }
-        div { class: "campo",
-            label { if idioma == Idioma::Es { "Medicamentos" } else { "Medications" } }
-            input { class: "input", value: "{medicamentos}", oninput: move |e| medicamentos.set(e.value()) }
-        }
-        div { class: "campo",
-            label { if idioma == Idioma::Es { "Antecedentes médicos" } else { "Medical history" } }
-            input { class: "input", value: "{antecedentes}", oninput: move |e| antecedentes.set(e.value()) }
-        }
-        div { class: "campo",
-            label { if idioma == Idioma::Es { "Contacto de emergencia" } else { "Emergency contact" } }
-            input { class: "input", value: "{emergencia}", oninput: move |e| emergencia.set(e.value()) }
-        }
-    }
-}
 
-/// Panel de lectura con los datos de salud de la ficha del alumno.
-fn panel_salud(
-    idioma: Idioma,
-    titulo: String,
-    grupo: String,
-    alergias: String,
-    medicamentos: String,
-    antecedentes: String,
-    emergencia: String,
-) -> Element {
-    rsx! {
-        div { class: "panel",
-            div { class: "panel-head",
-                span { class: "panel-title", "{titulo}" }
-                span { class: "link", "↗" }
-            }
-            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "🩸 Grupo" } else { "🩸 Type" } } span { class: "mini-name", "{grupo}" } }
-            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "⚠ Alergias" } else { "⚠ Allergies" } } span { class: "mini-name", "{alergias}" } }
-            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "💊 Medicamentos" } else { "💊 Medications" } } span { class: "mini-name", "{medicamentos}" } }
-            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "📋 Antecedentes" } else { "📋 History" } } span { class: "mini-name", "{antecedentes}" } }
-            div { class: "mini-row", span { class: "muted", if idioma == Idioma::Es { "📞 Emergencia" } else { "📞 Emergency" } } span { class: "mini-name", "{emergencia}" } }
-        }
-    }
-}
 
 /// Vista de alumnos: tabla viva con búsqueda, filtro de estado, alta y baja.
 #[component]
@@ -3824,17 +3674,6 @@ fn DetalleApoderado(id: Uuid) -> Element {
     }
 }
 
-/// Etiqueta de estado de tarea según idioma.
-fn etiqueta_tarea(estado: EstadoTarea, idioma: Idioma) -> &'static str {
-    match (estado, idioma) {
-        (EstadoTarea::Pendiente, Idioma::Es) => "Pendiente",
-        (EstadoTarea::EnCurso, Idioma::Es) => "En curso",
-        (EstadoTarea::Hecha, Idioma::Es) => "Hecha",
-        (EstadoTarea::Pendiente, Idioma::En) => "To do",
-        (EstadoTarea::EnCurso, Idioma::En) => "In progress",
-        (EstadoTarea::Hecha, Idioma::En) => "Done",
-    }
-}
 
 /// Vista de tareas: tablero Por Estado con alta y avance persistido.
 #[component]
@@ -4639,112 +4478,13 @@ fn VistaMiembros() -> Element {
     }
 }
 
-/// Convención horaria del frontal: los `datetime-local` se guardan y muestran
-/// en UTC (van y vuelven idénticos; el colegio opera en un solo huso).
-fn a_campo_local(fecha: chrono::DateTime<chrono::Utc>) -> String {
-    fecha.format("%Y-%m-%dT%H:%M").to_string()
-}
 
-/// Hora corta (`15:04`) para eventos y correos.
-fn fmt_hora(fecha: chrono::DateTime<chrono::Utc>) -> String {
-    fecha.format("%H:%M UTC").to_string()
-}
 
-/// Día y hora (`20/11 15:04 UTC`) para relacionados y listas.
-/// Día y hora con sufijo UTC estático de una sola vía (`20/11 15:04 UTC`).
-/// Nunca va en `data-dia`, `.cal-punto`, `.opp-name`, `.stage` ni `[data-correo]`.
-fn fmt_dia_hora(fecha: chrono::DateTime<chrono::Utc>) -> String {
-    fecha.format("%d/%m %H:%M UTC").to_string()
-}
 
-/// Fecha completa (`20/11/2026`) para el día seleccionado.
-fn fmt_fecha(fecha: chrono::NaiveDate) -> String {
-    fecha.format("%d/%m/%Y").to_string()
-}
 
-/// Lee un `datetime-local` (`YYYY-MM-DDTHH:MM`) como UTC.
-fn desde_campo_local(valor: &str) -> Option<chrono::DateTime<chrono::Utc>> {
-    chrono::NaiveDateTime::parse_from_str(&format!("{valor}:00"), "%Y-%m-%dT%H:%M:%S")
-        .ok()
-        .map(|ingenuo| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(ingenuo, chrono::Utc))
-}
 
-/// Recarga los eventos del mes indicado en las señales dadas.
-fn recargar_mes(
-    ano: Signal<i32>,
-    mes: Signal<u32>,
-    mut eventos: Signal<Vec<Evento>>,
-    mut aviso: Signal<String>,
-) {
-    let (a, m) = (ano(), mes());
-    spawn(async move {
-        match cliente::eventos_mes(a, m).await {
-            Ok(lista) => {
-                aviso.set(String::new());
-                eventos.set(lista);
-            }
-            Err(mensaje) => aviso.set(mensaje),
-        }
-    });
-}
 
-/// Mueve el mes visible y deja el día 1 seleccionado.
-fn mover_mes(
-    delta: i32,
-    mut ano: Signal<i32>,
-    mut mes: Signal<u32>,
-    mut dia_sel: Signal<chrono::NaiveDate>,
-    hoy: chrono::NaiveDate,
-) {
-    let (mut a, mut m) = (ano(), mes());
-    if delta < 0 {
-        if m == 1 {
-            a -= 1;
-            m = 12;
-        } else {
-            m -= 1;
-        }
-    } else if m == 12 {
-        a += 1;
-        m = 1;
-    } else {
-        m += 1;
-    }
-    ano.set(a);
-    mes.set(m);
-    dia_sel.set(chrono::NaiveDate::from_ymd_opt(a, m, 1).unwrap_or(hoy));
-}
 
-/// Nombres de mes según idioma.
-fn nombre_mes(mes: u32, idioma: Idioma) -> &'static str {
-    match (mes, idioma) {
-        (1, Idioma::Es) => "enero",
-        (2, Idioma::Es) => "febrero",
-        (3, Idioma::Es) => "marzo",
-        (4, Idioma::Es) => "abril",
-        (5, Idioma::Es) => "mayo",
-        (6, Idioma::Es) => "junio",
-        (7, Idioma::Es) => "julio",
-        (8, Idioma::Es) => "agosto",
-        (9, Idioma::Es) => "septiembre",
-        (10, Idioma::Es) => "octubre",
-        (11, Idioma::Es) => "noviembre",
-        (12, Idioma::Es) => "diciembre",
-        (1, Idioma::En) => "January",
-        (2, Idioma::En) => "February",
-        (3, Idioma::En) => "March",
-        (4, Idioma::En) => "April",
-        (5, Idioma::En) => "May",
-        (6, Idioma::En) => "June",
-        (7, Idioma::En) => "July",
-        (8, Idioma::En) => "August",
-        (9, Idioma::En) => "September",
-        (10, Idioma::En) => "October",
-        (11, Idioma::En) => "November",
-        (12, Idioma::En) => "December",
-        _ => "?",
-    }
-}
 
 /// Vista de calendario: rejilla mensual navegable con alta/edición/baja.
 #[component]

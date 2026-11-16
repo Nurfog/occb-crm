@@ -411,6 +411,29 @@ afirma(
   tocadaPath?.etapa === A_TEXTO_DB[sigEs],
   'Path persiste la etapa en PG con el mismo handler',
 );
+const OPP_MAT = `Postulación matricula ${SELLO}`;
+const oppMat = await (await api(`${API}/api/oportunidades`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ nombre: OPP_MAT }),
+})).json();
+await ir(`/oportunidades/${oppMat.id}`);
+const matBtn = await esperarCondicion(`[...document.querySelectorAll('.record-panel button')].some(b => b.textContent.trim() === 'Matricular')`);
+afirma(matBtn, 'ficha muestra botón Matricular si no está matriculada');
+await evaluar(`[...document.querySelectorAll('.record-panel button')].find(b => b.textContent.trim() === 'Matricular').click()`);
+await esperarCondicion(`!!document.querySelector('.matricula-form input')`);
+await evaluar(`(() => {
+  const inputs = [...document.querySelectorAll('.matricula-form input')];
+  const el = inputs[0];
+  el.focus(); el.value = '20202020-8';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+})()`);
+await evaluar(`[...document.querySelectorAll('.matricula-form button')].find(b => b.textContent.includes('Confirmar')).click()`);
+const fichaAlu = await esperarCondicion(`document.body.textContent.includes('Ficha de alumno')`);
+afirma(fichaAlu, 'matricular navega a la ficha del alumno');
+const aluMat = await (await api(`${API}/api/alumnos?busqueda=20202020-8`)).json();
+afirma(aluMat.length === 1 && aluMat[0].estado === 'matriculado', 'matrícula UI crea alumno matriculado');
+await api(`${API}/api/alumnos/${aluMat[0].id}`, { method: 'DELETE' });
+await api(`${API}/api/oportunidades/${oppMat.id}`, { method: 'DELETE' });
 const cols = await (await api(`${API}/api/colegios?limite=1`)).json();
 await ir(`/colegios/${cols[0].rbd}`);
 const hlCol = await esperarCondicion(

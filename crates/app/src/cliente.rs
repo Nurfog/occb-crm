@@ -501,6 +501,35 @@ pub async fn mover_etapa(id: Uuid, etapa: &str) -> Result<Oportunidad, String> {
     .await
 }
 
+/// Matricula un postulante vía `matricular_postulacion()` (SaaS M3, idempotente).
+/// `idempotency_key` debe ser estable por apertura del formulario.
+#[allow(clippy::too_many_arguments)]
+pub async fn matricular_oportunidad(
+    id: Uuid,
+    alumno_rut: &str,
+    nombres: &str,
+    apellidos: &str,
+    curso: &str,
+    colegio_rbd: Option<&str>,
+    apoderados_rut: Vec<String>,
+    idempotency_key: &str,
+) -> Result<Alumno, String> {
+    enviar_json(
+        "POST",
+        &format!("/api/oportunidades/{id}/matricular"),
+        &serde_json::json!({
+            "alumno_rut": alumno_rut,
+            "nombres": nombres,
+            "apellidos": apellidos,
+            "curso": curso,
+            "colegio_rbd": colegio_rbd,
+            "apoderados_rut": apoderados_rut,
+            "idempotency_key": idempotency_key,
+        }),
+    )
+    .await
+}
+
 /// Lista tareas con búsqueda y estado opcionales.
 pub async fn listar_tareas(busqueda: &str, estado: &str) -> Result<Vec<Tarea>, String> {
     let mut ruta = String::from("/api/tareas?limite=100");

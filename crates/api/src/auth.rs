@@ -413,7 +413,7 @@ pub async fn renovar(
     let usuario_id: Option<uuid::Uuid> = fila.get("usuario_id");
     let usuario_id =
         usuario_id.ok_or_else(|| ErrorApi::NoEncontrado("Sesión revocada por seguridad.".into()))?;
-    let f = sqlx::query("select nombre, rol from usuarios where id = $1")
+    let f = sqlx::query("select * from obtener_credencial_sesion($1)")
         .bind(usuario_id)
         .fetch_optional(&pool)
         .await?
