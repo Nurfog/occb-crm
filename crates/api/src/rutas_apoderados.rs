@@ -23,7 +23,7 @@ pub struct ParametrosLista {
 /// Cuerpo para registrar/actualizar apoderado, con validación.
 #[derive(Debug, Deserialize, Validate)]
 pub struct CuerpoApoderado {
-    #[validate(length(min = 1, message = "El RUT es obligatorio."))]
+    /// RUT chileno; vacío cuando el país no es CL (documento genérico).
     pub rut: String,
     #[validate(length(min = 1, max = 120, message = "Los nombres son obligatorios."))]
     pub nombres: String,
@@ -35,6 +35,10 @@ pub struct CuerpoApoderado {
     pub region_codigo: Option<i16>,
     pub comuna_codigo: Option<String>,
     pub ocupacion: Option<String>,
+    /// Multi-país (036): país ISO-2, tipo y número de documento fiscal.
+    pub pais: Option<String>,
+    pub documento_tipo: Option<String>,
+    pub documento: Option<String>,
 }
 
 /// GET /api/apoderados
@@ -68,8 +72,9 @@ fn a_dominio(cuerpo: &CuerpoApoderado) -> Result<occb_core::CrearApoderado, Erro
     cuerpo
         .validate()
         .map_err(|e| ErrorApi::Validacion(e.to_string()))?;
-    Ok(occb_core::validar_apoderado(occb_core::CrearApoderado {
-        rut: cuerpo.rut.clone(),
+    let pais = cuerpo.pais.clone().unwrap_or_else(|| "CL".into()).to_uppercase();
+    let entrada_base = occb_core::CrearApoderado {
+        rut: if pais == "CL" { cuerpo.rut.clone() } else { String::new() },
         nombres: cuerpo.nombres.clone(),
         apellidos: cuerpo.apellidos.clone(),
         telefono: cuerpo.telefono.clone().unwrap_or_default(),
@@ -78,7 +83,20 @@ fn a_dominio(cuerpo: &CuerpoApoderado) -> Result<occb_core::CrearApoderado, Erro
         region_codigo: cuerpo.region_codigo,
         comuna_codigo: cuerpo.comuna_codigo.clone(),
         ocupacion: cuerpo.ocupacion.clone().unwrap_or_default(),
-    })?)
+    };
+    if pais == "CL" {
+        if entrada_base.rut.trim().is_empty() {
+            return Err(ErrorApi::Validacion("El RUT es obligatorio.".into()));
+        }
+        Ok(occb_core::validar_apoderado(entrada_base)?)
+    } else {
+        if entrada_base.nombres.trim().is_empty() || entrada_base.apellidos.trim().is_empty() {
+            return Err(ErrorApi::Validacion(
+                "Los nombres y apellidos son obligatorios.".into(),
+            ));
+        }
+        Ok(entrada_base)
+    }
 }
 
 /// POST /api/apoderados
@@ -89,18 +107,36 @@ pub async fn crear(
 ) -> Result<(StatusCode, Json<occb_core::Apoderado>), ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
     let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
-    let fila = sqlx::query("select * from crear_apoderado($1, $2, $3, $4, $5, $6, $7, $8, $9)")
-        .bind(&entrada.rut)
-        .bind(&entrada.nombres)
-        .bind(&entrada.apellidos)
-        .bind(&entrada.telefono)
-        .bind(&entrada.correo)
-        .bind(&entrada.direccion)
-        .bind(entrada.region_codigo)
-        .bind(&entrada.comuna_codigo)
-        .bind(&entrada.ocupacion)
-        .fetch_one(&mut *tx)
-        .await?;
+    let pais = cuerpo.pais.clone().unwrap_or_else(|| "CL".into()).to_uppercase();
+    let fila = if pais == "CL" {
+        sqlx::query("select * from crear_apoderado($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+            .bind(&entrada.rut)
+            .bind(&entrada.nombres)
+            .bind(&entrada.apellidos)
+            .bind(&entrada.telefono)
+            .bind(&entrada.correo)
+            .bind(&entrada.direccion)
+            .bind(entrada.region_codigo)
+            .bind(&entrada.comuna_codigo)
+            .bind(&entrada.ocupacion)
+            .fetch_one(&mut *tx)
+            .await?
+    } else {
+        sqlx::query("select * from crear_apoderado_documento($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)")
+            .bind(&pais)
+            .bind(cuerpo.documento_tipo.clone().unwrap_or_else(|| "documento".into()))
+            .bind(cuerpo.documento.clone().unwrap_or_else(|| entrada.rut.clone()))
+            .bind(&entrada.nombres)
+            .bind(&entrada.apellidos)
+            .bind(&entrada.telefono)
+            .bind(&entrada.correo)
+            .bind(&entrada.direccion)
+            .bind(entrada.region_codigo)
+            .bind(&entrada.comuna_codigo)
+            .bind(&entrada.ocupacion)
+            .fetch_one(&mut *tx)
+            .await?
+    };
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_apoderado(&fila))))
 }
@@ -114,6 +150,27 @@ pub async fn actualizar(
 ) -> Result<Json<occb_core::Apoderado>, ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
     let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
+    let pais = cuerpo.pais.clone().unwrap_or_else(|| "CL".into()).to_uppercase();
+    if pais != "CL" {
+        let fila = sqlx::query("select * from actualizar_apoderado_documento($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
+            .bind(id)
+            .bind(&pais)
+            .bind(cuerpo.documento_tipo.clone().unwrap_or_else(|| "documento".into()))
+            .bind(cuerpo.documento.clone().unwrap_or_else(|| entrada.rut.clone()))
+            .bind(&entrada.nombres)
+            .bind(&entrada.apellidos)
+            .bind(&entrada.telefono)
+            .bind(&entrada.correo)
+            .bind(&entrada.direccion)
+            .bind(entrada.region_codigo)
+            .bind(&entrada.comuna_codigo)
+            .bind(&entrada.ocupacion)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| ErrorApi::NoEncontrado("Apoderado no encontrado.".into()))?;
+        tx.commit().await?;
+        return Ok(Json(bd::fila_a_apoderado(&fila)));
+    }
     let fila = sqlx::query("select * from actualizar_apoderado($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
         .bind(id)
         .bind(&entrada.rut)

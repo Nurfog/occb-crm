@@ -26,7 +26,7 @@ pub struct ParametrosLista {
 /// Cuerpo para matricular/actualizar alumno, con validación.
 #[derive(Debug, Deserialize, Validate)]
 pub struct CuerpoAlumno {
-    #[validate(length(min = 1, message = "El RUT es obligatorio."))]
+    /// RUT chileno; vacío cuando el país no es CL (documento genérico).
     pub rut: String,
     #[validate(length(min = 1, max = 120, message = "Los nombres son obligatorios."))]
     pub nombres: String,
@@ -36,6 +36,10 @@ pub struct CuerpoAlumno {
     pub curso: Option<String>,
     pub colegio_rbd: Option<String>,
     pub estado: Option<String>,
+    /// Multi-país (036): país ISO-2, tipo y número de documento fiscal.
+    pub pais: Option<String>,
+    pub documento_tipo: Option<String>,
+    pub documento: Option<String>,
     pub grupo_sanguineo: Option<String>,
     pub alergias: Option<String>,
     pub medicamentos: Option<String>,
@@ -82,8 +86,9 @@ fn a_dominio(cuerpo: &CuerpoAlumno) -> Result<occb_core::CrearAlumno, ErrorApi> 
             "Estado no válido. Use: postulante, matriculado, trasladado o retirado.".into(),
         )
     })?;
-    Ok(occb_core::validar_alumno(occb_core::CrearAlumno {
-        rut: cuerpo.rut.clone(),
+    let pais = cuerpo.pais.clone().unwrap_or_else(|| "CL".into()).to_uppercase();
+    let entrada_base = occb_core::CrearAlumno {
+        rut: if pais == "CL" { cuerpo.rut.clone() } else { String::new() },
         nombres: cuerpo.nombres.clone(),
         apellidos: cuerpo.apellidos.clone(),
         fecha_nacimiento: cuerpo.fecha_nacimiento,
@@ -95,7 +100,21 @@ fn a_dominio(cuerpo: &CuerpoAlumno) -> Result<occb_core::CrearAlumno, ErrorApi> 
         medicamentos: cuerpo.medicamentos.clone().unwrap_or_default(),
         antecedentes_medicos: cuerpo.antecedentes_medicos.clone().unwrap_or_default(),
         contacto_emergencia: cuerpo.contacto_emergencia.clone().unwrap_or_default(),
-    })?)
+    };
+    if pais == "CL" {
+        if entrada_base.rut.trim().is_empty() {
+            return Err(ErrorApi::Validacion("El RUT es obligatorio.".into()));
+        }
+        Ok(occb_core::validar_alumno(entrada_base)?)
+    } else {
+        // Multi-país: el documento se valida en SQL por país; aquí solo nombres.
+        if entrada_base.nombres.trim().is_empty() || entrada_base.apellidos.trim().is_empty() {
+            return Err(ErrorApi::Validacion(
+                "Los nombres y apellidos son obligatorios.".into(),
+            ));
+        }
+        Ok(entrada_base)
+    }
 }
 
 /// POST /api/alumnos — valida en Rust y delega a `crear_alumno()`.
@@ -106,21 +125,42 @@ pub async fn crear(
 ) -> Result<(StatusCode, Json<occb_core::Alumno>), ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
     let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
-    let fila = sqlx::query("select * from crear_alumno($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)")
-        .bind(&entrada.rut)
-        .bind(&entrada.nombres)
-        .bind(&entrada.apellidos)
-        .bind(entrada.fecha_nacimiento)
-        .bind(&entrada.curso)
-        .bind(entrada.colegio_rbd.clone())
-        .bind(entrada.estado.como_texto())
-        .bind(&entrada.grupo_sanguineo)
-        .bind(&entrada.alergias)
-        .bind(&entrada.medicamentos)
-        .bind(&entrada.antecedentes_medicos)
-        .bind(&entrada.contacto_emergencia)
-        .fetch_one(&mut *tx)
-        .await?;
+    let pais = cuerpo.pais.clone().unwrap_or_else(|| "CL".into()).to_uppercase();
+    let fila = if pais == "CL" {
+        sqlx::query("select * from crear_alumno($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)")
+            .bind(&entrada.rut)
+            .bind(&entrada.nombres)
+            .bind(&entrada.apellidos)
+            .bind(entrada.fecha_nacimiento)
+            .bind(&entrada.curso)
+            .bind(entrada.colegio_rbd.clone())
+            .bind(entrada.estado.como_texto())
+            .bind(&entrada.grupo_sanguineo)
+            .bind(&entrada.alergias)
+            .bind(&entrada.medicamentos)
+            .bind(&entrada.antecedentes_medicos)
+            .bind(&entrada.contacto_emergencia)
+            .fetch_one(&mut *tx)
+            .await?
+    } else {
+        sqlx::query("select * from crear_alumno_documento($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)")
+            .bind(&pais)
+            .bind(cuerpo.documento_tipo.clone().unwrap_or_else(|| "documento".into()))
+            .bind(cuerpo.documento.clone().unwrap_or_else(|| entrada.rut.clone()))
+            .bind(&entrada.nombres)
+            .bind(&entrada.apellidos)
+            .bind(entrada.fecha_nacimiento)
+            .bind(&entrada.curso)
+            .bind(entrada.colegio_rbd.clone())
+            .bind(entrada.estado.como_texto())
+            .bind(&entrada.grupo_sanguineo)
+            .bind(&entrada.alergias)
+            .bind(&entrada.medicamentos)
+            .bind(&entrada.antecedentes_medicos)
+            .bind(&entrada.contacto_emergencia)
+            .fetch_one(&mut *tx)
+            .await?
+    };
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(bd::fila_a_alumno(&fila))))
 }
@@ -134,6 +174,30 @@ pub async fn actualizar(
 ) -> Result<Json<occb_core::Alumno>, ErrorApi> {
     let entrada = a_dominio(&cuerpo)?;
     let mut tx = bd::transaccion_con_actor(&pool, usuario.id).await?;
+    let pais = cuerpo.pais.clone().unwrap_or_else(|| "CL".into()).to_uppercase();
+    if pais != "CL" {
+        let fila = sqlx::query("select * from actualizar_alumno_documento($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)")
+            .bind(id)
+            .bind(&pais)
+            .bind(cuerpo.documento_tipo.clone().unwrap_or_else(|| "documento".into()))
+            .bind(cuerpo.documento.clone().unwrap_or_else(|| entrada.rut.clone()))
+            .bind(&entrada.nombres)
+            .bind(&entrada.apellidos)
+            .bind(entrada.fecha_nacimiento)
+            .bind(&entrada.curso)
+            .bind(entrada.colegio_rbd.clone())
+            .bind(entrada.estado.como_texto())
+            .bind(&entrada.grupo_sanguineo)
+            .bind(&entrada.alergias)
+            .bind(&entrada.medicamentos)
+            .bind(&entrada.antecedentes_medicos)
+            .bind(&entrada.contacto_emergencia)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| ErrorApi::NoEncontrado("Alumno no encontrado.".into()))?;
+        tx.commit().await?;
+        return Ok(Json(bd::fila_a_alumno(&fila)));
+    }
     let fila = sqlx::query("select * from actualizar_alumno($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)")
         .bind(id)
         .bind(&entrada.rut)

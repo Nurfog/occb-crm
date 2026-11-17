@@ -75,7 +75,11 @@ impl EstadoAlumno {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Alumno {
     pub id: Uuid,
+    /// RUT chileno normalizado; vacío para alumnos de otros países.
     pub rut: String,
+    pub pais_iso: String,
+    pub documento_tipo: String,
+    pub documento_numero: String,
     pub nombres: String,
     pub apellidos: String,
     pub fecha_nacimiento: Option<chrono::NaiveDate>,
@@ -138,7 +142,11 @@ pub struct CrearIngreso {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Apoderado {
     pub id: Uuid,
+    /// RUT chileno normalizado; vacío para apoderados de otros países.
     pub rut: String,
+    pub pais_iso: String,
+    pub documento_tipo: String,
+    pub documento_numero: String,
     pub nombres: String,
     pub apellidos: String,
     pub telefono: String,

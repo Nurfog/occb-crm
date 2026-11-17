@@ -370,7 +370,7 @@ e historial siguen consistentes.
 - ✅ E2E: baja oculta sin borrar (fila sigue en PG), RUT reutilizable,
   403 para miembro, anonimización por UI con historial intacto.
 - ✅ Hecho cuando: E2E 120/120, clippy limpio.
-- ✅ Estado actual: E2E 156/156 en limpio (S1 Path/highlights/chip + S3 traslado/frase/hint/UTC/anon-aviso + matrícula UI idempotente + CSV cuarentena con job_id + M1b panel exige sesión + holdings con vínculo RBD + guardia cerrado + RUT único con PK UUID), clippy limpio.
+- ✅ Estado actual: E2E 162/162 en limpio (S1 Path/highlights/chip + S3 traslado/frase/hint/UTC/anon-aviso + matrícula UI idempotente + CSV cuarentena con job_id + M1b panel exige sesión + holdings con vínculo RBD + guardia cerrado + RUT único con PK UUID + documento fiscal multi-país), clippy limpio.
 
 ## Mapa de módulos → estado
 

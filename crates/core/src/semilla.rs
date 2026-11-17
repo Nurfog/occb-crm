@@ -68,6 +68,9 @@ pub fn datos_semilla_alumnos() -> Vec<Alumno> {
     let crear = |rut: &str, nombres: &str, apellidos: &str, curso: &str| Alumno {
         id: Uuid::new_v4(),
         rut: rut.into(),
+        pais_iso: "CL".into(),
+        documento_tipo: "rut".into(),
+        documento_numero: rut.into(),
         nombres: nombres.into(),
         apellidos: apellidos.into(),
         fecha_nacimiento: None,
@@ -94,6 +97,9 @@ pub fn datos_semilla_apoderados() -> Vec<Apoderado> {
     let crear = |rut: &str, nombres: &str, apellidos: &str, region: i16, comuna: &str| Apoderado {
         id: Uuid::new_v4(),
         rut: rut.into(),
+        pais_iso: "CL".into(),
+        documento_tipo: "rut".into(),
+        documento_numero: rut.into(),
         nombres: nombres.into(),
         apellidos: apellidos.into(),
         telefono: "+56 9 5555 0100".into(),

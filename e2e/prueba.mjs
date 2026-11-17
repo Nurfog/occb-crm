@@ -1241,6 +1241,39 @@ afirma(Array.isArray(sinAlumno) && sinAlumno.length === 0, 'cuarentena no crea a
 const listaQ = await (await api(`${API}/api/oportunidades?limite=200`)).json();
 const oppQ = listaQ.find((o) => o.prospecto_rut === '30303030-1');
 afirma(!!oppQ && oppQ.etapa === 'contacto' && oppQ.origen === 'csv', 'cuarentena crea postulación contacto/origen csv');
+// --- 25b2. Multi-país (036): documento fiscal por país, RUT como caso CL ---
+const rutCl = '21212121-5';
+const alumCl = await (await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: rutCl, nombres: 'Multi', apellidos: 'Chile' }),
+})).json();
+afirma(alumCl.pais_iso === 'CL' && alumCl.documento_numero === rutCl, 'CL sincroniza documento_numero desde el RUT');
+const alumPe = await (await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: '', pais: 'PE', documento_tipo: 'ruc', documento: '20100070970', nombres: 'Peru', apellidos: 'Uno' }),
+})).json();
+afirma(alumPe.pais_iso === 'PE' && alumPe.documento_numero === '20100070970' && alumPe.rut === '', 'PE acepta RUC sin RUT chileno');
+const dupPe = await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: '', pais: 'PE', documento_tipo: 'ruc', documento: '20100070970', nombres: 'Peru', apellidos: 'Dos' }),
+});
+afirma(dupPe.status >= 400, 'documento duplicado por país se rechaza');
+const cuitMalo = await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: '', pais: 'AR', documento_tipo: 'cuit', documento: '20123456780', nombres: 'Arg', apellidos: 'X' }),
+});
+afirma(cuitMalo.status === 400, 'CUIT con DV inválido se rechaza');
+const cuitOk = await (await api(`${API}/api/alumnos`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: '', pais: 'AR', documento_tipo: 'cuit', documento: '20123456786', nombres: 'Arg', apellidos: 'Uno' }),
+})).json();
+afirma(cuitOk.pais_iso === 'AR' && cuitOk.documento_numero === '20123456786', 'AR acepta CUIT válido');
+const apBr = await (await api(`${API}/api/apoderados`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ rut: '', pais: 'BR', documento_tipo: 'cpf', documento: '52998224725', nombres: 'Brasil', apellidos: 'Uno' }),
+})).json();
+afirma(apBr.pais_iso === 'BR' && apBr.documento_numero === '52998224725', 'BR acepta CPF en apoderado');
+
 // --- 25c. Holdings (M1 SaaS): admin crea, vincula RBD, vista y borrado ---
 const NOMBRE_H = `Holding ${SELLO}`;
 const hCreado = await (await apiAdmin(`${API}/api/holdings`, {

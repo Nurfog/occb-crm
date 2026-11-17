@@ -113,7 +113,10 @@ pub fn fila_a_alumno(fila: &sqlx::postgres::PgRow) -> occb_core::Alumno {
     let estado_texto: String = fila.get("estado");
     occb_core::Alumno {
         id: fila.get("id"),
-        rut: fila.get("rut"),
+        rut: fila.get::<Option<String>, _>("rut").unwrap_or_default(),
+        pais_iso: fila.get("pais_iso"),
+        documento_tipo: fila.get("documento_tipo"),
+        documento_numero: fila.get::<Option<String>, _>("documento_numero").unwrap_or_default(),
         nombres: fila.get("nombres"),
         apellidos: fila.get("apellidos"),
         fecha_nacimiento: fila.get::<Option<chrono::NaiveDate>, _>("fecha_nacimiento"),
@@ -134,7 +137,10 @@ pub fn fila_a_alumno(fila: &sqlx::postgres::PgRow) -> occb_core::Alumno {
 pub fn fila_a_apoderado(fila: &sqlx::postgres::PgRow) -> occb_core::Apoderado {
     occb_core::Apoderado {
         id: fila.get("id"),
-        rut: fila.get("rut"),
+        rut: fila.get::<Option<String>, _>("rut").unwrap_or_default(),
+        pais_iso: fila.get("pais_iso"),
+        documento_tipo: fila.get("documento_tipo"),
+        documento_numero: fila.get::<Option<String>, _>("documento_numero").unwrap_or_default(),
         nombres: fila.get("nombres"),
         apellidos: fila.get("apellidos"),
         telefono: fila.get::<String, _>("telefono"),
