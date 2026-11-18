@@ -2,7 +2,7 @@
 
 ## System Overview
 
-Historial lineal de esquema PostgreSQL 18 del CRM escolar (38 migraciones `sqlx`, `001–038`): tablas, funciones `SECURITY DEFINER` con `SET search_path = public`, RLS sin políticas permisivas (`REVOKE ALL` + `GRANT SELECT/EXECUTE` a `public`), índices y semillas. La API las aplica al arrancar (`bd::migrar_y_sembrar`); nunca se edita una migración aplicada (el `checksum` de `sqlx` lo impide), solo se añade la siguiente. '029' fundación tenant SaaS (holdings, colegios contratados, membresías, importaciones, supresión, `es_miembro`), `030` matrícula y consentimiento, `031` repara la siembra escolar, `032` credencial de sesión vía función, `033` CSV en cuarentena, `034` CRUD de holdings y `035` RUT/correo único real, `036` catálogo país/moneda y documento fiscal genérico (RUT chileno como caso, `documento_valido` por país) y `037` altas/ediciones con documento por país más anonimización que libera el documento, y `038` multiempresa contable (empresas emisoras, puntos de emisión) y columnas de tenant en datos núcleo: todas aditivas y sin cambio del flujo legado.
+Historial lineal de esquema PostgreSQL 18 del CRM escolar (41 migraciones `sqlx`, `001–041`): tablas, funciones `SECURITY DEFINER` con `SET search_path = public`, RLS sin políticas permisivas (`REVOKE ALL` + `GRANT SELECT/EXECUTE` a `public`), índices y semillas. La API las aplica al arrancar (`bd::migrar_y_sembrar`); nunca se edita una migración aplicada (el `checksum` de `sqlx` lo impide), solo se añade la siguiente. '029' fundación tenant SaaS (holdings, colegios contratados, membresías, importaciones, supresión, `es_miembro`), `030` matrícula y consentimiento, `031` repara la siembra escolar, `032` credencial de sesión vía función, `033` CSV en cuarentena, `034` CRUD de holdings y `035` RUT/correo único real, `036` catálogo país/moneda y documento fiscal genérico (RUT chileno como caso, `documento_valido` por país) y `037` altas/ediciones con documento por país más anonimización que libera el documento, `038` multiempresa contable (empresas emisoras, puntos de emisión) y columnas de tenant, `039` empresa como unidad de tenant (holding opcional, membresía por empresa, `scope_empresa`), `040` colegio contratado por RBD y empresa, y `041` vínculo colegio↔empresa con holding derivado: todas aditivas y sin cambio del flujo legado.
 
 ## Local Interface & Invariants
 
@@ -14,7 +14,7 @@ Invariantes clave: RUT chileno con DV módulo 11 (`[011_alumnos_apoderados.sql:e
 
 ## Subdirectories & System Boundaries
 
-- (sin subdirectorios: los 38 ficheros `001–038_*.sql` viven directamente en esta carpeta y se aplican en orden lexicográfico).
+- (sin subdirectorios: los 41 ficheros `001–041_*.sql` viven directamente en esta carpeta y se aplican en orden lexicográfico).
 
 ## Global Invariants
 
@@ -28,4 +28,4 @@ Invariantes clave: RUT chileno con DV módulo 11 (`[011_alumnos_apoderados.sql:e
 
 ## System Verification
 
-- Run: `docker compose up -d bd && cargo run -p occb-api` (aplica `001–038` al arrancar) o `node e2e/prueba.mjs` (E2E sobre esquema migrado).
+- Run: `docker compose up -d bd && cargo run -p occb-api` (aplica `001–041` al arrancar) o `node e2e/prueba.mjs` (E2E sobre esquema migrado).
