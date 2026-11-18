@@ -20,6 +20,7 @@ mod rutas_correos;
 mod rutas_eventos;
 mod rutas_espacio;
 mod rutas_integraciones;
+mod rutas_empresas;
 mod rutas_holdings;
 mod rutas_importacion;
 mod rutas_ingresos;
@@ -90,6 +91,14 @@ async fn main() {
         .route(
             "/api/holdings/{id}/colegios",
             get(rutas_holdings::colegios).post(rutas_holdings::vincular),
+        )
+        .route(
+            "/api/empresas",
+            get(rutas_empresas::listar).post(rutas_empresas::crear),
+        )
+        .route(
+            "/api/empresas/{id}/miembros",
+            axum::routing::post(rutas_empresas::asignar),
         )
         .route("/api/panel", get(rutas_oportunidades::panel))
         .route("/api/dashboard", get(rutas_oportunidades::panel))

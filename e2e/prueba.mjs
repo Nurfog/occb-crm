@@ -1241,6 +1241,32 @@ afirma(Array.isArray(sinAlumno) && sinAlumno.length === 0, 'cuarentena no crea a
 const listaQ = await (await api(`${API}/api/oportunidades?limite=200`)).json();
 const oppQ = listaQ.find((o) => o.prospecto_rut === '30303030-1');
 afirma(!!oppQ && oppQ.etapa === 'contacto' && oppQ.origen === 'csv', 'cuarentena crea postulación contacto/origen csv');
+// --- 25b1. Root de plataforma y empresas (042) ---
+const yoAdmin = await (await apiAdmin(`${API}/api/acceso/yo`)).json();
+afirma(yoAdmin.es_root === true, 'el primer usuario es root de plataforma');
+const yoMiembro = await (await api(`${API}/api/acceso/yo`)).json();
+afirma(yoMiembro.es_root === false, 'un miembro no es root');
+const emp = await (await apiAdmin(`${API}/api/empresas`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ razon_social: `Empresa ${SELLO}`, pais: 'CL', documento_tipo: 'rut', documento: '20202020-8', moneda: 'CLP' }),
+})).json();
+afirma(typeof emp.id === 'string' && emp.moneda_funcional === 'CLP', 'root crea empresa');
+const empMiembro = await (await apiAdmin(`${API}/api/empresas`)).json();
+afirma(empMiembro.some((e) => e.id === emp.id), 'root ve todas las empresas');
+const empNoRoot = await api(`${API}/api/empresas`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ razon_social: 'X', documento: '11111111-1' }),
+});
+afirma(empNoRoot.status === 403, 'miembro no puede crear empresa (403)');
+const miembroId = yoMiembro.id;
+const asig = await apiAdmin(`${API}/api/empresas/${emp.id}/miembros`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ usuario_id: miembroId }),
+});
+afirma(asig.status === 204, 'root asigna miembro a empresa');
+const empDelMiembro = await (await api(`${API}/api/empresas`)).json();
+afirma(empDelMiembro.some((e) => e.id === emp.id && e.es_mia === true), 'miembro ve su empresa asignada');
+
 // --- 25b2. Multi-país (036): documento fiscal por país, RUT como caso CL ---
 const rutCl = '21212121-5';
 const alumCl = await (await api(`${API}/api/alumnos`, {

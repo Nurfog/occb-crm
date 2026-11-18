@@ -46,6 +46,12 @@ struct Reclamos {
     holding_id: Option<uuid::Uuid>,
     #[serde(default)]
     colegio_rbd: Vec<String>,
+    /// Empresa activa (tenant). `None` en tokens previos a 042.
+    #[serde(default)]
+    empresa_id: Option<uuid::Uuid>,
+    /// Root de plataforma: ve todas las empresas.
+    #[serde(default)]
+    es_root: bool,
 }
 
 /// Usuario autenticado que el middleware deja en las extensiones.
@@ -59,6 +65,8 @@ pub struct UsuarioActual {
     /// Alcance tenant SaaS (029): `None`/vacío = legado sin scope (no filtra).
     pub holding_id: Option<uuid::Uuid>,
     pub colegio_rbd: Vec<String>,
+    pub empresa_id: Option<uuid::Uuid>,
+    pub es_root: bool,
 }
 
 fn ahora_segs() -> u64 {
@@ -118,11 +126,6 @@ fn login_limitado(ip: std::net::IpAddr) -> bool {
     false
 }
 
-/// Emite un JWT de acceso para el usuario (legado sin scope tenant).
-fn emitir_acceso(id: &uuid::Uuid, nombre: &str, rol: &str) -> Result<String, ErrorApi> {
-    emitir_acceso_con_scope(id, nombre, rol, None, &[])
-}
-
 /// Emite un JWT de acceso con alcance tenant SaaS (029, M1b).
 fn emitir_acceso_con_scope(
     id: &uuid::Uuid,
@@ -130,6 +133,8 @@ fn emitir_acceso_con_scope(
     rol: &str,
     holding_id: Option<uuid::Uuid>,
     colegio_rbd: &[String],
+    empresa_id: Option<uuid::Uuid>,
+    es_root: bool,
 ) -> Result<String, ErrorApi> {
     let reclamos = Reclamos {
         sub: id.to_string(),
@@ -139,6 +144,8 @@ fn emitir_acceso_con_scope(
         jti: uuid::Uuid::new_v4().to_string(),
         holding_id,
         colegio_rbd: colegio_rbd.to_vec(),
+        empresa_id,
+        es_root,
     };
     jsonwebtoken::encode(
         &jsonwebtoken::Header::default(),
@@ -168,6 +175,8 @@ fn leer_acceso(token: &str) -> Result<UsuarioActual, ErrorApi> {
         alcances: None,
         holding_id: datos.claims.holding_id,
         colegio_rbd: datos.claims.colegio_rbd,
+        empresa_id: datos.claims.empresa_id,
+        es_root: datos.claims.es_root,
     })
 }
 
@@ -187,6 +196,21 @@ pub async fn es_miembro(
         .fetch_one(pool)
         .await
         .unwrap_or(false)
+}
+
+/// Contexto de tenancy del usuario para el JWT (042): empresa principal y root.
+async fn contexto_usuario(pool: &sqlx::PgPool, id: &uuid::Uuid) -> (Option<uuid::Uuid>, bool) {
+    let empresa = sqlx::query_scalar::<_, Option<uuid::Uuid>>("select empresa_del_usuario($1)")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or(None);
+    let root = sqlx::query_scalar::<_, bool>("select es_root_usuario($1)")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or(false);
+    (empresa, root)
 }
 
 /// Middleware que exige `Authorization: Bearer <jwt>` válido.
@@ -218,6 +242,8 @@ pub async fn exigir_sesion(
                 alcances: Some(f.get("alcances")),
                 holding_id: None,
                 colegio_rbd: Vec::new(),
+                empresa_id: None,
+                es_root: false,
             }),
             Ok(None) => Err(ErrorApi::NoEncontrado("Clave API inválida o revocada.".into())),
             Err(e) => {
@@ -297,6 +323,11 @@ pub struct UsuarioPublico {
     pub nombre: String,
     pub correo: String,
     pub rol: String,
+    /// 042: root de plataforma y empresa activa (la UI los usa para el contexto).
+    #[serde(default)]
+    pub es_root: bool,
+    #[serde(default)]
+    pub empresa_id: Option<uuid::Uuid>,
 }
 
 /// POST /api/acceso/registro — crea usuario (el primero es admin) + sesión.
@@ -361,7 +392,8 @@ async fn responder_sesion(
         .fetch_one(pool)
         .await?
         .get("id");
-    let acceso = emitir_acceso(&id, &nombre, &rol)?;
+    let (empresa_id, es_root) = contexto_usuario(pool, &id).await;
+    let acceso = emitir_acceso_con_scope(&id, &nombre, &rol, None, &[], empresa_id, es_root)?;
     let mut cabeceras = axum::http::HeaderMap::new();
     cabeceras.insert(
         header::SET_COOKIE,
@@ -418,7 +450,8 @@ pub async fn renovar(
         .fetch_optional(&pool)
         .await?
         .ok_or_else(|| ErrorApi::NoEncontrado("Usuario no encontrado.".into()))?;
-    let acceso = emitir_acceso(&usuario_id, f.get("nombre"), f.get("rol"))?;
+    let (empresa_id, es_root) = contexto_usuario(&pool, &usuario_id).await;
+    let acceso = emitir_acceso_con_scope(&usuario_id, f.get("nombre"), f.get("rol"), None, &[], empresa_id, es_root)?;
     let mut cab = axum::http::HeaderMap::new();
     cab.insert(
         header::SET_COOKIE,
@@ -472,6 +505,8 @@ pub async fn yo(
         nombre: usuario.nombre,
         correo: String::new(),
         rol: usuario.rol,
+        es_root: usuario.es_root,
+        empresa_id: usuario.empresa_id,
     })
 }
 
@@ -492,6 +527,8 @@ pub async fn miembros(
                 nombre: f.get("nombre"),
                 correo: f.get("correo"),
                 rol: f.get::<String, _>("rol"),
+                es_root: f.get::<bool, _>("es_root"),
+                empresa_id: f.get::<Option<uuid::Uuid>, _>("empresa_id"),
             })
             .collect(),
     ))
@@ -523,5 +560,7 @@ pub async fn cambiar_rol(
         nombre: fila.get("nombre"),
         correo: fila.get("correo"),
         rol: fila.get::<String, _>("rol"),
+        es_root: false,
+        empresa_id: None,
     }))
 }
