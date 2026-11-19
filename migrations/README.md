@@ -2,7 +2,7 @@
 
 ## System Overview
 
-Historial lineal de esquema PostgreSQL 18 del CRM escolar (44 migraciones `sqlx`, `001–044`): tablas, funciones `SECURITY DEFINER` con `SET search_path = public`, RLS sin políticas permisivas (`REVOKE ALL` + `GRANT SELECT/EXECUTE` a `public`), índices y semillas. La API las aplica al arrancar (`bd::migrar_y_sembrar`); nunca se edita una migración aplicada (el `checksum` de `sqlx` lo impide), solo se añade la siguiente. '029' fundación tenant SaaS (holdings, colegios contratados, membresías, importaciones, supresión, `es_miembro`), `030` matrícula y consentimiento, `031` repara la siembra escolar, `032` credencial de sesión vía función, `033` CSV en cuarentena, `034` CRUD de holdings y `035` RUT/correo único real, `036` catálogo país/moneda y documento fiscal genérico (RUT chileno como caso, `documento_valido` por país) y `037` altas/ediciones con documento por país más anonimización que libera el documento, `038` multiempresa contable (empresas emisoras, puntos de emisión) y columnas de tenant, `039` empresa como unidad de tenant (holding opcional, membresía por empresa, `scope_empresa`), `040` colegio contratado por RBD y empresa, `041` vínculo colegio↔empresa con holding derivado, `042` root de plataforma y API de empresas, `043` membresía de empresa independiente y `044` tenant en todo el dato de negocio (16 tablas con herencia de empresa): todas aditivas y sin cambio del flujo legado.
+Historial lineal de esquema PostgreSQL 18 del CRM escolar (45 migraciones `sqlx`, `001–045`): tablas, funciones `SECURITY DEFINER` con `SET search_path = public`, RLS sin políticas permisivas (`REVOKE ALL` + `GRANT SELECT/EXECUTE` a `public`), índices y semillas. La API las aplica al arrancar (`bd::migrar_y_sembrar`); nunca se edita una migración aplicada (el `checksum` de `sqlx` lo impide), solo se añade la siguiente. '029' fundación tenant SaaS (holdings, colegios contratados, membresías, importaciones, supresión, `es_miembro`), `030` matrícula y consentimiento, `031` repara la siembra escolar, `032` credencial de sesión vía función, `033` CSV en cuarentena, `034` CRUD de holdings y `035` RUT/correo único real, `036` catálogo país/moneda y documento fiscal genérico (RUT chileno como caso, `documento_valido` por país) y `037` altas/ediciones con documento por país más anonimización que libera el documento, `038` multiempresa contable (empresas emisoras, puntos de emisión) y columnas de tenant, `039` empresa como unidad de tenant (holding opcional, membresía por empresa, `scope_empresa`), `040` colegio contratado por RBD y empresa, `041` vínculo colegio↔empresa con holding derivado, `042` root de plataforma y API de empresas, `043` membresía de empresa independiente `044` tenant en todo el dato de negocio (16 tablas con herencia de empresa) y `045` soft-delete en vínculos/conversaciones y PK uuid en favoritos: todas aditivas y sin cambio del flujo legado.
 
 ## Local Interface & Invariants
 
@@ -14,7 +14,7 @@ Invariantes clave: RUT chileno con DV módulo 11 (`[011_alumnos_apoderados.sql:e
 
 ## Subdirectories & System Boundaries
 
-- (sin subdirectorios: los 44 ficheros `001–044_*.sql` viven directamente en esta carpeta y se aplican en orden lexicográfico).
+- (sin subdirectorios: los 45 ficheros `001–045_*.sql` viven directamente en esta carpeta y se aplican en orden lexicográfico).
 
 ## Global Invariants
 
@@ -28,4 +28,4 @@ Invariantes clave: RUT chileno con DV módulo 11 (`[011_alumnos_apoderados.sql:e
 
 ## System Verification
 
-- Run: `docker compose up -d bd && cargo run -p occb-api` (aplica `001–044` al arrancar) o `node e2e/prueba.mjs` (E2E sobre esquema migrado).
+- Run: `docker compose up -d bd && cargo run -p occb-api` (aplica `001–045` al arrancar) o `node e2e/prueba.mjs` (E2E sobre esquema migrado).

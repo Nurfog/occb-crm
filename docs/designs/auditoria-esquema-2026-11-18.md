@@ -106,6 +106,7 @@ Brecha: catálogos sin política RLS aunque son lectura pública; conviene polí
 ## Plan de normalización (estado)
 
 - **044 aplicada (2026-11-18):** empresa_id en las 16 tablas restantes con triggers de herencia y backfill; importaciones registra usuario y empresa.
+- **045 aplicada (2026-11-19):** favoritos con id uuid + unique natural; alumno_apoderado, conversaciones y mensajes con `activo`; traslados con `creado_en`.
 
 ## Plan de normalización propuesto
 
