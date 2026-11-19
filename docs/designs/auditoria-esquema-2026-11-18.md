@@ -103,6 +103,10 @@ Brecha: catálogos sin política RLS aunque son lectura pública; conviene polí
 13. FKs con `ON DELETE` mezclados (`a` no action, `c` cascade, `n` set null) sin criterio escrito.
 14. Catálogos con RLS sin política (lectura pública no declarada).
 
+## Plan de normalización (estado)
+
+- **044 aplicada (2026-11-18):** empresa_id en las 16 tablas restantes con triggers de herencia y backfill; importaciones registra usuario y empresa.
+
 ## Plan de normalización propuesto
 
 - **044 — Tenant en todo el negocio**: `empresa_id` en las 19 tablas, con triggers de herencia (tarea/nota/evento/correo/ingreso/traslado/vínculo ← alumno u oportunidad; actividad ← registro; favoritos/vistas/conversaciones/claves/webhooks/importaciones ← usuario). `colegios_contratados.empresa_id` obligatorio cuando hay contrato.
